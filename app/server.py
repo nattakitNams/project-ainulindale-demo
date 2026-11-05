@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import aoi as aoimod
-from . import catalog, db, dsinfo, engine, export, jobs, links, ops, ops3, palettes, symbology, tiles, vault
+from . import basedata, catalog, db, dsinfo, engine, export, jobs, links, ops, ops3, palettes, symbology, tiles, vault
 from . import gridmath as gm
 from .config import APP_NAME, APP_VERSION, DIRS, PORT, ROOT, STATIC, WORKSPACE, ensure_workspace
 
@@ -305,6 +305,8 @@ def patch_ds(did):
 def del_ds(did):
     d = ds_or_404(did)
     db.delete('datasets', did)
+    if d['kind'] == 'link':
+        basedata.mark_removed(d['path'])                    # ข้อมูลพื้นฐานที่ผู้ใช้ลบ → ไม่เพิ่มกลับเอง
     note = 'ลบออกจากทะเบียนแล้ว (ไม่ได้ลบไฟล์)'
     if d.get('copied') or d.get('role') != 'input':
         note += f' — ไฟล์ยังอยู่ที่ {Path(d["path"]).parent}'
@@ -455,6 +457,16 @@ def style_qml(did):
 
 
 # ---------------- ลิงก์ (3.1–3.3) ----------------
+@app.route('/api/basedata', methods=['GET', 'POST'])
+def basedata_api():
+    """GET = รายการข้อมูลพื้นฐาน + สถานะ · POST = เพิ่มชุดที่ขาด (รวมที่ผู้ใช้เคยลบ)"""
+    if request.method == 'POST':
+        basedata.seed(force=True)
+    have = {basedata._norm(r['path']) for r in db.query("SELECT path FROM datasets WHERE kind='link'")}
+    return jsonify(items=[dict(name=n, url=u, description=d, present=basedata._norm(u) in have) for n, u, d in basedata.BASE],
+                   status=basedata.STATUS)
+
+
 @app.route('/api/links/inspect', methods=['POST'])
 def link_inspect():
     b = request.get_json(force=True)
@@ -1088,7 +1100,10 @@ def aoi_create():
     name = (b.get('name') or '').strip()
     if not name:
         raise ApiError('ตั้งชื่อพื้นที่ศึกษาก่อน')
-    if b.get('geojson'):
+    if b.get('coords'):                                   # พิมพ์พิกัดเอง → แปลง/ตรวจที่เซิร์ฟเวอร์อีกรอบ (ไม่เชื่อ geojson จากหน้าเว็บ)
+        c = aoimod.parse_coords(b['coords'], b.get('order', 'auto'), b.get('crs', 'auto'))
+        aid = aoimod.create_from_geojson(name, c['geojson'], dict(type='coords', crs=c['crs'], points=c['points'], parts=c['parts']))
+    elif b.get('geojson'):
         aid = aoimod.create_from_geojson(name, b['geojson'])
     elif b.get('link_id'):
         try:
@@ -1098,6 +1113,16 @@ def aoi_create():
     else:
         aid = aoimod.create_from_dataset(name, ds_or_404(int(b['dataset_id'])), b.get('field'), b.get('values') or [])
     return jsonify(id=aid, aoi=db.get('aoi', aid))
+
+
+@app.route('/api/aoi/parse-coords', methods=['POST'])
+def aoi_parse_coords():
+    """พรีวิวพิกัดที่พิมพ์ (ยังไม่บันทึก): รูปใน EPSG:4326 + พื้นที่ + สิ่งที่ตรวจพบ + คำเตือน"""
+    b = request.get_json(force=True)
+    try:
+        return jsonify(aoimod.parse_coords(b.get('text', ''), b.get('order', 'auto'), b.get('crs', 'auto')))
+    except aoimod.AoiError as e:
+        raise ApiError(str(e))
 
 
 @app.route('/api/aoi/<int:aid>', methods=['DELETE'])
@@ -1202,6 +1227,7 @@ def main():
         sys.exit(0)
     db.init()
     jobs.start_dispatcher()
+    basedata.seed_background()                            # ขอบเขตการปกครอง GISTDA (เบื้องหลัง · ออฟไลน์ = ลองใหม่ครั้งหน้า)
     print(f'{APP_NAME} {APP_VERSION}')
     print(f'workspace: {WORKSPACE}')
     tok = engine_token()

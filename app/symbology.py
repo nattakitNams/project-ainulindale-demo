@@ -31,6 +31,7 @@ RAMPS = {
     'Reds': '#fff5f0 #fee0d2 #fcbba1 #fc9272 #fb6a4a #ef3b2c #cb181d #a50f15 #67000d',
     'Purples': '#fcfbfd #efedf5 #dadaeb #bcbddc #9e9ac8 #807dba #6a51a3 #54278f #3f007d',
     'Greys': '#ffffff #f0f0f0 #d9d9d9 #bdbdbd #969696 #737373 #525252 #252525 #000000',
+    'RdYlGn': '#a50026 #d73027 #f46d43 #fdae61 #fee08b #ffffbf #d9ef8b #a6d96a #66bd63 #1a9850 #006837',
     'Spectral': '#9e0142 #d53e4f #f46d43 #fdae61 #fee08b #ffffbf #e6f598 #abdda4 #66c2a5 #3288bd #5e4fa2',
     'RdYlBu': '#a50026 #d73027 #f46d43 #fdae61 #fee090 #ffffbf #e0f3f8 #abd9e9 #74add1 #4575b4 #313695',
     'RdBu': '#67001f #b2182b #d6604d #f4a582 #fddbc7 #f7f7f7 #d1e5f0 #92c5de #4393c3 #2166ac #053061',
@@ -142,13 +143,50 @@ def default_style(ds):
         hide0 = ordinal and vals[0] == 0 and len(vals) > 1
         return dict(type='paletted', ramp=ramp, hide_values=[0] if hide0 else [],
                     entries=[dict(value=v, color=c, label=fmtv(v), visible=not (hide0 and v == 0)) for v, c in zip(vals, cols)])
-    pct = st.get('pct') or {}
-    lo, hi = pct.get('2'), pct.get('98')
-    if lo is None or hi is None or hi <= lo:
-        lo, hi = st.get('min', 0) or 0, st.get('max', 1) or 1
-        if hi <= lo:
-            hi = lo + 1
-    return classify(ds, dict(type='pseudocolor', ramp='viridis', mode='continuous', interp='linear', classes=5, min=lo, max=hi, metric='value'))
+    return continuous_default(ds)
+
+
+def data_profile(ds, s=None):
+    """ชนิดข้อมูลต่อเนื่องเพื่อเลือกสีเริ่มต้นแบบ QGIS: 'index' (NDVI ฯลฯ) · 'nightlight' · 'generic'"""
+    import re
+    n = (ds.get('name') or '').lower()
+    st = ds.get('stats') or {}
+    lo, hi = st.get('min'), st.get('max')
+    if re.search(r'ndvi|evi|savi|ndwi|ndbi|nbr|ndmi|lai|ดัชนี|index', n):
+        return 'index'
+    if re.search(r'night|viirs|vnl|ntl|dnb|black.?marble|radiance|แสงไฟ|ไฟกลางคืน', n):
+        return 'nightlight'
+    if lo is not None and hi is not None and -1.0001 <= lo < 0 < hi <= 1.0001:
+        return 'index'                                       # ค่าอยู่ในช่วง −1…1 และมีทั้งลบและบวก → น่าจะเป็นดัชนี
+    if s is not None and s.size and lo is not None and lo >= 0 and (s == 0).mean() > 0.3:
+        return 'nightlight'                                  # ไม่ติดลบ + ศูนย์เกิน 30% (พื้นหลังมืด/ไม่มีสัญญาณ)
+    return 'generic'
+
+
+def continuous_default(ds):
+    """สไตล์เริ่มต้นของข้อมูลต่อเนื่อง แบบ QGIS: Singleband pseudocolor · ไล่สีเชิงเส้น · min/max ตัดสะสม 2–98%
+    index → RdYlGn (น้ำตาล→เขียว) · nightlight → inferno + ซ่อน 0 + ยืดสีจากพิกเซลที่มีค่า · อื่นๆ → viridis"""
+    st = ds.get('stats') or {}
+    s = sample_values(ds, 'value')
+    prof = data_profile(ds, s)
+    hide = []
+    if s is not None and s.size:
+        base = s
+        if prof == 'nightlight' and (s > 0).any():
+            base, hide = s[s > 0], [0]
+        lo, hi = float(np.quantile(base, 0.02)), float(np.quantile(base, 0.98))
+    else:
+        pct = st.get('pct') or {}
+        lo, hi = pct.get('2'), pct.get('98')
+        if lo is None or hi is None:
+            lo, hi = st.get('min', 0) or 0, st.get('max', 1) or 1
+    if hi <= lo:
+        hi = lo + (abs(lo) or 1) * 1e-3
+    ramp = {'index': 'RdYlGn', 'nightlight': 'inferno'}.get(prof, 'viridis')
+    out = classify(ds, dict(type='pseudocolor', ramp=ramp, mode='continuous', interp='linear', classes=5, min=lo, max=hi, metric='value',
+                            hide_values=hide))
+    out['profile'] = prof
+    return out
 
 
 # ---------- จัดชั้น (ปุ่ม Classify) ----------

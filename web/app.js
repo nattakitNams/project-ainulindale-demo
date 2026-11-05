@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.2';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.3';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -134,7 +134,10 @@ const head = (eyebrow, title, sub = '', actions = '') => `<div class="page-head"
 async function pageHome() {
   const list = await api(ENGINE + '/api/datasets');
   const by = r => list.filter(d => d.role === r && d.kind !== 'link');
-  const lks = list.filter(d => d.kind === 'link');
+  const lks = list.filter(d => d.kind === 'link' && !d.meta?.builtin);
+  const base = list.filter(d => d.kind === 'link' && d.meta?.builtin);
+  let bd = null; try { bd = await api(ENGINE + '/api/basedata'); } catch { }
+  const bdMissing = (bd?.items || []).filter(i => !i.present);
   const jobs = await api(ENGINE + '/api/jobs');
   const running = jobs.filter(j => ['queued', 'running'].includes(j.status)).length;
   const v = $('#view');
@@ -166,9 +169,19 @@ async function pageHome() {
     </div>
     ${['input', 'derived', 'map'].map(r => `<div class="section-title"><span class="dot" style="background:${ROLE_C[r]};color:${ROLE_C[r]}"></span><h2>${{ input: 'ข้อมูลนำเข้า', derived: 'ข้อมูลที่แปลงแล้ว', map: 'แผนที่ไบแวเรียต' }[r]}</h2><span class="count">${by(r).length}</span></div>
       <div class="ds-grid">${by(r).map(cardHtml).join('') || `<div class="empty">${r === 'input' ? 'ยังไม่มี — เพิ่มชุดข้อมูลด้านบน' : r === 'derived' ? 'ผลจากการปรับความละเอียด / แปลงเป็นราสเตอร์ / ทำกริด จะอยู่ที่นี่' : 'สร้างจากเมนู "สร้างไบแวเรียต"'}</div>`}</div>`).join('')}
+    <div class="section-title"><span class="dot" style="background:var(--butter);color:var(--butter)"></span><h2>ข้อมูลพื้นฐาน</h2><span class="count">${base.length}</span>
+      <span class="tiny muted">ขอบเขตการปกครองจาก GISTDA · ใช้เป็นเส้นขอบเขต พื้นที่ศึกษา และไบแวเรียตรายพื้นที่ได้ทันที</span>
+      ${bdMissing.length ? `<button class="sm ghost" id="bdRestore" style="margin-left:auto">${IC.plus}เพิ่มกลับ ${bdMissing.length} ชุด (${bdMissing.map(i => esc(i.name)).join(', ')})</button>` : ''}</div>
+    <div class="ds-grid">${base.map(cardHtml).join('') || `<div class="empty">${bd?.status?.state === 'running' ? 'กำลังเชื่อมต่อบริการ GISTDA…' : 'ยังไม่มี — ต้องต่ออินเทอร์เน็ตครั้งแรก แล้วกด "เพิ่มกลับ"'}</div>`}</div>
     <div class="section-title"><span class="dot" style="background:var(--lav);color:var(--lav)"></span><h2>ลิงก์แผนที่</h2><span class="count">${lks.length}</span></div>
     <div class="ds-grid">${lks.map(cardHtml).join('') || '<div class="empty">ยังไม่มี — วางลิงก์บริการแผนที่ด้านบน</div>'}</div>`;
   linkAdder();
+  $('#bdRestore') && ($('#bdRestore').onclick = async () => {
+    $('#bdRestore').disabled = true; $('#bdRestore').textContent = 'กำลังเชื่อมต่อบริการ GISTDA…';
+    try { const r = await api(ENGINE + '/api/basedata', { json: {} }); if (r.status.failed.length) toast('เพิ่มไม่ได้: ' + r.status.failed.join(' · '), true); } catch (e) { toast(e.message, true); }
+    pageHome();
+  });
+  if (bd?.status?.state === 'running') setTimeout(() => { if (location.hash === '#/' || location.hash === '') pageHome(); }, 3000);
   $$('.ds').forEach(el => el.onclick = e => { if (!e.target.closest('button')) location.hash = '#/ds/' + el.dataset.id; });
   $$('[data-ren]').forEach(b => b.onclick = async () => {
     const d = list.find(x => x.id == b.dataset.ren);
@@ -215,7 +228,8 @@ function cardHtml(d) {
     return `<div class="ds" data-id="${d.id}" style="--c:var(--lav)">
       <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ลบออกจากทะเบียน">${IC.trash}</button></div>
       <div class="t"><div class="ico">${IC.link}</div><div style="min-width:0;padding-right:54px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
-      <div class="chips"><span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? '<span class="chip">🔒 โทเคน</span>' : ''}</div>
+      ${m.description ? `<div class="tiny muted" style="margin:-2px 0 8px">${esc(m.description)}</div>` : ''}
+      <div class="chips">${m.builtin ? '<span class="chip" style="color:var(--butter);border-color:#f6e3a155">ข้อมูลพื้นฐาน</span>' : ''}<span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? '<span class="chip">🔒 โทเคน</span>' : ''}</div>
       <div class="foot"><span class="status-dot"></span>ลิงก์<span class="spacer"></span>#${d.id}</div></div>`;
   }
   const icon = d.role === 'map' ? 'map' : d.kind === 'vector' ? 'vector' : 'raster';
@@ -950,6 +964,25 @@ async function pageBiv() {
       fillMask();
     } catch (e) { sel.innerHTML = ''; $('#resNote').innerHTML = `<span style="color:var(--coral)">${esc(e.message)}</span>`; }
   };
+  // เปลี่ยนชุดข้อมูล → เสนอเกณฑ์จากข้อมูลจริง (ควอนไทล์ที่ทนค่าซ้ำ ปัดเลขสวย) แทนเกณฑ์ประชากร 300/1500 ที่ไม่เข้ากับค่า 0–1
+  const niceBreaks = bs => {
+    for (let sig = 2; sig <= 6; sig++) {
+      const r = bs.map(b => +Number(b).toPrecision(sig));
+      if (r.every((v, i) => i === 0 || v > r[i - 1])) return r;
+    }
+    return bs;
+  };
+  const suggestBreaks = async ax => {
+    const c = BIV[ax], d = dsOf(c.dataset_id);
+    if (!d || c.n < 2) return;
+    if (d.value_type === 'count') { c.metric = 'density'; if (c.method === 'breaks' && c.n === 3) c.breaks = [300, 1500]; if (c.method === 'breaks' && c.n === 3) return; }
+    else c.metric = 'value';
+    if (c.method !== 'breaks') return;
+    try {
+      const r = await api(ENGINE + '/api/classes-preview', { json: { dataset_id: d.id, cfg: { ...c, method: 'quantile' } } });
+      if (r.breaks?.length === c.n - 1) c.breaks = niceBreaks(r.breaks);
+    } catch (e) { toast(`${d.name}: ${e.message}`, true); }
+  };
   // พรีวิวพื้นที่ศึกษา
   const amap = baseMap('aoiMap', { zoomControl: false, attributionControl: false });
   amap.setView([13.2, 100.9], 5);
@@ -965,8 +998,10 @@ async function pageBiv() {
 
   ['x', 'y'].forEach(ax => {
     const el = $('#ax_' + ax);
-    $$('[data-k]', el).forEach(i => i.onchange = () => {
-      readAxis(ax); drawAxis(ax); preview(ax);
+    $$('[data-k]', el).forEach(i => i.onchange = async () => {
+      readAxis(ax);
+      if (i.dataset.k === 'dataset_id' || (i.dataset.k === 'n' && BIV[ax].method === 'breaks')) await suggestBreaks(ax);
+      drawAxis(ax); preview(ax);
       if (i.dataset.k === 'n') drawPal(true);
       if (i.dataset.k === 'dataset_id') loadRes();
       if (i.dataset.k === 'label') drawPal();
@@ -1046,7 +1081,7 @@ async function pageAoi(qs) {
   let dsId = +qs.get('ds') || vecs[0]?.id || null;
   v.innerHTML = head('Area of interest', 'พื้นที่ศึกษา', 'จังหวัด / อำเภอ / ตำบล จากชั้นขอบเขตใดก็ได้ในคลังข้อมูล หรือวาดโพลิกอนเอง — ใช้ตัดผลลัพธ์และคิดสถิติเฉพาะพื้นที่')
     + `<div class="cols"><div>
-      <div class="card"><div class="card-head"><h2><span class="dot"></span>สร้างพื้นที่ศึกษา</h2><div class="seg" id="mode"><button data-k="ds" class="on">จากชั้นขอบเขต</button><button data-k="draw">วาดเอง</button></div></div>
+      <div class="card"><div class="card-head"><h2><span class="dot"></span>สร้างพื้นที่ศึกษา</h2><div class="seg" id="mode"><button data-k="ds" class="on">จากชั้นขอบเขต</button><button data-k="draw">วาดเอง</button><button data-k="coords">พิมพ์พิกัด</button></div></div>
         <div id="fromDs">
           ${vecs.length ? `<div class="grid-form">
             <label class="field full"><span>ชั้นขอบเขต</span><select id="aDs">${vecs.map(d => `<option value="${d.id}" ${d.id === dsId ? 'selected' : ''}>${srcLabel(d)}</option>`).join('')}</select></label>
@@ -1056,11 +1091,24 @@ async function pageAoi(qs) {
           <div class="row" style="margin:10px 0 6px"><span class="small muted" id="aCount"></span><span class="spacer"></span><button class="sm ghost" id="aAll">เลือกทั้งหมดที่ค้นเจอ</button><button class="sm ghost" id="aNone">ล้าง</button></div>
           <div class="checklist" id="aList"></div>` : `<div class="note info">ยังไม่มีชั้นขอบเขต — เพิ่มไฟล์ขอบเขต หรือ<b>ลิงก์</b> (เช่น ArcGIS FeatureServer ของ GISTDA: L05_Province / L05_Amphoe / L05_Tambon) ที่หน้าคลังข้อมูลก่อน</div>`}
         </div>
+        <div id="fromCoords" class="hide">
+          <textarea id="cTxt" rows="7" style="font-family:var(--mono);font-size:12.5px" placeholder="วางพิกัด บรรทัดละจุด เช่น
+100.50 13.70
+100.60 13.70
+100.60 13.80
+100.50 13.80
+(หลายรูป: เว้นบรรทัดว่างคั่น · รับ WKT / GeoJSON / 100°30'15&quot;E 13°42'N / UTM ได้)"></textarea>
+          <div class="grid-form" style="margin-top:8px">
+            <label class="field"><span>ลำดับแกน</span><select id="cOrder"><option value="auto">อัตโนมัติ</option><option value="xy">ลองจิจูด, ละติจูด (X, Y)</option><option value="yx">ละติจูด, ลองจิจูด (Y, X)</option></select></label>
+            <label class="field"><span>ระบบพิกัด</span><select id="cCrs"><option value="auto">อัตโนมัติ</option><option value="EPSG:4326">WGS 84 องศา</option><option value="EPSG:32647">UTM 47N (WGS 84)</option><option value="EPSG:32648">UTM 48N (WGS 84)</option><option value="EPSG:24047">UTM 47N (Indian 1975)</option><option value="EPSG:24048">UTM 48N (Indian 1975)</option></select></label>
+          </div>
+          <div id="cRes" class="small" style="margin-top:8px"><span class="muted">รูปจะแสดงบนแผนที่ทันทีที่พิมพ์ · ปิดรูปให้เอง</span></div>
+        </div>
         <div id="fromDraw" class="hide"><p class="small muted" style="margin-top:0">ใช้เครื่องมือมุมซ้ายบนของแผนที่ วาดโพลิกอนหรือสี่เหลี่ยม (วาดหลายรูปได้ จะรวมเป็นพื้นที่เดียว)</p><div class="small" id="drawCount">ยังไม่ได้วาด</div></div>
         <div class="row" style="margin-top:14px"><input type="text" id="aName" placeholder="ชื่อพื้นที่ศึกษา เช่น สิงห์บุรี" style="flex:1"><button id="aSave" class="primary">${IC.check}บันทึก</button></div>
       </div>
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>พื้นที่ที่บันทึกไว้</h2><span class="chip">${aois.length}</span></div>
-        ${aois.length ? `<table><tbody>${aois.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b>${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'drawn' ? 'วาดเอง' : `${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}`}</div></td>
+        ${aois.length ? `<table><tbody>${aois.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b>${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'drawn' ? 'วาดเอง' : a.source?.type === 'coords' ? `พิมพ์พิกัด · ${a.source.points} จุด · ${esc(a.source.crs)}` : `${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}`}</div></td>
           <td class="small">${fmt(a.area_km2, 1)} ตร.กม.</td><td style="text-align:right"><button class="sm ghost danger" data-del="${a.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">ยังไม่มี</div>'}
       </div></div>
       <div class="card sticky"><div class="mapbar"><div class="seg" id="bm"><button data-k="gh">ดาวเทียม</button><button data-k="osm">แผนที่</button><button data-k="none">ไม่มี</button></div><span class="tiny muted" id="mapNote"></span></div>
@@ -1072,10 +1120,36 @@ async function pageAoi(qs) {
   let mode = 'ds';
   const setMode = k => {
     mode = k; $$('#mode button').forEach(b => b.classList.toggle('on', b.dataset.k === k));
-    $('#fromDs').classList.toggle('hide', k !== 'ds'); $('#fromDraw').classList.toggle('hide', k !== 'draw');
+    $('#fromDs').classList.toggle('hide', k !== 'ds'); $('#fromDraw').classList.toggle('hide', k !== 'draw'); $('#fromCoords').classList.toggle('hide', k !== 'coords');
+    if (cLayer && k !== 'coords') { mp.removeLayer(cLayer); cLayer = null; } else if (k === 'coords') parseCoords();
     if (k === 'draw') mp.addControl(drawCtl); else mp.removeControl(drawCtl);
   };
   $$('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.k));
+  // พิมพ์พิกัด → เซิร์ฟเวอร์อ่าน/ตรวจ/แปลงเป็น WGS 84 → แสดงบนแผนที่ (บันทึกจริงเซิร์ฟเวอร์ตรวจซ้ำ)
+  let cLayer = null, cOk = null, cT = null, cReq = 0;
+  const parseCoords = () => {
+    clearTimeout(cT);
+    cT = setTimeout(async () => {
+      const text = $('#cTxt').value, my = ++cReq;
+      if (!text.trim()) { $('#cRes').innerHTML = '<span class="muted">รูปจะแสดงบนแผนที่ทันทีที่พิมพ์ · ปิดรูปให้เอง</span>'; cOk = null; if (cLayer) { mp.removeLayer(cLayer); cLayer = null; } return; }
+      try {
+        const r = await api(ENGINE + '/api/aoi/parse-coords', { json: { text, order: $('#cOrder').value, crs: $('#cCrs').value } });
+        if (my !== cReq) return;
+        cOk = r;
+        if (cLayer) mp.removeLayer(cLayer);
+        cLayer = L.geoJSON(r.geojson, { style: { color: '#f6e3a1', weight: 2.5, fillColor: '#f6e3a1', fillOpacity: .2 } }).addTo(mp);
+        mp.fitBounds(cLayer.getBounds(), { padding: [30, 30], maxZoom: 15 });
+        $('#cRes').innerHTML = `<div class="note ok" style="margin:0">✔ ${esc(r.info.format)} · ${esc(r.info.crs)}${r.info.order ? ' · ' + esc(r.info.order) : ''} · ${r.parts} รูป · <b>${fmt(r.area_km2, 2)} ตร.กม.</b>${r.info.closed ? '<div class="tiny muted">' + esc(r.info.closed) + '</div>' : ''}</div>`
+          + r.warnings.map(w => `<div class="note warn" style="margin:6px 0 0">${esc(w)}</div>`).join('');
+        if (!$('#aName').dataset.touched && !$('#aName').value) $('#aName').value = 'พื้นที่จากพิกัด';
+      } catch (e) {
+        if (my !== cReq) return;
+        cOk = null; if (cLayer) { mp.removeLayer(cLayer); cLayer = null; }
+        $('#cRes').innerHTML = `<div class="note err" style="margin:0">${esc(e.message)}</div>`;
+      }
+    }, 350);
+  };
+  $('#cTxt').oninput = parseCoords; $('#cOrder').onchange = parseCoords; $('#cCrs').onchange = parseCoords;
   mp.on(L.Draw.Event.CREATED, e => { drawn.addLayer(e.layer); $('#drawCount').textContent = `วาดแล้ว ${drawn.getLayers().length} รูป`; });
   // ชั้นขอบเขต + ไฮไลต์ที่เลือก
   const sel = new Set();
@@ -1155,7 +1229,10 @@ async function pageAoi(qs) {
     const name = $('#aName').value.trim();
     try {
       let r;
-      if (mode === 'draw') {
+      if (mode === 'coords') {
+        if (!cOk) return toast('พิกัดยังใช้ไม่ได้ — ดูข้อความใต้ช่องพิกัด', true);
+        r = await api(ENGINE + '/api/aoi', { json: { name, coords: $('#cTxt').value, order: $('#cOrder').value, crs: $('#cCrs').value } });
+      } else if (mode === 'draw') {
         if (!drawn.getLayers().length) return toast('ยังไม่ได้วาด', true);
         r = await api(ENGINE + '/api/aoi', { json: { name, geojson: drawn.toGeoJSON() } });
       } else {

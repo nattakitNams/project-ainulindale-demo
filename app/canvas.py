@@ -47,7 +47,8 @@ def _sig(layers, m):
     """ลายเซ็นข้อมูลที่มีผลต่อภาพ (ไฟล์เปลี่ยน/สไตล์เปลี่ยน → วาดใหม่)"""
     sig = []
     for n, k, d, st, op in layers:
-        sig.append((k, d.get('id'), d.get('fingerprint'), d.get('style') if k == 'raster' else st, op))
+        # raster: สไตล์ที่ใช้วาดจริง (รวมสไตล์เริ่มต้นที่ไม่ได้บันทึก) — ไม่งั้นเปลี่ยนสไตล์เริ่มต้นแล้วได้ภาพเก่าจากแคช
+        sig.append((k, d.get('id'), d.get('fingerprint'), tiles.style_of(d) if k == 'raster' else st, op))
     bd = (m.get('boundary') or {}).get('key')
     if bd:
         k, d = layout._resolve(bd)
