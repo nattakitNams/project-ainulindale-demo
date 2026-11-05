@@ -1,10 +1,10 @@
 // ================= Ainulindalë v1 — หน้าเว็บ ↔ ตัวประมวลผลในเครื่องผู้ใช้ =================
 // หน้าเว็บนี้วางบนโฮสต์ไหนก็ได้ (GitHub Pages / Cloudflare Pages) แต่ "คำนวณ" ที่เครื่องของผู้ใช้เอง:
-//   เบราว์เซอร์ ──fetch──▶ http://127.0.0.1:5200 (ตัวประมวลผล = Python ในเครื่อง) ──▶ ไฟล์ · CPU · RAM
+//   เบราว์เซอร์ ──fetch──▶ http://127.0.0.1:41217 (ตัวประมวลผล = Python ในเครื่อง) ──▶ ไฟล์ · CPU · RAM
 // ไฟล์ข้อมูลไม่ถูกอัปโหลดขึ้นเว็บ · การเรียกที่เปลี่ยนข้อมูลต้องมีโทเคนจับคู่ (ได้จากลิงก์ที่ตัวประมวลผลเปิดให้)
 var ENGINE, ENGINE_TOKEN;
 (function () {
-  const DEFAULT_ENGINE = 'http://127.0.0.1:5200';
+  const DEFAULT_ENGINE = 'http://127.0.0.1:41217';
   // ไฟล์ติดตั้งอยู่ที่ GitHub Releases (ชื่อไฟล์คงที่ → ลิงก์ latest ใช้ได้ทุกเวอร์ชัน)
   window.AINU_DOWNLOAD_URL = window.AINU_DOWNLOAD_URL || 'https://github.com/nattakitNams/project-ainulindale-demo/releases/latest/download/Ainulindale-setup.zip';
   const get = k => { try { return localStorage.getItem(k); } catch { return null; } };
@@ -22,7 +22,7 @@ var ENGINE, ENGINE_TOKEN;
   takePair();
   // หน้าเปิดค้างอยู่แล้วกดลิงก์จับคู่ = เปลี่ยนแค่ # → ไม่โหลดใหม่เอง ต้องจับเองแล้วโหลดใหม่
   window.addEventListener('hashchange', e => { if (takePair()) { e.stopImmediatePropagation(); location.reload(); } }, true);
-  // เปิดจากตัวประมวลผลเอง (http://127.0.0.1:5200/ui/) = same-origin ไม่ต้องจับคู่
+  // เปิดจากตัวประมวลผลเอง (http://127.0.0.1:41217/ui/) = same-origin ไม่ต้องจับคู่
   const SAME = !!document.querySelector('meta[name="ainu-engine"]');
   ENGINE = SAME ? location.origin : (get('ainu.engine') || DEFAULT_ENGINE).replace(/\/+$/, '');
   ENGINE_TOKEN = SAME ? '' : (get('ainu.token') || '');

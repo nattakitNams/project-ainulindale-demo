@@ -93,7 +93,7 @@ def main():
         shutil.copy2(ROOT / f, out / f)
     origins = a.origin or ([a.web_url.split('/', 3)[0] + '//' + a.web_url.split('/', 3)[2]] if a.web_url else [])
     (out / 'engine.json').write_text(json.dumps(dict(
-        _help='หน้าเว็บที่อนุญาตให้สั่งงานตัวประมวลผลเครื่องนี้ · web_url = หน้าที่เปิดให้ตอนเริ่ม (ว่าง = หน้าสำรอง http://127.0.0.1:5200/ui/)',
+        _help='หน้าเว็บที่อนุญาตให้สั่งงานตัวประมวลผลเครื่องนี้ · web_url = หน้าที่เปิดให้ตอนเริ่ม (ว่าง = หน้าสำรอง http://127.0.0.1:41217/ui/)',
         web_url=a.web_url, allowed_origins=origins), ensure_ascii=False, indent=1), encoding='utf-8')
     (out / 'README.txt').write_text(
         f'Ainulindale {APP_VERSION}\r\n\r\n1) ดับเบิลคลิก Ainulindale.bat\r\n2) ทำตามตัวช่วยติดตั้งในหน้าเว็บ (ครั้งแรกเท่านั้น ~180 MB จาก PyPI)\r\n'

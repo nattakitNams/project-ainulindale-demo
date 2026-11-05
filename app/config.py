@@ -34,7 +34,7 @@ WORKSPACE = Path(os.environ.get('AINU_WORKSPACE') or load_settings().get('worksp
 DB_PATH = WORKSPACE / 'catalog.db'
 DIRS = {k: WORKSPACE / k for k in ('database', 'derived', 'maps', 'aoi', 'cache', 'logs')}
 STATIC = ROOT / 'web'                       # หน้าเว็บ (deploy แยกได้ · ตัวประมวลผลเสิร์ฟสำรองที่ /ui/)
-PORT = int(os.environ.get('AINU_PORT', 5200))
+PORT = int(os.environ.get('AINU_PORT', 41217))   # พอร์ตแปลก ไม่ชนโปรแกรมอื่น · ต่ำกว่าช่วงพอร์ตชั่วคราวของ Windows (49152+)
 
 # ไม่เขียนอะไรนอกโฟลเดอร์แอป: matplotlib ปกติเก็บแคชฟอนต์ที่ ~/.matplotlib
 os.environ.setdefault('MPLCONFIGDIR', str(WORKSPACE / 'cache' / 'matplotlib'))
