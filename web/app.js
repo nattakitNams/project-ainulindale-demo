@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.4';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.5';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -440,6 +440,8 @@ async function symPanel(d, o = {}) {
       <div class="grid-form">
         <label class="field full"><span>Render type</span><select id="sType">${Object.entries(RTYPE).map(([k, t]) => `<option value="${k}" ${k === T ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
         ${isCount && T !== 'paletted' ? `<label class="field full"><span>ค่าที่แสดง</span><select id="sMetric"><option value="density" ${sty.metric === 'density' ? 'selected' : ''}>ความหนาแน่น (ต่อ ตร.กม.) — เทียบได้ทุกความละเอียด</option><option value="value" ${sty.metric !== 'density' ? 'selected' : ''}>ค่าต่อพิกเซล (ค่าดิบ)</option></select></label>` : ''}
+        ${T === 'gray' ? `<div class="field full"><span>Color ramp <span class="tiny muted">— เลือกพาเลท = เปลี่ยนเป็นไล่สี (pseudocolor) ใช้ Min/Max เดิม</span></span><div class="ramp-pick"><button type="button" id="rampBtn" class="ramp-btn"><i style="background:linear-gradient(90deg,#000,#fff)"></i><span>ขาวดำ</span>▾</button>
+          <div class="ramp-list hide" id="rampList">${Object.keys(STATE.ramps).filter(k => !STATE.categorical.includes(k)).map(k => `<div data-r="${esc(k)}"><i style="background:${rampCss(k)}"></i>${esc(k)}</div>`).join('')}</div></div></div>` : ''}
         ${T !== 'gray' ? `<div class="field full"><span>Color ramp</span><div class="ramp-pick"><button type="button" id="rampBtn" class="ramp-btn"><i style="background:${rampCss(sty.ramp || 'viridis', sty.invert)}"></i><span>${esc(sty.ramp || 'viridis')}</span>▾</button>
           <label class="row small"><input type="checkbox" id="sInv" ${sty.invert ? 'checked' : ''}> กลับด้าน</label>
           <div class="ramp-list hide" id="rampList">${Object.keys(STATE.ramps).map(k => `<div data-r="${esc(k)}"><i style="background:${rampCss(k)}"></i>${esc(k)}</div>`).join('')}</div></div></div>` : ''}
@@ -452,7 +454,8 @@ async function symPanel(d, o = {}) {
           <div class="field"><span>&nbsp;</span><button id="sMinMax" class="sm ghost" title="ตัด 2%–98% ของค่าสุ่ม">ใช้ช่วง 2–98%</button></div>` : ''}
         ${T === 'gray' ? `<label class="field"><span>Min</span><input type="number" step="any" id="sMin" value="${sty.min ?? 0}"></label>
           <label class="field"><span>Max</span><input type="number" step="any" id="sMax" value="${sty.max ?? 1}"></label>
-          <label class="row small full"><input type="checkbox" id="sInv" ${sty.invert ? 'checked' : ''}> กลับด้าน (ขาว → ดำ)</label>` : ''}
+          <label class="row small"><input type="checkbox" id="sInv" ${sty.invert ? 'checked' : ''}> กลับด้าน (ขาว → ดำ)</label>
+          <div class="field"><button id="sMinMax" class="sm ghost" title="ตัด 2%–98% ของค่าสุ่ม (ศูนย์กองเยอะ → คิดจากพิกเซลที่มีค่า)">ใช้ช่วง 2–98%</button></div>` : ''}
       </div>
       ${T !== 'gray' ? `<div class="sym-wrap"><table class="sym"><thead><tr><th title="แสดง/ซ่อน">👁</th><th>${T === 'pseudocolor' && sty.interp === 'discrete' ? 'ค่า ≤' : 'ค่า'}</th><th>สี</th><th>ป้ายชื่อ</th><th></th></tr></thead><tbody>
         ${items().map((e, i) => `<tr class="${e.visible === false ? 'off' : ''}"><td><input type="checkbox" data-vis="${i}" ${e.visible === false ? '' : 'checked'}></td>
@@ -485,7 +488,12 @@ async function symPanel(d, o = {}) {
     $('#sMetric') && ($('#sMetric').onchange = async () => { sty.metric = $('#sMetric').value; sty.min = sty.max = null; await reclass(); });
     if ($('#rampBtn')) {
       $('#rampBtn').onclick = () => $('#rampList').classList.toggle('hide');
-      $$('#rampList div').forEach(x => x.onclick = () => { sty.ramp = x.dataset.r; recolor(); });
+      $$('#rampList div').forEach(x => x.onclick = async () => {
+        sty.ramp = x.dataset.r;
+        if (sty.type !== 'gray') return recolor();
+        Object.assign(sty, { type: 'pseudocolor', mode: 'continuous', interp: 'linear', classes: sty.classes || 5 });   // ขาวดำ → ไล่สี ช่วงเดิม
+        if (!await reclass()) { sty.type = 'gray'; draw(); }
+      });
     }
     $('#sInv') && ($('#sInv').onchange = () => { sty.invert = $('#sInv').checked; sty.type === 'gray' ? (draw(), preview()) : recolor(); });
     ['#sMin', '#sMax'].forEach(k => $(k) && ($(k).onchange = () => { sty.min = num('#sMin'); sty.max = num('#sMax'); if (sty.type === 'gray') { draw(); preview(); } }));
@@ -679,7 +687,7 @@ function initMap(d) {
   linkOverlay(mp, $('.mapbar'));
   let pxRect = null;
   mp.on('click', async e => {
-    const { lat, lng } = e.latlng;
+    const { lat } = e.latlng, lng = e.latlng.wrap().lng;      // แผนที่วนรอบโลก → ลองจิจูดเกิน 180 (เช่น 459.9) ให้กลับเป็น −180…180
     try {
       const r = await api(`${ENGINE}/api/datasets/${d.id}/point?lon=${lng}&lat=${lat}&z=${mp.getZoom()}`);
       $('#pt').innerHTML = pointHtml(r);
@@ -1875,7 +1883,7 @@ async function pageViewer() {
   // ---------- คลิกดูค่าทุกชั้น ----------
   let mark = null;
   mp.on('click', async e => {
-    const { lat, lng } = e.latlng;
+    const { lat } = e.latlng, lng = e.latlng.wrap().lng;
     if (mark) mp.removeLayer(mark);
     mark = L.circleMarker(e.latlng, { radius: 6, color: '#f6e3a1', weight: 2, fillOpacity: 0 }).addTo(mp);
     const vis = layers.filter(l => l.visible && ['raster', 'vector'].includes(l.kind));

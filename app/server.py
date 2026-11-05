@@ -901,6 +901,7 @@ def validate_job(kind, p):
         og = engine.OnGrid(s, g)
         aoi_name = _apply_aoi(p, g, [og])
         s.close()
+        engine.check_tiles(g, [og])
         if og.mode == 'same' and not aoi_name:
             raise ApiError('ความละเอียดเป้าหมายเท่ากับต้นฉบับ (เลือกพื้นที่ศึกษาถ้าต้องการตัดอย่างเดียว)')
         if og.mode == 'up' and d['value_type'] == 'count':
@@ -918,6 +919,7 @@ def validate_job(kind, p):
         g = engine.make_grid([sx, sy], Fraction(p['target_res']))
         ox, oy = engine.OnGrid(sx, g), engine.OnGrid(sy, g)
         aoi_name = _apply_aoi(p, g, [ox, oy])
+        engine.check_tiles(g, [ox, oy])
         engine.Classifier(p['x']) if p['x'].get('method') == 'breaks' else None
         engine.Classifier(p['y']) if p['y'].get('method') == 'breaks' else None
         sx.close(), sy.close()
@@ -1002,6 +1004,7 @@ def validate_job(kind, p):
         g = engine.make_grid([sa, sb], Fraction(p['target_res']))
         oa, ob = engine.OnGrid(sa, g), engine.OnGrid(sb, g)
         aoi_name = _apply_aoi(p, g, [oa, ob])
+        engine.check_tiles(g, [oa, ob])
         sa.close(), sb.close()
         H, W = g.out_shape
         return dict(grid=g.describe(), raw_bytes=H * W * 4, aoi=aoi_name, warnings=[])

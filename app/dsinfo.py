@@ -270,6 +270,11 @@ def guess_value_type(meta, name):
     dt = meta['dtypes'][0]
     if meta.get('has_colormap'):
         return 'class', 'มีตารางสีในไฟล์ → น่าจะเป็นข้อมูลชั้น'
+    # ชื่อบอกชนิดชัด → ใช้ก่อนชนิดตัวเลข (night light/NDVI หลายแหล่งเก็บเป็นจำนวนเต็มแบบคูณสเกล เช่น int16)
+    if re.search(r'night|viirs|vnl|ntl|dnb|black.?marble|radiance|แสงไฟ|ไฟกลางคืน', n):
+        return 'density', 'ค่าความสว่างแสงไฟกลางคืน (ค่าต่อพื้นที่ ไม่ใช่จำนวนนับ) — รวมพิกเซลด้วยค่าเฉลี่ย'
+    if re.search(r'ndvi|evi|savi|ndwi|ndbi|ndmi|ดัชนี', n):
+        return 'density', 'ชื่อไฟล์บอกดัชนี (NDVI ฯลฯ) = ค่าต่อเนื่อง — รวมพิกเซลด้วยค่าเฉลี่ย'
     if 'float' in dt:
         if re.search(r'pop|ppp|worldpop|ประชากร|count|_cn_', n):
             return 'count', 'ทศนิยม + ชื่อไฟล์เกี่ยวกับประชากร → น่าจะเป็นจำนวนนับต่อพิกเซล'

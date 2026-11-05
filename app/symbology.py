@@ -42,6 +42,7 @@ RAMPS = {
 }
 RAMPS = {k: v.split() for k, v in RAMPS.items()}
 CATEGORICAL = {k for k in RAMPS if 'หมวดหมู่' in k}
+PALETTED_MAX = 4096          # เท่ากับเพดาน hist_int ของงานเตรียมข้อมูล (QGIS ไม่จำกัด แต่ตารางหลายพันแถวช้า)
 DENS_BINS = [10, 50, 100, 300, 600, 1500, 3000]
 
 
@@ -163,6 +164,19 @@ def data_profile(ds, s=None):
     return 'generic'
 
 
+def stretch(s):
+    """min/max ตัดสะสม 2–98% แบบ QGIS — แต่ถ้าศูนย์กองเกิน 30% (เช่น night light ทั้งโลก: ทะเล/ที่มืด 97%)
+    98% ของทุกพิกเซลจะได้แค่ ~1 → ไฟทุกดวงขาวโพลน ; กรณีนี้ใช้ 98% ของพิกเซลที่มีค่า (> 0) เป็นค่าบน
+    ศูนย์ยังแสดงเป็นสีปลายล่าง (ดำ) ไม่ได้ถูกซ่อน"""
+    lo, hi = float(np.quantile(s, 0.02)), float(np.quantile(s, 0.98))
+    pos = s[s > 0]
+    if (s == 0).mean() > 0.3 and pos.size:
+        lo, hi = min(lo, 0.0), float(np.quantile(pos, 0.98))
+    if hi <= lo:
+        hi = lo + (abs(lo) or 1) * 1e-3
+    return lo, hi
+
+
 def continuous_default(ds):
     """สไตล์เริ่มต้นของข้อมูลต่อเนื่อง แบบ QGIS: Singleband pseudocolor · ไล่สีเชิงเส้น · min/max ตัดสะสม 2–98%
     index → RdYlGn (น้ำตาล→เขียว) · nightlight → Singleband gray ดำ→ขาว ทึบ 100% (เหมือนเปิดใน QGIS) · อื่นๆ → viridis"""
@@ -171,8 +185,7 @@ def continuous_default(ds):
     prof = data_profile(ds, s)
     hide = []
     if s is not None and s.size:
-        base = s
-        lo, hi = float(np.quantile(base, 0.02)), float(np.quantile(base, 0.98))
+        lo, hi = stretch(s)
     else:
         pct = st.get('pct') or {}
         lo, hi = pct.get('2'), pct.get('98')
@@ -181,12 +194,8 @@ def continuous_default(ds):
     if hi <= lo:
         hi = lo + (abs(lo) or 1) * 1e-3
     if prof == 'nightlight':
-        # แบบที่เปิดใน QGIS: Singleband gray ดำ→ขาว · ทึบ 100% · ไม่ซ่อนค่า · ตัดสะสม 2–98% จากทุกพิกเซล
+        # แบบที่เปิดใน QGIS: Singleband gray ดำ→ขาว · ทึบ 100% · ไม่ซ่อนค่า
         # (เดิมซ่อน 0 + ทึบ 85% → พื้นมืดโปร่งสลับกับพิกเซลแสงจาง เป็นลายกระดำกระด่างทับภาพดาวเทียม)
-        if s is not None and s.size:
-            lo, hi = float(np.quantile(s, 0.02)), float(np.quantile(s, 0.98))
-            if hi <= lo:
-                hi = lo + (abs(lo) or 1) * 1e-3
         return dict(type='gray', min=lo, max=hi, invert=False, metric='value', hide_values=[], opacity=1.0, profile=prof)
     ramp = {'index': 'RdYlGn'}.get(prof, 'viridis')
     out = classify(ds, dict(type='pseudocolor', ramp=ramp, mode='continuous', interp='linear', classes=5, min=lo, max=hi, metric='value',
@@ -209,14 +218,19 @@ def classify(ds, req):
             if s is None:
                 raise ValueError('ยังไม่มีสถิติ — รองานเตรียมข้อมูลให้เสร็จก่อน')
             vals = sorted(np.unique(s).tolist())
-        if len(vals) > 256:
-            raise ValueError(f'ค่าไม่ซ้ำ {len(vals):,} ค่า มากเกินสำหรับแบบค่าเฉพาะ (≤ 256) — ใช้ Singleband pseudocolor แทน')
+        if len(vals) > PALETTED_MAX:
+            raise ValueError(f'ค่าไม่ซ้ำ {len(vals):,} ค่า มากเกินสำหรับแบบค่าเฉพาะ (≤ {PALETTED_MAX:,}) — ข้อมูลต่อเนื่อง/ทศนิยมใช้ Singleband pseudocolor แทน')
         ex = ds.get('exclude_values') or []
         vals = [v for v in vals if v not in ex]
         cols = ramp_colors(ramp, len(vals), inv)
         out['entries'] = [dict(value=v, color=c, label=fmtv(v), visible=True) for v, c in zip(vals, cols)]
         return out
     if t == 'gray':
+        if req.get('min') is None or req.get('max') is None:
+            s = sample_values(ds, metric)
+            if s is None or not s.size:
+                raise ValueError('ยังไม่มีค่าสุ่ม — รองานเตรียมข้อมูลให้เสร็จก่อน')
+            out['min'], out['max'] = stretch(s)
         return out
     n = max(2, min(int(req.get('classes', 5)), 64))
     mode, interp = req.get('mode', 'continuous'), req.get('interp', 'linear')
@@ -226,10 +240,9 @@ def classify(ds, req):
         s = sample_values(ds, metric)
         if s is None or not s.size:
             raise ValueError('ยังไม่มีค่าสุ่ม — รองานเตรียมข้อมูลให้เสร็จก่อน')
-        if lo is None:
-            lo = float(np.quantile(s, 0.02))
-        if hi is None:
-            hi = float(np.quantile(s, 0.98))
+        slo, shi = stretch(s)
+        lo = slo if lo is None else lo
+        hi = shi if hi is None else hi
     lo, hi = float(lo), float(hi)
     if hi <= lo:
         hi = lo + 1

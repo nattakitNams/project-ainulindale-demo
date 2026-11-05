@@ -551,6 +551,21 @@ def tile_size(ogs, inmem, extra=1):
     return max(L, cap // L * L)
 
 
+TILE_MAX_PX = 150_000_000      # ไทล์เดียวใหญ่กว่านี้ → อาร์เรย์ float64 หลายตัว เกินหน่วยความจำเครื่องทั่วไป
+
+
+def check_tiles(grid, ogs, extra=1):
+    """แตกพิกเซลละเอียดมาก (เช่น 15″ → 0.01″ = ×1500) → ไทล์ต้องเป็นพหุคูณของอัตราแตก × 512 จนทั้งงานกลายเป็นไทล์เดียวขนาดยักษ์
+    → แจ้งตั้งแต่ประเมินงาน แทนการล้มกลางทางเพราะหน่วยความจำไม่พอ"""
+    T = tile_size(ogs, is_inmem(grid), extra)
+    _, _, H, W = grid.win
+    if min(T, H) * min(T, W) > TILE_MAX_PX:
+        k = max([o.k for o in ogs if o.mode == 'up'] or [1])
+        raise EngineError(f'ความละเอียดเป้าหมายละเอียดกว่าข้อมูลต้นทาง {k:,} เท่า — ต้องประมวลผลทีละ {min(T, H):,} × {min(T, W):,} พิกเซล '
+                          'เกินหน่วยความจำ · เลือกความละเอียดที่หยาบขึ้น (ข้อมูลพิกัดองศา ความละเอียดเป็นฟิลิปดา ″)')
+    return T
+
+
 def iter_tiles(grid, T, full=False):
     """ไทล์ในหน้าต่างผลลัพธ์ (พิกัดกริดเต็ม) ; full=True = ทั้งกริด"""
     R0, C0, H, W = (0, 0, grid.height, grid.width) if full else grid.win
