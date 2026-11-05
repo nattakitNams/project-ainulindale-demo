@@ -1,0 +1,44 @@
+# สร้างตัวติดตั้ง Ainulindale-setup.zip จากโค้ดใน repo แล้วแนบใน GitHub Release
+# ใช้: push tag เช่น  git tag v1.0.0 && git push origin v1.0.0
+# ไฟล์ที่ได้สร้างโดยเครื่องของ GitHub จากโค้ดสาธารณะ → ใครก็ตรวจย้อนได้ว่า zip มาจากโค้ดไหน (ดู log ของ workflow)
+name: Build installer release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PY_EMBED: '3.13.16'                       # ต้องตรงกับเวอร์ชันที่ทดสอบติดตั้งจริงแล้ว
+  WEB_URL: https://nattakitnams.github.io/project-ainulindale-demo/
+  ORIGIN: https://nattakitnams.github.io
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: ดาวน์โหลด Python แบบพกพา + get-pip (แหล่งทางการ)
+        run: |
+          mkdir -p tools/cache
+          curl -fsSL -o tools/cache/python-${PY_EMBED}-embed-amd64.zip https://www.python.org/ftp/python/${PY_EMBED}/python-${PY_EMBED}-embed-amd64.zip
+          curl -fsSL -o tools/cache/get-pip.py https://bootstrap.pypa.io/get-pip.py
+          sha256sum tools/cache/*
+      - name: สร้างตัวติดตั้ง
+        run: python tools/build_installer.py --embed tools/cache/python-${PY_EMBED}-embed-amd64.zip --getpip tools/cache/get-pip.py --web-url "$WEB_URL" --origin "$ORIGIN"
+      - name: แนบใน Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Ainulindale-setup.zip
+            dist/SHA256.txt
+          body: |
+            **ติดตั้ง:** ดาวน์โหลด `Ainulindale-setup.zip` → แตกไฟล์ → ดับเบิลคลิก `Ainulindale.bat` → ทำตามตัวช่วยติดตั้งในหน้าเว็บ
+            Windows อาจเตือน "Windows protected your PC" (ไฟล์ยังไม่ได้ลงนามดิจิทัล) → More info → Run anyway
+            ตรวจไฟล์: เทียบ SHA-256 กับ `SHA256.txt` · ไฟล์นี้สร้างโดย GitHub Actions จากโค้ดใน tag นี้ (ดู log ของ workflow)

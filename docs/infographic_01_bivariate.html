@@ -1,0 +1,445 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ไบแวเรียต — โค้ดทำงานอย่างไร</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+:root {
+  --bg: #f4f5fa; --paper: #ffffff; --ink: #1b2033; --muted: #5f6680; --line: #e2e5ef;
+  --ui: #2f6fe4; --srv: #7c4ddb; --job: #e07a1f; --eng: #179a74; --file: #6b7280; --np: #d6336c;
+  --code: #1f2330;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.65 'IBM Plex Sans Thai', sans-serif; }
+code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+header { background: linear-gradient(135deg, #1b2a4a 0%, #2f3f75 55%, #4b3b8f 100%); color: #fff; padding: 56px 0 46px; margin-bottom: 34px; position: relative; overflow: hidden; }
+header::after { content: ''; position: absolute; right: -60px; top: -40px; width: 380px; height: 380px; background: repeating-linear-gradient(90deg, transparent 0 22px, #ffffff10 22px 24px), repeating-linear-gradient(0deg, transparent 0 22px, #ffffff10 22px 24px); transform: rotate(12deg); }
+.eyebrow { font: 600 12px/1 'JetBrains Mono'; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+h1 { font-size: 40px; line-height: 1.2; margin: 12px 0 10px; }
+.lead { max-width: 760px; opacity: .88; font-size: 16.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; position: relative; z-index: 1; }
+.chip { background: #ffffff1c; border: 1px solid #ffffff33; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+h2 { font-size: 25px; margin: 52px 0 6px; display: flex; align-items: center; gap: 12px; }
+h2 .n { font: 700 14px 'JetBrains Mono'; background: var(--ink); color: #fff; border-radius: 8px; padding: 3px 9px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; box-shadow: 0 1px 2px #0000000a, 0 8px 24px -12px #1b20331f; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+
+/* เส้นทางข้อมูล */
+.lanes { display: grid; grid-template-columns: 150px 1fr; gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--paper); }
+.lane-h { padding: 14px 14px; font-weight: 700; font-size: 13.5px; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid var(--line); }
+.lane-h small { font: 400 11.5px 'JetBrains Mono'; opacity: .8; }
+.lane { padding: 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.lanes > :nth-last-child(-n+2) { border-bottom: 0; }
+.step { flex: 1 1 180px; border-radius: 12px; padding: 10px 12px; font-size: 13.5px; border: 1.5px solid; position: relative; background: #fff; }
+.step b { display: block; font-size: 13.5px; }
+.step code { font-size: 11.5px; display: block; margin-top: 3px; word-break: break-all; }
+.step .no { position: absolute; top: -9px; left: 10px; font: 700 11px 'JetBrains Mono'; color: #fff; border-radius: 6px; padding: 1px 6px; }
+.c-ui { color: var(--ui); } .c-srv { color: var(--srv); } .c-job { color: var(--job); } .c-eng { color: var(--eng); } .c-file { color: var(--file); }
+.b-ui { border-color: #2f6fe455; background: #2f6fe40a; } .b-ui .no { background: var(--ui); }
+.b-srv { border-color: #7c4ddb55; background: #7c4ddb0a; } .b-srv .no { background: var(--srv); }
+.b-job { border-color: #e07a1f55; background: #e07a1f0d; } .b-job .no { background: var(--job); }
+.b-eng { border-color: #179a7455; background: #179a740d; } .b-eng .no { background: var(--eng); }
+.b-file { border-color: #6b728055; background: #6b72800a; } .b-file .no { background: var(--file); }
+.bg-ui { background: #2f6fe412; color: var(--ui); } .bg-srv { background: #7c4ddb12; color: var(--srv); } .bg-job { background: #e07a1f14; color: var(--job); }
+.bg-eng { background: #179a7414; color: var(--eng); } .bg-file { background: #6b728012; color: var(--file); }
+.arrow { align-self: center; color: #9aa1b8; font-size: 18px; }
+
+/* ไลบรารี */
+.lib { display: flex; flex-direction: column; gap: 8px; }
+.lib .top { display: flex; align-items: center; gap: 10px; }
+.lib .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font: 700 13px 'JetBrains Mono'; color: #fff; flex: none; }
+.lib h3 { margin: 0; font-size: 16.5px; } .lib .role { font-size: 12.5px; color: var(--muted); }
+.lib ul { margin: 0; padding-left: 0; list-style: none; font-size: 13px; }
+.lib li { padding: 4px 0; border-top: 1px dashed var(--line); }
+.lib li code { background: #f1f2f8; border-radius: 5px; padding: 1px 6px; font-size: 12px; color: #3b2f8f; }
+
+/* ขั้นตอน */
+.flow { position: relative; padding-left: 34px; }
+.flow::before { content: ''; position: absolute; left: 14px; top: 8px; bottom: 8px; width: 3px; background: linear-gradient(var(--eng), var(--job), var(--file)); border-radius: 3px; }
+.fs { position: relative; margin-bottom: 18px; }
+.fs .dot { position: absolute; left: -34px; top: 16px; width: 31px; height: 31px; border-radius: 50%; background: #fff; border: 3px solid var(--eng); display: grid; place-items: center; font: 700 12px 'JetBrains Mono'; color: var(--eng); }
+.fs .card { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .fs .card { grid-template-columns: 1fr; } }
+.fs h3 { margin: 0 0 4px; font-size: 17px; }
+.fs .where { font: 500 12px 'JetBrains Mono'; color: var(--muted); }
+.fs p { margin: 8px 0; font-size: 14px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag { font: 500 11.5px 'JetBrains Mono'; border-radius: 6px; padding: 2px 7px; }
+.t-np { background: #d6336c14; color: var(--np); } .t-rio { background: #179a7414; color: var(--eng); } .t-py { background: #2f6fe412; color: var(--ui); } .t-os { background: #e07a1f14; color: var(--job); }
+pre { margin: 0; border-radius: 12px; overflow: auto; font-size: 12.3px; line-height: 1.55; }
+pre code.hljs { padding: 14px 16px; background: var(--code); }
+.io { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; margin-top: 8px; }
+.io dt { font: 600 11.5px 'JetBrains Mono'; color: var(--muted); padding-top: 2px; } .io dd { margin: 0; }
+
+/* ตารางกติกา */
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: #fafbfe; }
+td code { font-size: 12.5px; background: #f1f2f8; padding: 1px 6px; border-radius: 5px; }
+.pill { display: inline-block; border-radius: 6px; padding: 1px 8px; font: 600 12px 'JetBrains Mono'; }
+
+/* ภาพประกอบ */
+.biv { display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; }
+.biv i { height: 54px; border-radius: 6px; display: grid; place-items: center; font: 700 15px 'JetBrains Mono'; color: #fff; text-shadow: 0 1px 2px #0005; font-style: normal; }
+.biv i.hl { outline: 3px solid var(--ink); outline-offset: -3px; }
+.pix { display: grid; gap: 2px; }
+.pix i { width: 26px; height: 26px; border-radius: 4px; display: grid; place-items: center; font: 600 10.5px 'JetBrains Mono'; font-style: normal; }
+.kv { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.formula { font: 600 17px 'JetBrains Mono'; background: #1b2033; color: #fff; border-radius: 12px; padding: 14px 18px; display: inline-block; }
+.formula em { color: #ffd479; font-style: normal; }
+.note { border-left: 4px solid var(--job); background: #e07a1f0d; padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 14px; }
+.stat { font: 700 30px/1.1 'JetBrains Mono'; } .stat-l { font-size: 13px; color: var(--muted); }
+.files { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .files { grid-template-columns: 1fr 1fr; } }
+.file { border: 1.5px dashed #b8bdd0; border-radius: 12px; padding: 12px; background: #fff; }
+.file .ext { font: 700 13px 'JetBrains Mono'; color: #fff; background: var(--file); border-radius: 6px; padding: 2px 8px; display: inline-block; }
+.file p { margin: 6px 0 0; font-size: 12.8px; } .file code { font-size: 11.5px; color: var(--muted); display: block; margin-top: 6px; }
+footer { color: var(--muted); font-size: 12.5px; margin-top: 50px; border-top: 1px solid var(--line); padding-top: 14px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">Ainulindalë · Code infographic 01</div>
+  <h1>ไบแวเรียต: จากปุ่ม "เริ่มงาน" สู่แผนที่ 9 สี</h1>
+  <div class="lead">เส้นทางข้อมูลทั้งหมดของฟังก์ชันสร้างแผนที่ไบแวเรียต — ไฟล์ไหน ฟังก์ชันอะไร ใช้ไลบรารีตัวไหน อ่านอะไรจากดิสก์ และคำนวณอย่างไรทีละไทล์ อ้างอิงโค้ดจริงใน <code>app/ops.py</code> และ <code>app/engine.py</code></div>
+  <div class="chips"><span class="chip">🐍 Python 3 · Flask</span><span class="chip">🗺 rasterio / GDAL</span><span class="chip">🔢 NumPy</span><span class="chip">🧵 ThreadPoolExecutor</span><span class="chip">🗄 SQLite</span><span class="chip">🧮 fractions.Fraction</span><span class="chip">🖼 Pillow</span></div>
+</div></header>
+
+<div class="wrap">
+
+<h2><span class="n">01</span>ภาพรวม: ข้อมูลเดินทางผ่าน 5 ชั้น</h2>
+<p class="sub">หน้าเว็บไม่คำนวณเอง — ส่งพารามิเตอร์เป็น JSON ไปให้เซิร์ฟเวอร์ ซึ่งลงคิวแล้วเปิด process แยกมารันงานหนัก หน้าจอจึงไม่ค้างแม้งานใช้ 10 นาที</p>
+<div class="lanes">
+  <div class="lane-h bg-ui">เบราว์เซอร์<small>static/app.js</small></div>
+  <div class="lane">
+    <div class="step b-ui"><span class="no">1</span><b>ผู้ใช้ตั้งค่า</b>เลือกแกน X/Y · เกณฑ์ · พาเลท · ความละเอียด<code>pageBiv()</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">2</span><b>ประเมินก่อนรัน</b>ขนาดกริด คำเตือน<code>runJob() → POST /api/estimate</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">3</span><b>ส่งงาน</b>JSON params<code>POST /api/jobs {kind:'bivariate'}</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">9</span><b>ดูความคืบหน้า</b>ถาม % / ETA ทุก ~1 วิ<code>GET /api/jobs</code></div>
+  </div>
+  <div class="lane-h bg-srv">เซิร์ฟเวอร์<small>server.py · jobs.py</small></div>
+  <div class="lane">
+    <div class="step b-srv"><span class="no">4</span><b>ตรวจพารามิเตอร์</b>สร้างกริดทดลอง ไม่อ่านข้อมูล<code>validate_job() · make_grid() · OnGrid()</code></div><span class="arrow">→</span>
+    <div class="step b-srv"><span class="no">5</span><b>ลงคิว</b>แถวใหม่ในตาราง jobs + โฟลเดอร์ผลลัพธ์<code>jobs.submit() → db.insert('jobs')</code></div><span class="arrow">→</span>
+    <div class="step b-srv"><span class="no">6</span><b>เปิด process แยก</b>ทีละงาน ไม่มีหน้าต่าง<code>subprocess.Popen([python,'-m','app.worker',id])</code></div>
+  </div>
+  <div class="lane-h bg-job">Worker<small>worker.py</small></div>
+  <div class="lane">
+    <div class="step b-job"><span class="no">7</span><b>รันงาน</b>ตั้ง GDAL ใช้ทุกคอร์ · ส่ง progress / log<code>os.environ['GDAL_NUM_THREADS']='ALL_CPUS'<br>OPS['bivariate'](job, progress, log)</code></div><span class="arrow">→</span>
+    <div class="step b-job"><span class="no">8b</span><b>จบงาน</b>บันทึกเวลา · สถานะ done/failed/cancelled<code>db.update('jobs', status='done', result=…)</code></div>
+  </div>
+  <div class="lane-h bg-eng">แกนคำนวณ<small>ops.py · engine.py</small></div>
+  <div class="lane">
+    <div class="step b-eng"><span class="no">8</span><b>op_bivariate()</b>กริด → จัดชั้น X,Y ทีละไทล์ (หลายเธรด) → รหัส 1–9 → สถิติ<code>Source · OnGrid · Classifier · parallel_tiles</code></div>
+  </div>
+  <div class="lane-h bg-file">ไฟล์ผลลัพธ์<small>workspace/maps/…</small></div>
+  <div class="lane">
+    <div class="step b-file"><b>.tif</b>GeoTIFF uint8 + ตารางสี</div><div class="step b-file"><b>.qml</b>สไตล์ QGIS</div><div class="step b-file"><b>_legend.png</b>คำอธิบาย</div>
+    <div class="step b-file"><b>_stats.csv</b>สถิติรายรหัส</div><div class="step b-file"><b>lineage.json</b>ที่มา+พารามิเตอร์</div>
+  </div>
+</div>
+
+<h2><span class="n">02</span>พารามิเตอร์ที่หน้าเว็บส่งมา</h2>
+<p class="sub">ทุกอย่างที่ผู้ใช้ตั้งถูกเก็บเป็น JSON ก้อนเดียวในคอลัมน์ <code>jobs.params</code> — รันซ้ำ (rerun) ได้เพราะเก็บไว้ครบ</p>
+<div class="grid g2">
+<pre><code class="language-json">{
+  "name": "ไบแวเรียต น้ำท่วม × ประชากร",
+  "x": { "dataset_id": 27, "n": 3, "method": "breaks",
+         "breaks": [300, 1500], "metric": "density",
+         "label": "ประชากร" },
+  "y": { "dataset_id": 26, "n": 2, "method": "breaks",
+         "breaks": [1], "metric": "value", "label": "น้ำท่วม" },
+  "target_res": "3",            // อาร์ควินาที (เศษส่วนได้ เช่น "3/10")
+  "colors": ["#e8e8e8", "...", "#c85a5a"],   // nx × ny สี
+  "highlight": [5, 6],          // รหัสเขตเน้น
+  "weight_dataset_id": 27,      // ชั้นที่ใช้เป็นน้ำหนัก (เช่น คน)
+  "aoi_id": 4,                  // พื้นที่ศึกษา (ไม่บังคับ)
+  "tie": "high",                // majority เสมอ → ชั้นสูงกว่า
+  "count_down_valid": "positive"
+}</code></pre>
+<div class="card">
+  <h3 style="margin-top:0">อ่านค่าเหล่านี้อย่างไร</h3>
+  <table>
+    <tr><th>คีย์</th><th>ใช้ที่</th><th>ความหมาย</th></tr>
+    <tr><td><code>x / y</code></td><td><code>Classifier(cfg)</code></td><td>จำนวนชั้น <b>n</b> และเกณฑ์ <b>n−1</b> ค่า · metric = density (count ÷ พื้นที่) หรือ value</td></tr>
+    <tr><td><code>method</code></td><td><code>auto_breaks()</code></td><td>quantile / equal → คำนวณเกณฑ์จากค่าสุ่มก่อน · degurba → วิธีเมือง/ชนบทของ EU</td></tr>
+    <tr><td><code>target_res</code></td><td><code>Fraction()</code></td><td>เก็บเป็นเศษส่วนตรง ไม่ใช้ทศนิยม → 3″ ÷ 0.3″ = 10 พอดี ไม่ใช่ 9.999…</td></tr>
+    <tr><td><code>colors</code></td><td><code>cmap{}</code></td><td>แปลง #rrggbb → (r,g,b,255) เป็นตารางสีในไฟล์ tif</td></tr>
+    <tr><td><code>weight_*</code></td><td><code>ogw.values()</code></td><td>ไม่ใส่ → ใช้ชั้นที่เป็น count อัตโนมัติ (นับคนในแต่ละรหัส)</td></tr>
+  </table>
+</div>
+</div>
+
+<h2><span class="n">03</span>ไลบรารีที่ใช้ และคำสั่งที่เรียกจริง</h2>
+<p class="sub">ไม่มี GIS server — ทุกอย่างเป็นไลบรารี Python ในเครื่อง ตัวหลักคือ rasterio (ห่อ GDAL) กับ NumPy</p>
+<div class="grid g3">
+  <div class="card lib"><div class="top"><div class="ic" style="background:#179a74">rio</div><div><h3>rasterio <span class="role">(GDAL)</span></h3><div class="role">อ่าน/เขียน GeoTIFF แบบหน้าต่าง</div></div></div>
+    <ul><li><code>rasterio.open(path)</code> เปิดไฟล์ต้นทาง (แยกต่อเธรด)</li><li><code>ds.read(band, window=Window(c,r,w,h))</code> อ่านเฉพาะไทล์</li>
+    <li><code>rasterio.open(p,'w', driver='GTiff', compress='deflate', tiled=True)</code></li><li><code>ds.write_colormap(1, cmap)</code> ใส่สีก่อนเขียนข้อมูล</li>
+    <li><code>d.build_overviews(fac, Resampling.mode)</code> ภาพย่อสำหรับซูม</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#d6336c">np</div><div><h3>NumPy</h3><div class="role">คำนวณทั้งไทล์ทีเดียว (vectorized)</div></div></div>
+    <ul><li><code>np.digitize(vals, breaks)</code> ค่า → เลขชั้น</li><li><code>a.reshape(h//m,m,w//m,m).sum((1,3))</code> รวมพิกเซล m×m</li>
+    <li><code>np.repeat(np.repeat(a,k,0),k,1)</code> แตกพิกเซล</li><li><code>np.bincount(code, weights=w)</code> นับ/รวมน้ำหนักต่อรหัส</li>
+    <li><code>np.quantile(sample, i/n)</code> เกณฑ์ควอนไทล์</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#2f6fe4">py</div><div><h3>ไลบรารีมาตรฐาน</h3><div class="role">ไม่ต้องติดตั้งเพิ่ม</div></div></div>
+    <ul><li><code>fractions.Fraction</code> ความละเอียดแบบเศษส่วนตรง</li><li><code>concurrent.futures.ThreadPoolExecutor</code> หลายเธรด</li>
+    <li><code>collections.deque</code> คิวไทล์ล่วงหน้า 2×เธรด</li><li><code>threading.local()</code> GDAL dataset ต่อเธรด</li><li><code>subprocess.Popen</code> เปิด worker</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#7c4ddb">db</div><div><h3>SQLite <span class="role">(sqlite3)</span></h3><div class="role">แคตตาล็อก + คิวงาน</div></div></div>
+    <ul><li><code>db.get('datasets', id)</code> เมทาดาทาชุดข้อมูล (path, transform, nodata, value_type)</li><li><code>db.insert('jobs', …)</code> ลงคิว</li>
+    <li><code>db.update('jobs', progress, eta_s)</code> worker รายงาน %</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#e07a1f">os</div><div><h3>ctypes / os</h3><div class="role">ปรับจำนวนเธรดตามเครื่อง</div></div></div>
+    <ul><li><code>os.cpu_count() − 2</code> เหลือคอร์ไว้ให้เครื่อง</li><li><code>kernel32.GlobalMemoryStatusEx</code> อ่าน RAM ว่าง → จำกัดเธรด</li>
+    <li><code>GDAL_NUM_THREADS=ALL_CPUS</code> สร้าง overview ทุกคอร์</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#6b7280">pil</div><div><h3>Pillow + export.py</h3><div class="role">ไฟล์ประกอบผลลัพธ์</div></div></div>
+    <ul><li><code>legend_png()</code> วาดตารางสีคำอธิบาย</li><li><code>qml_paletted()</code> เขียน XML สไตล์ QGIS</li>
+    <li><code>write_csv()</code> สถิติ (UTF-8 BOM เปิดใน Excel ได้)</li><li><code>write_lineage()</code> JSON ที่มาของข้อมูล</li></ul></div>
+</div>
+
+<h2><span class="n">04</span>หัวใจ: กติกาเปลี่ยนความละเอียดตามประเภทค่า</h2>
+<p class="sub">สองชั้นข้อมูลมักละเอียดไม่เท่ากัน (เช่น น้ำท่วม 0.3″ × ประชากร 3″) <code>OnGrid</code> ปรับทั้งคู่ลงกริดเดียวกัน โดยเลือกวิธีตาม <b>ประเภทค่า</b> ของข้อมูล — นี่คือเหตุผลที่ผลรวมคน 71,689,208 คนไม่หาย</p>
+<div class="grid g2">
+<div class="card">
+  <table>
+    <tr><th>ประเภทค่า</th><th>แตกพิกเซล <span class="pill bg-ui">up ×k</span></th><th>รวมพิกเซล <span class="pill bg-job">down ÷m</span></th></tr>
+    <tr><td><b>count</b><br><span class="stat-l">จำนวนคน, จำนวนอาคาร</span></td><td>หารเท่ากัน <code>v / k²</code></td><td>ผลรวม <code>block_sum()</code></td></tr>
+    <tr><td><b>density</b><br><span class="stat-l">คน/ตร.กม., ฝน มม.</span></td><td>ทำซ้ำค่า <code>np.repeat</code></td><td>เฉลี่ยถ่วงพื้นที่ <code>Σ(v·a)/Σa</code></td></tr>
+    <tr><td><b>class</b><br><span class="stat-l">ใช้ที่ดิน, ท่วม/ไม่ท่วม</span></td><td>ทำซ้ำค่า</td><td>เสียงข้างมาก <code>majority_classes()</code><br>เสมอ → ชั้นสูงกว่า (<code>tie='high'</code>)</td></tr>
+  </table>
+  <p class="note" style="margin-top:14px">ลำดับจัดชั้นตอนรวมพิกเซล: count → <b>รวมก่อน</b>แล้วค่อยคิดความหนาแน่น · density → <b>เฉลี่ยก่อน</b> · class → <b>จัดชั้นก่อน</b>แล้วค่อยหาเสียงข้างมาก</p>
+</div>
+<div class="card">
+  <div class="kv">
+    <div><div class="stat-l">ต้นทาง 0.3″ (m = 10)</div>
+      <div class="pix" style="grid-template-columns:repeat(4,26px)">
+        <i style="background:#fde2b8">2</i><i style="background:#fde2b8">1</i><i style="background:#fbc37d">5</i><i style="background:#fde2b8">0</i>
+        <i style="background:#fbc37d">4</i><i style="background:#fde2b8">2</i><i style="background:#fde2b8">1</i><i style="background:#fde2b8">3</i>
+        <i style="background:#fde2b8">0</i><i style="background:#f59b3d">9</i><i style="background:#fde2b8">2</i><i style="background:#fde2b8">1</i>
+        <i style="background:#fde2b8">1</i><i style="background:#fde2b8">2</i><i style="background:#fbc37d">6</i><i style="background:#fde2b8">2</i></div></div>
+    <div style="font-size:26px;color:#9aa1b8">→</div>
+    <div><div class="stat-l">count รวม 2×2</div>
+      <div class="pix" style="grid-template-columns:repeat(2,54px)"><i style="background:#f59b3d;width:54px;height:54px;font-size:15px">9</i><i style="background:#f59b3d;width:54px;height:54px;font-size:15px">9</i>
+      <i style="background:#e07a1f;width:54px;height:54px;color:#fff;font-size:15px">12</i><i style="background:#f59b3d;width:54px;height:54px;font-size:15px">11</i></div></div>
+    <div style="font-size:13px;color:var(--muted);max-width:180px">ผลรวมก่อน = ผลรวมหลัง = <b>41</b><br>ค่าไม่หาย ไม่เกิน ไม่ขาด</div>
+  </div>
+<pre style="margin-top:14px"><code class="language-python"># engine.py — รวมบล็อก m×m ด้วยการ reshape (ไม่มี for loop)
+def block_sum(a, m):
+    h, w = a.shape
+    return a.reshape(h // m, m, w // m, m).sum(axis=(1, 3))
+
+# โหมด up/down/same มาจากอัตราส่วนเศษส่วนของความละเอียด
+r = gm.int_ratio(src.res_frac / grid.res_frac)
+#  Fraction(3,1)  → ('up', 3)     ต้นทางหยาบกว่า → แตกพิกเซล
+#  Fraction(1,10) → ('down', 10)  ต้นทางละเอียดกว่า → รวมพิกเซล
+#  Fraction(2,3)  → None          ไม่ลงตัว → แจ้งข้อผิดพลาด</code></pre>
+</div>
+</div>
+
+<h2><span class="n">05</span>op_bivariate() ทีละขั้น</h2>
+<p class="sub"><code>app/ops.py</code> บรรทัด 397–584 · ทุกขั้นก่อนวนไทล์ใช้เวลาไม่ถึงวินาที — เวลาจริงหมดไปกับขั้น ⑨</p>
+<div class="flow">
+
+<div class="fs"><div class="dot">1</div><div class="card"><div>
+  <h3>โหลดเมทาดาทา + ตรวจความพร้อม</h3><div class="where">ops.py:399–405</div>
+  <p>ดึงแถวชุดข้อมูล X, Y จาก SQLite ยังไม่แตะไฟล์ภาพ · ต้อง <b>ยืนยันประเภทค่า</b> (count/density/class) ก่อน เพราะกติกาทุกอย่างขึ้นกับค่านี้</p>
+  <dl class="io"><dt>อ่าน</dt><dd>ตาราง <code>datasets</code>: path, transform, nodata, value_type, exclude_values</dd></dl>
+  <div class="tags"><span class="tag t-py">sqlite3</span></div></div>
+<pre><code class="language-python">dsx = db.get('datasets', p['x']['dataset_id'])
+dsy = db.get('datasets', p['y']['dataset_id'])
+for d in (dsx, dsy):
+    if not d.get('value_type_confirmed'):
+        raise EngineError(f'ยังไม่ได้ยืนยันประเภทค่าของ "{d["name"]}"')</code></pre></div></div>
+
+<div class="fs"><div class="dot">2</div><div class="card"><div>
+  <h3>เกณฑ์อัตโนมัติ (quantile / equal)</h3><div class="where">ops.py:196–212 · auto_breaks()</div>
+  <p>ไม่อ่านภาพทั้งไฟล์ — ใช้ <b>ค่าสุ่ม ~180,000 จุด</b> ที่งาน "เตรียมข้อมูล" เก็บไว้ใน <code>cache/samples/ds27.npz</code> แล้วหาเกณฑ์ · กันเกณฑ์ซ้ำด้วย <code>math.nextafter</code> (ข้อมูลที่กองอยู่ค่าเดียว)</p>
+  <dl class="io"><dt>อ่าน</dt><dd><code>np.load(sample_path)</code></dd><dt>ได้</dt><dd>เช่น <code>[300.0, 1500.0]</code> → เก็บใน lineage</dd></dl>
+  <div class="tags"><span class="tag t-np">np.quantile</span><span class="tag t-py">math.nextafter</span></div></div>
+<pre><code class="language-python">v = load_sample(ds, cfg.get('metric', 'density'))
+if cfg['method'] == 'quantile':
+    b = [float(np.quantile(v, i / n)) for i in range(1, n)]
+else:                                   # equal interval
+    lo, hi = float(v.min()), float(v.max())
+    b = [lo + (hi - lo) * i / n for i in range(1, n)]</code></pre></div></div>
+
+<div class="fs"><div class="dot">3</div><div class="card"><div>
+  <h3>ตัวจัดชั้น Classifier</h3><div class="where">engine.py:152–173</div>
+  <p>ตรวจว่าเกณฑ์เรียงน้อยไปมาก จำนวน = n−1 · จัดชั้นด้วย <code>np.digitize</code> — <b>ค่าเท่าเกณฑ์ขึ้นชั้นบน</b> (300 พอดี → ชั้นกลาง) · ไม่มีข้อมูล = −1</p>
+  <div class="tags"><span class="tag t-np">np.digitize</span></div></div>
+<pre><code class="language-python">def classify(self, metric_vals, valid):
+    c = np.digitize(metric_vals, self.breaks).astype('int16')
+    c[~valid] = -1          # ไม่มีข้อมูล
+    return c
+# breaks = [300, 1500]
+#   120 → 0 ,  300 → 1 ,  999 → 1 ,  1500 → 2</code></pre></div></div>
+
+<div class="fs"><div class="dot">4</div><div class="card"><div>
+  <h3>สร้างกริดเป้าหมาย make_grid()</h3><div class="where">engine.py:297–313</div>
+  <p>ใช้มุมเริ่มเดียวกับต้นทาง ขนาด = ส่วนที่ <b>ทับกัน</b> ของทุกชุด · ค่าทศนิยมของขนาดพิกเซลคัดลอกจากไฟล์ต้นทางที่ใกล้ที่สุด เพื่อให้พิกัดตรงไฟล์เดิมทุกหลัก (ผลทดสอบ: พิกเซลต่าง 0 จุด)</p>
+  <dl class="io"><dt>ตรวจ</dt><dd>CRS ต้องตรงกัน · มุมเริ่มต่างไม่เกิน 1/1000 พิกเซล</dd></dl>
+  <div class="tags"><span class="tag t-py">fractions.Fraction</span><span class="tag t-rio">rasterio.Affine</span></div></div>
+<pre><code class="language-python">res_frac = Fraction(res_frac)              # "3" → 3/1 อาร์ควินาที
+ref = min(sources, key=lambda s: abs(math.log(float(s.res_frac / res_frac))))
+rx  = ref.rx * float(res_frac / ref.res_frac)
+W = min(math.ceil(s.w * s.res_frac / res_frac - 1e-9) for s in sources)
+H = min(math.ceil(s.h * s.res_frac / res_frac - 1e-9) for s in sources)
+g = Grid(ref.x0, ref.y0, rx, ry, W, H, ref.ds.crs, ref.geographic, res_frac)</code></pre></div></div>
+
+<div class="fs"><div class="dot">5</div><div class="card"><div>
+  <h3>ผูกต้นทางกับกริด OnGrid + เลือกชั้นน้ำหนัก</h3><div class="where">ops.py:419–427 · engine.py:217–289</div>
+  <p>แต่ละแกนได้โหมด <b>same / up×k / down÷m</b> · ชั้นน้ำหนัก (เช่น จำนวนคน) ถ้าเป็นชุดเดียวกับแกนใด ใช้ object เดียวกันซ้ำ ไม่อ่านไฟล์สองรอบ</p>
+  <div class="tags"><span class="tag t-py">OnGrid</span></div></div>
+<pre><code class="language-python">ogx = engine.OnGrid(sx, grid, cdv, tie)
+ogy = engine.OnGrid(sy, grid, cdv, tie)
+wid = p.get('weight_dataset_id') or next(
+        (d['id'] for d in (dsx, dsy) if d['value_type'] == 'count'), None)
+ogw = ogx if wid == dsx['id'] else ogy if wid == dsy['id'] \
+      else engine.OnGrid(Source(dsw), grid, cdv, tie)</code></pre></div></div>
+
+<div class="fs"><div class="dot">6</div><div class="card"><div>
+  <h3>พื้นที่ศึกษา (ถ้ามี) setup_aoi()</h3><div class="where">ops.py:306–325</div>
+  <p>ตัด <b>หน้าต่างผลลัพธ์</b> ให้เหลือแค่กรอบพื้นที่ — มุมปัดลงเป็นพหุคูณของอัตราแตกพิกเซล (<code>snap_unit</code>) ไม่ให้พิกเซลแม่ถูกผ่าครึ่ง · <code>Masker</code> คืน mask ศูนย์กลางพิกเซลต่อไทล์</p>
+  <div class="tags"><span class="tag t-rio">rasterio.features</span><span class="tag t-py">shapely</span></div></div>
+<pre><code class="language-python">geom = aoimod.geom_in(int(aid), grid.crs)
+grid.set_window(geom.bounds, engine.snap_unit(ogs, f))
+return aoimod.Masker(geom, grid, rule, f), f, aoi_info</code></pre></div></div>
+
+<div class="fs"><div class="dot">7</div><div class="card"><div>
+  <h3>เปิดไฟล์ผลลัพธ์ OutWriter</h3><div class="where">ops.py:218–257</div>
+  <p>GeoTIFF <b>uint8</b> (รหัส 0–255) · บีบอัด deflate · ไทล์ 512×512 · <b>ตารางสีต้องเขียนก่อนข้อมูล</b> (ไม่งั้น GDAL error) · ถ้าผลลัพธ์เล็ก เก็บใน RAM แล้วเขียนทีเดียว</p>
+  <div class="tags"><span class="tag t-rio">rasterio.open('w')</span><span class="tag t-rio">write_colormap</span></div></div>
+<pre><code class="language-python">cmap = {0: (0, 0, 0, 0)}                   # 0 = ไม่มีข้อมูล (โปร่งใส)
+for code in range(1, ncode + 1):
+    h_ = colors[code - 1].lstrip('#')
+    cmap[code] = (int(h_[0:2],16), int(h_[2:4],16), int(h_[4:6],16), 255)
+prof = dict(driver='GTiff', dtype='uint8', nodata=0, tiled=True,
+            blockxsize=512, blockysize=512, compress='deflate',
+            BIGTIFF='IF_SAFER', SPARSE_OK='TRUE', NUM_THREADS='ALL_CPUS')
+ds = rasterio.open(path, 'w', **prof); ds.write_colormap(1, cmap)</code></pre></div></div>
+
+<div class="fs"><div class="dot">8</div><div class="card"><div>
+  <h3>แบ่งไทล์ tile_size() + iter_tiles()</h3><div class="where">engine.py:325–340</div>
+  <p>ขนาดไทล์ต้อง <b>หารด้วยอัตราแตกพิกเซลลงตัว</b> และเป็นพหุคูณ 512 (ตรงบล็อก GeoTIFF) · ปกติ ≈ 2,560 px · ถ้าต้องรวม m×m จะลดลงเหลือ 5120/m ให้ RAM พอ</p>
+  <dl class="io"><dt>ตัวอย่าง</dt><dd>100 ม. ทั้งประเทศ ≈ 5,400 × 9,600 px → ~10 ไทล์</dd></dl>
+  <div class="tags"><span class="tag t-py">math.gcd (ค.ร.น.)</span></div></div>
+<pre><code class="language-python">L = snap_unit(ogs, extra)              # ค.ร.น. ของ k ทุกแกนที่แตกพิกเซล
+if not inmem:
+    L = L * 512 // math.gcd(L, 512)    # และหาร 512 ลงตัว
+maxm = max([o.k for o in ogs if o.mode == 'down'] or [1])
+cap = 2560 if maxm == 1 else max(1, 5120 // maxm)
+return max(L, cap // L * L)</code></pre></div></div>
+
+<div class="fs"><div class="dot">9</div><div class="card"><div>
+  <h3>คำนวณทุกไทล์พร้อมกัน compute()</h3><div class="where">ops.py:471–507 · รันในหลายเธรด</div>
+  <p><b>ⓐ</b> อ่านแกนที่ <b>ถูกกว่าก่อน</b> (พิกเซลต้นทางน้อยกว่า) ถ้าว่างทั้งไทล์ → ข้ามแกนที่เหลือ ไม่ต้องอ่าน<br>
+  <b>ⓑ</b> ได้เลขชั้น X, Y → <b>รหัส = Y×nX + X + 1</b><br>
+  <b>ⓒ</b> สถิติด้วย <code>bincount</code>: จำนวนพิกเซล · พื้นที่จริงรายแถว (cos ละติจูด) · น้ำหนักรวมต่อรหัส</p>
+  <div class="tags"><span class="tag t-rio">ds.read(window=…)</span><span class="tag t-np">np.where</span><span class="tag t-np">np.bincount</span><span class="tag t-np">matmul @</span></div></div>
+<pre><code class="language-python">for ax, og in order:                       # เรียงจากแกนที่อ่านถูกกว่า
+    c = og.classes(clx if ax == 'x' else cly, r0, c0, h, w)
+    if not (c >= 0).any():
+        empty = og; break                  # ทั้งไทล์ไม่มีข้อมูล → ข้าม
+    cls[ax] = c
+ok   = (cls['x'] >= 0) & (cls['y'] >= 0)
+code = np.where(ok, cls['y'] * nx + cls['x'] + 1, 0).astype('uint8')
+flat = code.ravel()
+px   = np.bincount(flat, minlength=ncode + 1)            # พิกเซลต่อรหัส
+rows = np.repeat(np.arange(h), w)
+cnt  = np.bincount(rows * (ncode+1) + flat,
+                   minlength=h*(ncode+1)).reshape(h, ncode+1)
+area = grid.area_rows(r0, h) @ cnt                       # ตร.กม. ต่อรหัส
+ws   = np.bincount(flat, weights=wv.ravel(), minlength=ncode + 1)</code></pre></div></div>
+
+<div class="fs"><div class="dot">10</div><div class="card"><div>
+  <h3>กระจายงานหลายเธรด parallel_tiles()</h3><div class="where">ops.py:260–298</div>
+  <p>NumPy และ GDAL <b>ปล่อย GIL</b> ระหว่างคำนวณ/อ่านไฟล์ → เธรดได้ผลจริง · เธรดหลักรับผล <b>ตามลำดับเดิม</b> แล้วเขียนไฟล์คนเดียว (GeoTIFF เขียนพร้อมกันไม่ได้) · คิวล่วงหน้าไม่เกิน 2×เธรด คุม RAM</p>
+  <dl class="io"><dt>เธรด</dt><dd><code>min(CPU−2, RAM ว่าง×50% ÷ (ไทล์×3), 8)</code></dd><dt>ผล</dt><dd>100 ม. ทั้งประเทศ 240 → 144 วินาที · พิกเซลตรงเดิม 100%</dd></dl>
+  <div class="tags"><span class="tag t-py">ThreadPoolExecutor</span><span class="tag t-py">deque</span><span class="tag t-os">GlobalMemoryStatusEx</span></div></div>
+<pre><code class="language-python">with ThreadPoolExecutor(nth) as ex:
+    q = deque()
+    for i, t in it:                         # เติมคิว 2×เธรด
+        q.append((i, t, ex.submit(fn, *t)))
+        if len(q) >= nth * 2: break
+    while q:
+        i, t, f = q.popleft()
+        yield i, t, f.result()              # ได้ผลตามลำดับไทล์
+        nxt = next(it, None)
+        if nxt: q.append((nxt[0], nxt[1], ex.submit(fn, *nxt[1])))
+
+# เธรดหลัก: เขียนไฟล์ + รวมสถิติ + รายงาน ETA
+W.write(r0, c0, o['code']); px_cnt += o['px']; area += o['area']</code></pre></div></div>
+
+<div class="fs"><div class="dot">11</div><div class="card"><div>
+  <h3>ปิดงาน: overview + ไฟล์ประกอบ + ลงทะเบียน</h3><div class="where">ops.py:536–584</div>
+  <p>สร้างภาพย่อด้วย <b>Resampling.mode</b> (ข้อมูลรหัส ห้ามเฉลี่ย) · เขียน .qml / legend / csv / lineage · ลงทะเบียนเป็นชุดข้อมูลใหม่ <code>role='map'</code> ให้เปิดดูในแอปได้ทันที</p>
+  <div class="tags"><span class="tag t-rio">build_overviews</span><span class="tag t-py">json</span><span class="tag t-py">csv</span><span class="tag t-py">Pillow</span></div></div>
+<pre><code class="language-python">W.close(Resampling.mode)                       # + build_overviews([2,4,8…])
+(out_dir / f'{base}.qml').write_text(export.qml_paletted(entries))
+export.legend_png(out_dir / f'{base}_legend.png', nx, ny, colors, …)
+export.write_csv(out_dir / f'{base}_stats.csv', header, rows)
+export.write_lineage(out_dir, 'bivariate', ins, params, outs, summary)
+register_output(outp, name, 'class', job['id'], 'map')</code></pre></div></div>
+</div>
+
+<h2><span class="n">06</span>สูตรรหัสสี</h2>
+<div class="grid g2">
+<div class="card" style="display:flex;gap:26px;align-items:center;flex-wrap:wrap">
+  <div>
+    <div class="stat-l" style="margin-bottom:6px">ตัวอย่าง 3×3 (แกน Y ขึ้นบน)</div>
+    <div style="display:flex;gap:8px;align-items:stretch">
+      <div style="writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px;color:var(--muted);text-align:center">Y (น้ำท่วม) →</div>
+      <div><div class="biv">
+        <i style="background:#64acbe">7</i><i style="background:#627f8c">8</i><i class="hl" style="background:#574249">9</i>
+        <i style="background:#b0d5df">4</i><i style="background:#ad9ea5">5</i><i class="hl" style="background:#985356">6</i>
+        <i style="background:#e8e8e8;color:#555;text-shadow:none">1</i><i style="background:#e4acac">2</i><i style="background:#c85a5a">3</i></div>
+      <div style="font-size:13px;color:var(--muted);text-align:center;margin-top:4px">X (ประชากร) →</div></div>
+    </div>
+  </div>
+  <div style="flex:1;min-width:240px">
+    <div class="formula">รหัส = <em>Y</em> × nX + <em>X</em> + 1</div>
+    <p style="font-size:14px">X = 2 (คนหนาแน่น), Y = 2 (ท่วมบ่อย) → 2×3+2+1 = <b>9</b><br>0 = ไม่มีข้อมูล (โปร่งใส) · กรอบเข้ม = <b>เขตเน้น</b> (highlight) ใช้รวมน้ำหนักเป็นตัวเลขสรุป</p>
+  </div>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">สถิติที่ได้ต่อรหัส (summary → lineage.json)</h3>
+  <table>
+    <tr><th>ค่า</th><th>มาจาก</th></tr>
+    <tr><td>pixels_coded</td><td><code>px_cnt[1:].sum()</code></td></tr>
+    <tr><td>area_coded_km2</td><td>Σ (พื้นที่พิกเซลรายแถว × จำนวน) — คิด cos ละติจูด</td></tr>
+    <tr><td>weight_by_code</td><td><code>bincount(code, weights=คน)</code></td></tr>
+    <tr><td>highlight_weight</td><td>Σ น้ำหนักของรหัสในเขตเน้น</td></tr>
+    <tr><td>weight_total</td><td>น้ำหนักทั้งกริด <b>รวมช่องไม่มีรหัส</b> → ตรวจว่าคนไม่หาย</td></tr>
+  </table>
+</div>
+</div>
+
+<h2><span class="n">07</span>ไฟล์ที่ได้</h2>
+<div class="files">
+  <div class="file"><span class="ext">.tif</span><p>รหัส 0–9 + ตารางสีฝังในไฟล์ · overview สำหรับซูม</p><code>rasterio · GTiff</code></div>
+  <div class="file"><span class="ext">.qml</span><p>QGIS เปิดแล้วสี+ป้ายไทยขึ้นเอง</p><code>export.qml_paletted</code></div>
+  <div class="file"><span class="ext">.png</span><p>คำอธิบายสัญลักษณ์ตาราง n×n</p><code>Pillow · legend_png</code></div>
+  <div class="file"><span class="ext">.csv</span><p>พิกเซล / ตร.กม. / น้ำหนัก ต่อรหัส + แถวรวม</p><code>csv · utf-8-sig</code></div>
+  <div class="file"><span class="ext">.json</span><p>lineage: ต้นทาง, พารามิเตอร์, เกณฑ์จริง, เวลา</p><code>json · timing</code></div>
+</div>
+
+<h2><span class="n">08</span>ตัวเลขที่วัดได้จริง</h2>
+<div class="grid g4">
+  <div class="card"><div class="stat" style="color:var(--eng)">0</div><div class="stat-l">พิกเซลที่ต่างจากไฟล์ต้นแบบ (10 ม. / 100 ม. / 1 กม.)</div></div>
+  <div class="card"><div class="stat" style="color:var(--ui)">71,689,208</div><div class="stat-l">ผลรวมคนก่อน = หลังไขว้ (ไม่หายแม้แต่คนเดียว)</div></div>
+  <div class="card"><div class="stat" style="color:var(--job)">144 วิ</div><div class="stat-l">ไบแวเรียต 100 ม. ทั้งประเทศ (เดิม 240 วิ ก่อนทำหลายเธรด)</div></div>
+  <div class="card"><div class="stat" style="color:var(--srv)">11.5 นาที</div><div class="stat-l">10 ม. ทั้งประเทศ 17,740 ล้านพิกเซล · คอขวดคือ HDD</div></div>
+</div>
+
+<footer>Ainulindalë · infographic สร้างจากโค้ดเวอร์ชัน 0.5.0 · ไฟล์อ้างอิง: app/ops.py (op_bivariate, OutWriter, parallel_tiles, workers_for, auto_breaks, setup_aoi) · app/engine.py (Grid, Source, Classifier, OnGrid, make_grid, tile_size) · app/jobs.py · app/worker.py · app/server.py (validate_job)</footer>
+</div>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

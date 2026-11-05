@@ -1,0 +1,5 @@
+# เก็บใน repo เป็น LF · ไฟล์ .bat ต้องเป็น CRLF ไม่งั้น cmd อ่านผิด
+* text=auto eol=lf
+*.bat text eol=crlf
+*.png binary
+*.zip binary

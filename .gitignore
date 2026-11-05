@@ -1,0 +1,36 @@
+# ===== ความลับ / ค่าเฉพาะเครื่อง — ห้ามขึ้น GitHub เด็ดขาด =====
+engine_token.txt
+settings.json
+.installed.json
+secrets.json
+.env
+.env.*
+*.env
+*.pem
+*.key
+
+# ===== ข้อมูลผู้ใช้ / ผลลัพธ์ / แคช =====
+workspace/
+
+# ===== ไฟล์ build (แจกผ่าน GitHub Releases แทน) =====
+dist/
+python/
+tools/cache/
+web/download/
+*.zip
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+
+# ===== ระบบ / เอดิเตอร์ =====
+.vscode/
+.idea/
+.claude/settings.local.json
+Thumbs.db
+desktop.ini
+.DS_Store
+
+# ===== เอกสารภายใน (เก็บในเครื่อง — มี path ภายในและแผนงาน) =====
+DEVLOG.md
+PROJECT_BRIEF.md

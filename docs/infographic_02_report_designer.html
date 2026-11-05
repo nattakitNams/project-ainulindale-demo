@@ -1,0 +1,458 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ออกแบบรายงาน — โค้ดทำงานอย่างไร</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&family=Sarabun:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<style>
+:root {
+  --bg: #f4f5fa; --paper: #ffffff; --ink: #1b2033; --muted: #5f6680; --line: #e2e5ef;
+  --ui: #2f6fe4; --srv: #7c4ddb; --job: #e07a1f; --eng: #179a74; --file: #6b7280; --np: #d6336c;
+  --code: #1f2330;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.65 'IBM Plex Sans Thai', sans-serif; }
+code, pre, .mono { font-family: 'JetBrains Mono', monospace; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px 80px; }
+header { background: linear-gradient(135deg, #1b2a4a 0%, #2f3f75 55%, #4b3b8f 100%); color: #fff; padding: 56px 0 46px; margin-bottom: 34px; position: relative; overflow: hidden; }
+header::after { content: ''; position: absolute; right: -60px; top: -40px; width: 380px; height: 380px; background: repeating-linear-gradient(90deg, transparent 0 22px, #ffffff10 22px 24px), repeating-linear-gradient(0deg, transparent 0 22px, #ffffff10 22px 24px); transform: rotate(12deg); }
+.eyebrow { font: 600 12px/1 'JetBrains Mono'; letter-spacing: .14em; text-transform: uppercase; opacity: .75; }
+h1 { font-size: 40px; line-height: 1.2; margin: 12px 0 10px; }
+.lead { max-width: 760px; opacity: .88; font-size: 16.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; position: relative; z-index: 1; }
+.chip { background: #ffffff1c; border: 1px solid #ffffff33; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+h2 { font-size: 25px; margin: 52px 0 6px; display: flex; align-items: center; gap: 12px; }
+h2 .n { font: 700 14px 'JetBrains Mono'; background: var(--ink); color: #fff; border-radius: 8px; padding: 3px 9px; }
+.sub { color: var(--muted); margin: 0 0 20px; }
+.card { background: var(--paper); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; box-shadow: 0 1px 2px #0000000a, 0 8px 24px -12px #1b20331f; }
+.grid { display: grid; gap: 16px; }
+.g2 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .g3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } .g4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .g2, .g3, .g4 { grid-template-columns: 1fr; } h1 { font-size: 30px; } }
+
+/* เส้นทางข้อมูล */
+.lanes { display: grid; grid-template-columns: 150px 1fr; gap: 0; border: 1px solid var(--line); border-radius: 16px; overflow: hidden; background: var(--paper); }
+.lane-h { padding: 14px 14px; font-weight: 700; font-size: 13.5px; display: flex; flex-direction: column; justify-content: center; border-bottom: 1px solid var(--line); }
+.lane-h small { font: 400 11.5px 'JetBrains Mono'; opacity: .8; }
+.lane { padding: 14px; border-bottom: 1px solid var(--line); display: flex; gap: 10px; align-items: stretch; flex-wrap: wrap; }
+.lanes > :nth-last-child(-n+2) { border-bottom: 0; }
+.step { flex: 1 1 180px; border-radius: 12px; padding: 10px 12px; font-size: 13.5px; border: 1.5px solid; position: relative; background: #fff; }
+.step b { display: block; font-size: 13.5px; }
+.step code { font-size: 11.5px; display: block; margin-top: 3px; word-break: break-all; }
+.step .no { position: absolute; top: -9px; left: 10px; font: 700 11px 'JetBrains Mono'; color: #fff; border-radius: 6px; padding: 1px 6px; }
+.c-ui { color: var(--ui); } .c-srv { color: var(--srv); } .c-job { color: var(--job); } .c-eng { color: var(--eng); } .c-file { color: var(--file); }
+.b-ui { border-color: #2f6fe455; background: #2f6fe40a; } .b-ui .no { background: var(--ui); }
+.b-srv { border-color: #7c4ddb55; background: #7c4ddb0a; } .b-srv .no { background: var(--srv); }
+.b-job { border-color: #e07a1f55; background: #e07a1f0d; } .b-job .no { background: var(--job); }
+.b-eng { border-color: #179a7455; background: #179a740d; } .b-eng .no { background: var(--eng); }
+.b-file { border-color: #6b728055; background: #6b72800a; } .b-file .no { background: var(--file); }
+.bg-ui { background: #2f6fe412; color: var(--ui); } .bg-srv { background: #7c4ddb12; color: var(--srv); } .bg-job { background: #e07a1f14; color: var(--job); }
+.bg-eng { background: #179a7414; color: var(--eng); } .bg-file { background: #6b728012; color: var(--file); }
+.arrow { align-self: center; color: #9aa1b8; font-size: 18px; }
+
+/* ไลบรารี */
+.lib { display: flex; flex-direction: column; gap: 8px; }
+.lib .top { display: flex; align-items: center; gap: 10px; }
+.lib .ic { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; font: 700 13px 'JetBrains Mono'; color: #fff; flex: none; }
+.lib h3 { margin: 0; font-size: 16.5px; } .lib .role { font-size: 12.5px; color: var(--muted); }
+.lib ul { margin: 0; padding-left: 0; list-style: none; font-size: 13px; }
+.lib li { padding: 4px 0; border-top: 1px dashed var(--line); }
+.lib li code { background: #f1f2f8; border-radius: 5px; padding: 1px 6px; font-size: 12px; color: #3b2f8f; }
+
+/* ขั้นตอน */
+.flow { position: relative; padding-left: 34px; }
+.flow::before { content: ''; position: absolute; left: 14px; top: 8px; bottom: 8px; width: 3px; background: linear-gradient(var(--eng), var(--job), var(--file)); border-radius: 3px; }
+.fs { position: relative; margin-bottom: 18px; }
+.fs .dot { position: absolute; left: -34px; top: 16px; width: 31px; height: 31px; border-radius: 50%; background: #fff; border: 3px solid var(--eng); display: grid; place-items: center; font: 700 12px 'JetBrains Mono'; color: var(--eng); }
+.fs .card { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 18px; align-items: start; }
+@media (max-width: 900px) { .fs .card { grid-template-columns: 1fr; } }
+.fs h3 { margin: 0 0 4px; font-size: 17px; }
+.fs .where { font: 500 12px 'JetBrains Mono'; color: var(--muted); }
+.fs p { margin: 8px 0; font-size: 14px; }
+.tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.tag { font: 500 11.5px 'JetBrains Mono'; border-radius: 6px; padding: 2px 7px; }
+.t-np { background: #d6336c14; color: var(--np); } .t-rio { background: #179a7414; color: var(--eng); } .t-py { background: #2f6fe412; color: var(--ui); } .t-os { background: #e07a1f14; color: var(--job); }
+pre { margin: 0; border-radius: 12px; overflow: auto; font-size: 12.3px; line-height: 1.55; }
+pre code.hljs { padding: 14px 16px; background: var(--code); }
+.io { display: grid; grid-template-columns: auto 1fr; gap: 3px 10px; font-size: 13px; margin-top: 8px; }
+.io dt { font: 600 11.5px 'JetBrains Mono'; color: var(--muted); padding-top: 2px; } .io dd { margin: 0; }
+
+/* ตารางกติกา */
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+th { font-size: 12.5px; color: var(--muted); font-weight: 600; background: #fafbfe; }
+td code { font-size: 12.5px; background: #f1f2f8; padding: 1px 6px; border-radius: 5px; }
+.pill { display: inline-block; border-radius: 6px; padding: 1px 8px; font: 600 12px 'JetBrains Mono'; }
+
+/* ภาพประกอบ */
+.biv { display: grid; grid-template-columns: repeat(3, 54px); gap: 4px; }
+.biv i { height: 54px; border-radius: 6px; display: grid; place-items: center; font: 700 15px 'JetBrains Mono'; color: #fff; text-shadow: 0 1px 2px #0005; font-style: normal; }
+.biv i.hl { outline: 3px solid var(--ink); outline-offset: -3px; }
+.pix { display: grid; gap: 2px; }
+.pix i { width: 26px; height: 26px; border-radius: 4px; display: grid; place-items: center; font: 600 10.5px 'JetBrains Mono'; font-style: normal; }
+.kv { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.formula { font: 600 17px 'JetBrains Mono'; background: #1b2033; color: #fff; border-radius: 12px; padding: 14px 18px; display: inline-block; }
+.formula em { color: #ffd479; font-style: normal; }
+.note { border-left: 4px solid var(--job); background: #e07a1f0d; padding: 10px 14px; border-radius: 0 10px 10px 0; font-size: 14px; }
+.stat { font: 700 30px/1.1 'JetBrains Mono'; } .stat-l { font-size: 13px; color: var(--muted); }
+.files { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 900px) { .files { grid-template-columns: 1fr 1fr; } }
+.file { border: 1.5px dashed #b8bdd0; border-radius: 12px; padding: 12px; background: #fff; }
+.file .ext { font: 700 13px 'JetBrains Mono'; color: #fff; background: var(--file); border-radius: 6px; padding: 2px 8px; display: inline-block; }
+.file p { margin: 6px 0 0; font-size: 12.8px; } .file code { font-size: 11.5px; color: var(--muted); display: block; margin-top: 6px; }
+footer { color: var(--muted); font-size: 12.5px; margin-top: 50px; border-top: 1px solid var(--line); padding-top: 14px; }
+
+header { background: linear-gradient(135deg, #12343b 0%, #1d5a5e 50%, #2f6fe4 100%); }
+.split { display: grid; grid-template-columns: 1fr 70px 1fr; gap: 0; align-items: stretch; }
+@media (max-width: 900px) { .split { grid-template-columns: 1fr; } .split .mid { transform: rotate(90deg); } }
+.split .mid { display: grid; place-items: center; font-size: 28px; color: #9aa1b8; }
+.mini-page { background: #fff; border: 1px solid var(--line); border-radius: 8px; aspect-ratio: 297/210; position: relative; overflow: hidden; box-shadow: 0 6px 18px -8px #0003; }
+.mini-page > div { position: absolute; border-radius: 3px; font: 600 10px 'JetBrains Mono'; display: grid; place-items: center; text-align: center; }
+.mp-img { background: repeating-linear-gradient(45deg, #179a7422 0 6px, #179a7433 6px 12px); border: 1.5px solid var(--eng); color: var(--eng); }
+.mp-html { background: #2f6fe412; border: 1.5px dashed var(--ui); color: var(--ui); }
+.legend-key { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; margin-top: 10px; }
+.legend-key span { display: inline-flex; align-items: center; gap: 6px; } .legend-key i { width: 16px; height: 12px; border-radius: 3px; display: inline-block; }
+.thai-demo { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.thai-demo > div { border-radius: 12px; padding: 14px; border: 1px solid var(--line); background: #fff; }
+.thai-demo .big { font: 400 30px 'Sarabun'; line-height: 1.5; }
+.bad { position: relative; }
+.bad .big span { position: relative; } .bad .big .t1 { position: relative; top: -14px; left: -2px; }
+.verdict { font: 700 12px 'JetBrains Mono'; border-radius: 6px; padding: 2px 8px; display: inline-block; margin-bottom: 6px; }
+.v-no { background: #d6336c18; color: var(--np); } .v-yes { background: #179a7418; color: var(--eng); }
+.math { font: 500 14px 'JetBrains Mono'; background: #f1f2f8; border-radius: 10px; padding: 10px 14px; margin: 8px 0; line-height: 1.8; }
+.math em { color: var(--srv); font-style: normal; font-weight: 700; }
+.snapdemo { position: relative; height: 150px; background: #fafbfe; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.snapdemo .el { position: absolute; border-radius: 4px; }
+.snapdemo .gv { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff4fa3; }
+.snapdemo .gh { position: absolute; left: 0; right: 0; height: 2px; background: #ff4fa3; }
+.types { display: grid; grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)); gap: 10px; }
+.type { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; background: #fff; font-size: 13px; }
+.type b { display: block; font-size: 14px; } .type code { font-size: 11px; color: var(--muted); }
+.type .k { font: 700 10.5px 'JetBrains Mono'; border-radius: 5px; padding: 1px 6px; margin-top: 6px; display: inline-block; }
+.k-img { background: #179a7418; color: var(--eng); } .k-svg { background: #7c4ddb18; color: var(--srv); } .k-html { background: #2f6fe418; color: var(--ui); }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <div class="eyebrow">Ainulindalë · Code infographic 02</div>
+  <h1>ออกแบบรายงาน: ตัวแก้แบบแคนวาส ที่หน้าจอ = PDF</h1>
+  <div class="lead">เซิร์ฟเวอร์วาดเฉพาะ "ภาพแผนที่" · ข้อความ คำอธิบาย มาตราส่วน ทิศเหนือ กริด วาดด้วย HTML/SVG ในเบราว์เซอร์ · ส่งออกโดยให้ Microsoft Edge แบบไม่มีหน้าต่างเปิดหน้าเดียวกันแล้วสั่งพิมพ์ — อ้างอิงโค้ดจริงใน <code>app/canvas.py</code> · <code>static/report.js</code> · <code>static/app.js (pageReport)</code></div>
+  <div class="chips"><span class="chip">📐 หน่วย มม. / pt</span><span class="chip">🗺 matplotlib + rasterio</span><span class="chip">🧩 geopandas</span><span class="chip">🧱 XYZ tiles → EPSG:4326</span><span class="chip">🖨 Edge headless</span><span class="chip">🔤 Sarabun (Google Fonts)</span><span class="chip">🖱 Pointer Events</span></div>
+</div></header>
+
+<div class="wrap">
+
+<h2><span class="n">01</span>แนวคิดหลัก: แบ่งงานระหว่างเซิร์ฟเวอร์กับเบราว์เซอร์</h2>
+<p class="sub">matplotlib วางข้อความไทยแบบไม่มีระบบ shaping เต็มรูป (ตำแหน่งสระ/วรรณยุกต์บางคำเพี้ยน) และใช้ฟอนต์ได้เฉพาะที่ติดตั้งในเครื่อง · เบราว์เซอร์มี HarfBuzz และโหลดฟอนต์เว็บได้ → ให้ Python ทำเฉพาะสิ่งที่เบราว์เซอร์ทำไม่ได้: อ่านราสเตอร์ใหญ่ ต่อไทล์ แปลงพิกัด</p>
+<div class="grid g2">
+  <div class="card">
+    <div class="mini-page">
+      <div class="mp-img" style="left:4%;top:5%;width:66%;height:88%">ภาพแผนที่<br>PNG จากเซิร์ฟเวอร์</div>
+      <div class="mp-html" style="left:73%;top:5%;width:23%;height:12%">ชื่อเรื่อง<br>HTML</div>
+      <div class="mp-html" style="left:73%;top:20%;width:23%;height:30%">คำอธิบาย<br>HTML</div>
+      <div class="mp-html" style="left:73%;top:53%;width:7%;height:10%;font-size:9px">N<br>SVG</div>
+      <div class="mp-html" style="left:82%;top:54%;width:14%;height:8%;font-size:9px">มาตรา<br>SVG</div>
+      <div class="mp-img" style="left:73%;top:66%;width:23%;height:16%">inset PNG</div>
+      <div class="mp-html" style="left:73%;top:85%;width:23%;height:8%;font-size:9px">เครดิต HTML</div>
+      <div class="mp-html" style="left:6%;top:8%;width:14%;height:6%;font-size:8px;background:#fffc">ป้ายจังหวัด</div>
+    </div>
+    <div class="legend-key"><span><i class="mp-img" style="border-width:1px"></i>ภาพจาก Python (canvas.py)</span><span><i class="mp-html" style="border-width:1px"></i>วาดด้วย HTML/SVG (report.js)</span></div>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">ทำไมต้องแบบนี้ — ทดสอบจริง</h3>
+    <div class="thai-demo">
+      <div><span class="verdict v-no">matplotlib (v0.4) — ภาพจริง</span><img src="data:image/png;base64,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" alt="ตัวอย่างข้อความไทยจาก matplotlib" style="width:100%;border-radius:6px;border:1px solid var(--line)">
+        <div class="stat-l">อ่านได้ส่วนใหญ่ แต่วางเครื่องหมายบนไม่แม่นในบางคำ เช่น <b>น้ำ</b> (นิคหิตกับไม้โทซ้อนผิดใน Tahoma) · และใช้ได้เฉพาะฟอนต์ที่ติดตั้งในเครื่อง — Sarabun ไม่มีใน Windows</div></div>
+      <div><span class="verdict v-yes">Edge / Chromium (v0.5)</span><div class="big">น้ำ ที่ ปี่ ฤๅษี</div><div class="stat-l">HarfBuzz วางตำแหน่งถูก · PDF ขนาด 841.92×594.96 pt = A4 แนวนอนพอดี</div></div>
+    </div>
+    <p class="note" style="margin-top:14px">ผลพลอยได้: ตัวแก้บนจอกับไฟล์ PDF ใช้ <b>โค้ดวาดชุดเดียวกัน</b> (<code>RPT.render</code>) จึงไม่มีอาการ "จอกับไฟล์ไม่เหมือนกัน"</p>
+  </div>
+</div>
+
+<h2><span class="n">02</span>เส้นทางข้อมูล</h2>
+<div class="lanes">
+  <div class="lane-h bg-ui">ตัวแก้<small>app.js · pageReport()</small></div>
+  <div class="lane">
+    <div class="step b-ui"><span class="no">1</span><b>โหลดเอกสาร</b>จาก localStorage หรือสร้างจากเทมเพลต<code>localStorage['reportDoc.v2'] · RPT.fromTemplate()</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">2</span><b>ขอภาพแผนที่ / ข้อมูลคำอธิบาย</b><code>POST /api/report/map · /inset · /info</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">4</span><b>ลาก · ย่อขยาย · พิมพ์</b>แก้ doc ในหน่วยความจำ + บันทึก + ประวัติ<code>startMove · snapTo · commit()</code></div><span class="arrow">→</span>
+    <div class="step b-ui"><span class="no">5</span><b>กดส่งออก</b><code>POST /api/report/export {doc, format, dpi}</code></div>
+  </div>
+  <div class="lane-h" style="background:#7c4ddb12;color:var(--srv)">ตัววาดร่วม<small>static/report.js</small></div>
+  <div class="lane">
+    <div class="step b-srv"><span class="no">3</span><b>RPT.render(page, doc, data)</b>สร้าง div ตำแหน่ง มม. ต่อองค์ประกอบ 13 ชนิด · ใช้ทั้งในตัวแก้และหน้าพิมพ์<code>RPT.draw · R.map · R.legend · R.scalebar …</code></div>
+  </div>
+  <div class="lane-h bg-eng">เซิร์ฟเวอร์<small>server.py · canvas.py</small></div>
+  <div class="lane">
+    <div class="step b-eng"><span class="no">2a</span><b>render_map()</b>พื้นหลัง + ชั้นข้อมูล + ขอบเขต → PNG โปร่งใส (แคชตาม hash)<code>matplotlib · rasterio · geopandas</code></div><span class="arrow">→</span>
+    <div class="step b-eng"><span class="no">6</span><b>prepare()</b>วาดแผนที่ใหม่ทุกกรอบที่ dpi ส่งออก<code>render_map(..., dpi=200)</code></div><span class="arrow">→</span>
+    <div class="step b-eng"><span class="no">7</span><b>export()</b>ฝาก doc ไว้ใน PRINTS[token] แล้วเรียก Edge<code>subprocess.run([msedge, '--headless=new', …])</code></div>
+  </div>
+  <div class="lane-h bg-job">Edge headless<small>msedge.exe</small></div>
+  <div class="lane">
+    <div class="step b-job"><span class="no">8</span><b>เปิดหน้า /report/print/&lt;token&gt;</b>HTML ที่ฝัง DOC + report.js + ฟอนต์ Sarabun<code>print_html(doc) · @page { size: 297mm 210mm }</code></div><span class="arrow">→</span>
+    <div class="step b-job"><span class="no">9</span><b>พิมพ์</b><code>--print-to-pdf=out.pdf<br>--screenshot=out.png --force-device-scale-factor=dpi/96</code></div>
+  </div>
+  <div class="lane-h bg-file">ผลลัพธ์<small>ดาวน์โหลด</small></div>
+  <div class="lane"><div class="step b-file"><b>.pdf</b>ข้อความเป็นเวกเตอร์ ค้นหา/คัดลอกได้ · แผนที่เป็นภาพตาม dpi</div><div class="step b-file"><b>.png</b>ภาพทั้งหน้า ตาม dpi ที่เลือก</div><div class="step b-file"><b>cache/report/*.png</b>ภาพแผนที่ที่วาดแล้ว ใช้ซ้ำได้</div></div>
+</div>
+
+<h2><span class="n">03</span>โครงสร้างเอกสาร (doc)</h2>
+<p class="sub">ทั้งหน้าคือ JSON ก้อนเดียว — ตำแหน่ง/ขนาดเป็น <b>มิลลิเมตร</b> ตัวอักษรเป็น <b>pt</b> จึงพิมพ์ออกมาขนาดจริงตรงตามจอ</p>
+<div class="grid g2">
+<pre><code class="language-json">{
+  "v": 2, "template": "gov_l",
+  "paper": { "size": "A4", "orient": "landscape" },   // 297 × 210 มม.
+  "font": "Sarabun", "bg": "#ffffff",
+  "meta": { "title": "ประชากรประเทศไทย พ.ศ. 2566", "org": "GISTDA",
+            "map_no": "PP-001", "date": "", "note": "", ... },
+  "map": {                                            // ข้อมูลของแผนที่หลัก
+    "layers": [{ "key": "ds:27", "opacity": .85, "rstyle": null }],
+    "basemap": "esri_light", "basemap_opacity": 1,
+    "boundary": { "key": "lk:11", "label_field": "pv_tn", ... },
+    "extent": { "type": "data" }
+  },
+  "els": [
+    { "id": "e1", "type": "map", "x": 16, "y": 12, "w": 191, "h": 186, "z": 2,
+      "p": { "grid": "lines", "gridLabels": "lb", "auto": true,
+             "view": { "cx": 101.49, "cy": 13.04, "span": 16.04 } } },
+    { "id": "e6", "type": "text", "x": 218, "y": 17, "w": 68, "h": 22,
+      "p": { "text": "{title}", "fs": 17, "fw": 700 } },
+    { "id": "e9", "type": "legend", ... , "p": { "names": { "L05_Province": "ขอบเขตจังหวัด" } } },
+    ...
+  ]
+}</code></pre>
+<div class="card">
+  <h3 style="margin-top:0">13 ชนิดองค์ประกอบ วาดด้วยอะไร</h3>
+  <div class="types">
+    <div class="type"><b>🗺 map</b>ภาพ + กริด + ป้ายชื่อ<br><span class="k k-img">PNG</span> <span class="k k-svg">SVG</span> <span class="k k-html">HTML</span></div>
+    <div class="type"><b>📍 inset</b>ภาพ + กรอบแดง<br><span class="k k-img">PNG</span> <span class="k k-svg">SVG</span></div>
+    <div class="type"><b>📏 scalebar</b>คิดจากกรอบแผนที่<br><span class="k k-svg">SVG</span></div>
+    <div class="type"><b>🧭 north</b>4 แบบ<br><span class="k k-svg">SVG</span></div>
+    <div class="type"><b>☰ legend</b>รายการ/ไล่สี/ตาราง n×n<br><span class="k k-html">HTML grid</span></div>
+    <div class="type"><b>T text</b>ตัวแทน {title}<br><span class="k k-html">HTML</span></div>
+    <div class="type"><b># kpi</b>การ์ดตัวเลข<br><span class="k k-html">HTML flex</span></div>
+    <div class="type"><b>📊 chart</b>แท่งต่อรหัส<br><span class="k k-svg">SVG</span></div>
+    <div class="type"><b>ℹ prov · © credits</b>ที่มา/เครดิตอัตโนมัติ<br><span class="k k-html">HTML</span></div>
+    <div class="type"><b>▭ rect · ― line</b>กรอบ/แถบสี<br><span class="k k-html">CSS</span> <span class="k k-svg">SVG</span></div>
+    <div class="type"><b>🖼 image</b>โลโก้ (data URL ≤ 1200 px)<br><span class="k k-html">&lt;img&gt;</span></div>
+  </div>
+  <p class="note" style="margin-top:14px">ตัวแทนข้อความ <code>RPT.fill()</code>: <code>{title} {org} {date} {map_no}</code> — บรรทัดที่ตัวแทนว่างทั้งหมดจะถูกตัดทิ้ง เช่น ไม่กรอกหมายเลขแผนที่ บรรทัด "แผนที่หมายเลข {map_no}" ก็หายไปเอง</p>
+</div>
+</div>
+
+<h2><span class="n">04</span>ไลบรารีที่ใช้ และคำสั่งที่เรียกจริง</h2>
+<div class="grid g3">
+  <div class="card lib"><div class="top"><div class="ic" style="background:#11557c">mpl</div><div><h3>matplotlib <span class="role">(Agg)</span></h3><div class="role">วาดภาพแผนที่ไม่มีข้อความ</div></div></div>
+    <ul><li><code>fig.add_axes([0,0,1,1]); ax.axis('off')</code> ภาพเต็มกรอบพอดี</li><li><code>ax.imshow(rgba, extent=[x0,x1,y0,y1])</code> วางราสเตอร์/พื้นหลัง</li>
+    <li><code>fig.savefig(png, dpi, transparent=True)</code></li><li><code>threading.Lock()</code> pyplot ใช้ข้ามเธรดไม่ได้</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#179a74">rio</div><div><h3>rasterio</h3><div class="role">อ่านเฉพาะส่วนที่เห็น ย่อตอนอ่าน</div></div></div>
+    <ul><li><code>windows.from_bounds(*ext, transform)</code> กรอบ → หน้าต่างพิกเซล</li><li><code>s.read(band, window, out_shape=(oh,ow), resampling=nearest|average)</code></li>
+    <li><code>warp.reproject(…, 'EPSG:3857' → 'EPSG:4326')</code> แปลงไทล์พื้นหลัง</li><li><code>symbology.render()</code> ระบายสีตาม Symbology</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#3e7c3a">gpd</div><div><h3>geopandas / pyogrio</h3><div class="role">ขอบเขตและชั้นเวกเตอร์</div></div></div>
+    <ul><li><code>read_vector(d, bbox=…, max_features=60000)</code></li><li><code>geometry.simplify(tol)</code> ย่อรูปทรงตามขนาดพิกเซล</li>
+    <li><code>g.boundary.plot(ax, color, linewidth)</code></li><li><code>g.representative_point()</code> จุดวางป้ายชื่อ (อยู่ในโพลิกอนเสมอ)</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#e07a1f">xyz</div><div><h3>requests + Pillow</h3><div class="role">แผนที่พื้นหลังแบบไทล์</div></div></div>
+    <ul><li><code>requests.get(url.format(z,x,y))</code> Esri Canvas / Topo / Imagery, OSM</li><li><code>Image.new('RGBA', …).paste(tile, (i*256, j*256))</code> ต่อไทล์</li>
+    <li>แคชดิสก์ <code>cache/basemap/{name}/{z}/{x}/{y}.png</code></li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#0078d4">edge</div><div><h3>Microsoft Edge headless</h3><div class="role">ตัวพิมพ์ PDF/PNG</div></div></div>
+    <ul><li><code>--headless=new --print-to-pdf=out.pdf --no-pdf-header-footer</code></li><li><code>--screenshot --window-size --force-device-scale-factor</code></li>
+    <li><code>--user-data-dir=cache/edge_profile</code> ไม่ชนโปรไฟล์ที่ผู้ใช้เปิดอยู่</li><li><code>--virtual-time-budget=20000</code> รอฟอนต์/ภาพโหลดครบ</li></ul></div>
+  <div class="card lib"><div class="top"><div class="ic" style="background:#7c4ddb">web</div><div><h3>Web APIs (ตัวแก้)</h3><div class="role">ไม่ใช้ไลบรารี JS เพิ่ม</div></div></div>
+    <ul><li><code>pointerdown / setPointerCapture</code> ลากที่ไม่หลุดเมื่อเมาส์ออกนอกกรอบ</li><li><code>contentEditable</code> พิมพ์แก้บนหน้า</li>
+    <li><code>transform: scale(z)</code> ซูมทั้งหน้า (หน่วยข้างในยังเป็น มม.)</li><li><code>elementsFromPoint</code> · <code>document.fonts.ready</code> · <code>localStorage</code></li></ul></div>
+</div>
+
+<h2><span class="n">05</span>render_map() — วาดภาพแผนที่ทีละขั้น</h2>
+<p class="sub"><code>app/canvas.py</code> · ใช้ทั้งพรีวิว (dpi ตามซูมหน้าจอ ≈ 72–240) และส่งออก (150/200/300)</p>
+<div class="flow">
+
+<div class="fs"><div class="dot">1</div><div class="card"><div>
+  <h3>แปลง "มุมมอง" เป็นกรอบพิกัด</h3><div class="where">canvas.py · auto_view() · ext_from_view()</div>
+  <p>มุมมองเก็บเป็น <b>จุดกลาง + ความสูงเป็นองศา</b> ไม่ใช่กรอบ — เพราะกรอบเปลี่ยนตามสัดส่วนกล่อง · ความกว้างหารด้วย <b>cos(ละติจูด)</b> ให้ระยะจริงแนวนอน = แนวตั้ง (ประเทศไทยไม่ดูแบน)</p>
+  <div class="tags"><span class="tag t-py">math.cos</span></div></div>
+<pre><code class="language-python">def ext_from_view(v, w, h):          # w, h = ขนาดกรอบ (มม.)
+    k  = math.cos(math.radians(v['cy']))
+    dh = float(v['span'])
+    dw = dh * (w / h) / k
+    return [v['cx'] - dw/2, v['cy'] - dh/2, v['cx'] + dw/2, v['cy'] + dh/2]
+
+# auto: ครอบข้อมูล/พื้นที่ศึกษา + ขอบ 4% แล้วขยายให้สัดส่วนตรงกล่อง
+e = layout._fit_extent(base_extent(m, layers), w, h)</code></pre></div></div>
+
+<div class="fs"><div class="dot">2</div><div class="card"><div>
+  <h3>แคช: วาดแล้วไม่วาดซ้ำ</h3><div class="where">canvas.py · _h() · _sig()</div>
+  <p>กุญแจแคช = hash ของ (ชั้นข้อมูล, สไตล์, ขนาดกรอบ, dpi, มุมมอง, <b>fingerprint ไฟล์</b>) · ไฟล์ต้นทางเปลี่ยน → fingerprint เปลี่ยน → วาดใหม่เอง · ครั้งแรก ~3–7 วิ ครั้งต่อไป <b>0.01 วิ</b></p>
+  <div class="tags"><span class="tag t-py">hashlib.sha1</span><span class="tag t-py">json.dumps(sort_keys)</span></div></div>
+<pre><code class="language-python">key = _h(dict(m={...}, w=round(w,1), h=round(h,1), dpi=dpi,
+              view={k: round(v, 6) for k, v in view.items()},
+              sig=_sig(layers, m), v=2))
+png, meta = RDIR / f'{key}.png', RDIR / f'{key}.json'
+if png.exists() and meta.exists():
+    return json.loads(meta.read_text())     # → {src, ext, view, labels, ...}</code></pre></div></div>
+
+<div class="fs"><div class="dot">3</div><div class="card"><div>
+  <h3>แผนที่พื้นหลัง: ต่อไทล์แล้วแปลงพิกัด</h3><div class="where">layout.py · _mosaic_4326() · _tile_bytes()</div>
+  <p>เลือกระดับซูม z จากขนาดพิกเซลที่ต้องการ → ดาวน์โหลดไทล์ 256 px ที่ครอบกรอบ (จำกัดจำนวน) → ต่อเป็นภาพเดียว → <b>reproject Web Mercator → ละติจูด/ลองจิจูด</b> ให้ทับข้อมูลได้ตรง</p>
+  <p class="note" style="font-size:13px">CARTO ส่งภาพ "API KEY REQUIRED" ให้คำขอจากเซิร์ฟเวอร์ → ใช้ Esri Canvas แทน</p>
+  <div class="tags"><span class="tag t-py">requests</span><span class="tag t-py">PIL.Image</span><span class="tag t-rio">warp.reproject</span></div></div>
+<pre><code class="language-python">z = floor(log2(156543.034 * cos(lat) / res_m))       # ม./พิกเซล → zoom
+def t(lon, la, zz):                                     # ลอง/ละติ → ไทล์ XYZ
+    n = 2 ** zz
+    return (lon + 180) / 360 * n, (1 - asinh(tan(radians(la))) / pi) / 2 * n
+img.paste(Image.open(io.BytesIO(fetch(z, X, Y))), (i * 256, j * 256))
+reproject(src[b], dst[b], src_crs='EPSG:3857', src_transform=src_tr,
+          dst_crs='EPSG:4326', dst_transform=from_bounds(*ext, out_w, out_h),
+          resampling=Resampling.bilinear)</code></pre></div></div>
+
+<div class="fs"><div class="dot">4</div><div class="card"><div>
+  <h3>ชั้นราสเตอร์: อ่านเท่าที่เห็น ย่อตอนอ่าน</h3><div class="where">layout.py · _raster()</div>
+  <p>ไฟล์ 100 ม. ทั้งประเทศ (~50 ล้านพิกเซล) อ่านแค่ <b>≤ 3,200 px</b> ตามขนาดกล่อง · GDAL ใช้ overview ที่มีอยู่ให้เอง · ข้อมูลชั้น/รหัสใช้ <code>nearest</code> ค่าต่อเนื่องใช้ <code>average</code> · สีจาก Symbology (หรือสไตล์ที่ปรับในแผนที่ซ้อนชั้น <code>rstyle</code>)</p>
+  <div class="tags"><span class="tag t-rio">from_bounds</span><span class="tag t-rio">read(out_shape)</span><span class="tag t-np">masked array</span></div></div>
+<pre><code class="language-python">win = wfb(*bb, s.transform).intersection(Window(0, 0, s.width, s.height))
+ow  = int(min(px_w * 1.2, win.width, 3200))
+oh  = int(max(1, ow * win.height / win.width))
+rs  = Resampling.nearest if style['type'] == 'paletted' else Resampling.average
+arr = s.read(band, window=win, out_shape=(oh, ow), masked=True, resampling=rs)
+rgba = symbology.render(d, style, a, ~np.ma.getmaskarray(arr), res, lat)
+ax.imshow(rgba, extent=[wb[0], wb[2], wb[1], wb[3]], interpolation='nearest')</code></pre></div></div>
+
+<div class="fs"><div class="dot">5</div><div class="card"><div>
+  <h3>เวกเตอร์และขอบเขต: ย่อรูปทรง + แคช</h3><div class="where">layout.py · _vector_gdf()</div>
+  <p>ย่อรูปทรงด้วยค่าคลาดเคลื่อน <b>ครึ่งพิกเซล</b> (มองไม่เห็นความต่าง แต่จุดลดลงมาก) · แคช 8 ชุดในหน่วยความจำ · พรีวิว 4 ชั้นจาก <b>21 → 3.7 วินาที</b> · ส่งพิกัดป้ายชื่อกลับเป็น JSON ให้เบราว์เซอร์วาดเอง</p>
+  <div class="tags"><span class="tag t-py">geopandas</span><span class="tag t-py">shapely.simplify</span></div></div>
+<pre><code class="language-python">tol = (ext[2] - ext[0]) / px_w / 2              # ครึ่งพิกเซล (องศา)
+g = g.set_geometry(g.geometry.simplify(tol, preserve_topology=False))
+g.boundary.plot(ax=ax, color=bd['color'], linewidth=bd['width'], zorder=12)
+for (_, r), pt in zip(g.iterrows(), g.representative_point()):
+    labels.append(dict(x=pt.x, y=pt.y, t=str(r[label_field])))
+fig.savefig(png, dpi=dpi, transparent=True)     # ภาพโปร่งใส ไม่มีตัวอักษร</code></pre></div></div>
+</div>
+
+<h2><span class="n">06</span>report.js — คณิตศาสตร์ของสิ่งที่วาดทับแผนที่</h2>
+<p class="sub">ภาพแผนที่เป็นละติจูด/ลองจิจูดแบบเชิงเส้นเต็มกล่อง → แปลงพิกัดเป็นตำแหน่ง มม. ได้ด้วยสมการเส้นตรง</p>
+<div class="grid g2">
+<div class="card">
+  <h3 style="margin-top:0">กริดพิกัด · ป้ายชื่อ · มาตราส่วน</h3>
+  <div class="math">X(ลอง) = (ลอง − <em>x0</em>) ÷ (<em>x1</em> − <em>x0</em>) × กว้าง<sub>มม.</sub><br>Y(ละติ) = (<em>y1</em> − ละติ) ÷ (<em>y1</em> − <em>y0</em>) × สูง<sub>มม.</sub></div>
+  <p style="font-size:14px">ระยะกริด: เลือกจาก <code>[1′, 2′, 5′, 10′, 15′, 0.5°, 1°, 2°, 5°, 10°…]</code> ตัวแรกที่ทำให้ได้ ≤ 5 เส้น · ต่ำกว่า 1° แสดงเป็นลิปดา เช่น <code>100°30′E</code></p>
+  <div class="math">กม./มม. = Δลอง × <em>111.32</em> × cos(ละติจูดกลาง) ÷ กว้าง<sub>มม.</sub><br>มาตราส่วน 1 : (กม./มม. × 10⁶) → ปัด 2 หลัก</div>
+  <p style="font-size:14px">ความยาวแท่ง = ค่าสวยตัวใหญ่สุด (1, 2, 2.5, 5 × 10ⁿ) ที่ไม่เกิน 85% ของกล่อง · ต่ำกว่า 1 กม. เปลี่ยนเป็นเมตร</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">ป้ายชื่อไม่ทับกัน (declutter)</h3>
+<pre><code class="language-javascript">// ประมาณกว้างจากจำนวนตัวอักษร (ไม่นับสระบน/ล่าง ที่ไม่กินที่)
+const wOf = s => [...s].filter(c => !/[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/.test(c))
+                       .length * fmm * .56 + fmm * .4;
+labs.map(l => ({ ...l, cx: X(l.x), cy: Y(l.y), w: wOf(l.t), h: fmm * 1.25 }))
+    .sort((a, b) => a.w - b.w)            // ชื่อสั้นได้ที่ก่อน
+    .filter(l => {
+      const b = [l.cx - l.w/2, l.cy - l.h/2, l.cx + l.w/2, l.cy + l.h/2];
+      if (boxes.some(o => b[0] < o[2] && b[2] > o[0] &&
+                          b[1] < o[3] && b[3] > o[1])) return false; // ทับ → ตัด
+      boxes.push(b); return true;
+    });</code></pre>
+  <p style="font-size:13.5px;margin-bottom:0">คำนวณตอนวาด (ไม่ต้องรอฟอนต์โหลด) จึงได้ผลเหมือนกันทั้งในตัวแก้และในหน้าพิมพ์ของ Edge</p>
+</div>
+</div>
+
+<h2><span class="n">07</span>ตัวแก้: ลาก · ดูดเส้นนำ · ย้อนกลับ</h2>
+<div class="grid g3">
+<div class="card">
+  <h3 style="margin-top:0">ลาก/ย่อขยาย</h3>
+  <p style="font-size:14px">เมาส์ขยับกี่พิกเซล → หารด้วย <b>3.7795 × ซูม</b> (px ต่อ มม.) ได้ระยะเป็น มม. · ปัดทศนิยม 1 ตำแหน่ง · ระหว่างลาก แผนที่แค่ยืดภาพเดิม ปล่อยเมาส์แล้วค่อยขอภาพใหม่</p>
+<pre><code class="language-javascript">const k  = 3.7795 * z;
+const mv = m => onMove((m.clientX - sx) / k,
+                       (m.clientY - sy) / k, m);
+stage.setPointerCapture(ev.pointerId);</code></pre>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">ดูดเส้นนำ (snap)</h3>
+  <div class="snapdemo">
+    <div class="el" style="left:30px;top:20px;width:110px;height:50px;background:#2f6fe422;border:1.5px solid #2f6fe4"></div>
+    <div class="el" style="left:140px;top:84px;width:80px;height:46px;background:#7c4ddb22;border:1.5px solid #7c4ddb"></div>
+    <div class="gv" style="left:139px"></div>
+    <div class="el" style="left:236px;top:20px;width:40px;height:40px;background:#179a7422;border:1.5px dashed #179a74"></div>
+  </div>
+  <p style="font-size:13.5px">ผู้สมัคร = ขอบ+กึ่งกลางของหน้ากระดาษและทุกองค์ประกอบ · เทียบ ซ้าย/กลาง/ขวา ของชิ้นที่ลาก · ห่าง ≤ <b>6 px บนจอ</b> → ดูดเข้าแล้ววาดเส้นชมพู · กด Alt ปิด</p>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">ประวัติ (Ctrl+Z / Ctrl+Y)</h3>
+  <p style="font-size:14px">เก็บ <b>ภาพรวมทั้ง doc เป็นข้อความ JSON</b> หลังทุกการแก้ (สูงสุด 100 ครั้ง) — ง่ายและไม่พลาด แม้การแก้ซับซ้อนอย่างเปลี่ยนเทมเพลต · ตอนย้อนกลับ ขอภาพใหม่เฉพาะกรอบที่ขนาด/มุมมองเปลี่ยน</p>
+<pre><code class="language-javascript">const commit = () => {
+  const s = JSON.stringify(doc);
+  if (s === last) return;
+  hist.push(last); fut = []; last = s;
+  save();                 // localStorage
+};</code></pre>
+</div>
+</div>
+<div class="grid g2" style="margin-top:16px">
+<div class="card">
+  <h3 style="margin-top:0">เลื่อน/ซูมแผนที่ในกรอบ (ดับเบิลคลิกแผนที่)</h3>
+<pre><code class="language-javascript">// ลากไป dx, dy มม. → เลื่อนจุดกลางในทิศตรงข้าม (เป็นองศา)
+vw.cx -= dx * (ext[2] - ext[0]) / e.w;
+vw.cy += dy * (ext[3] - ext[1]) / e.h;
+// ล้อเมาส์ → ย่อ/ขยายความสูงของมุมมอง
+e.p.view.span *= ev.deltaY > 0 ? 1.15 : 1 / 1.15;
+e.p.auto = false;  commit();  refreshMap(e.id);</code></pre>
+</div>
+<div class="card">
+  <h3 style="margin-top:0">บั๊กที่เจอระหว่างทำ (และสาเหตุ)</h3>
+  <table>
+    <tr><td>จุดจับย่อขยายกดไม่ได้</td><td>องค์ประกอบมี z-index 10+ แต่หน้ากระดาษไม่ได้แยกชั้น → จุดจับจมอยู่ข้างใต้ · แก้: <code>#rpPage { z-index: 0 }</code></td></tr>
+    <tr><td>ดับเบิลคลิกแก้ข้อความไม่ติด</td><td><code>setPointerCapture</code> ทำให้ dblclick เกิดที่ stage · แก้: <code>elementsFromPoint()</code></td></tr>
+    <tr><td>การ์ดตัวเลขเรียงผิด</td><td>คลาสของกล่อง <code>rpt-kpi</code> ซ้ำกับเนื้อใน · แก้: <code>rpt-t-&lt;type&gt;</code></td></tr>
+    <tr><td>ข้อความท้ายหน้าหายเงียบ</td><td><code>justify-content:flex-end</code> ทำให้ส่วนล้นหลุดด้านบน วัดไม่ได้ · แก้เป็น <code>margin-top:auto</code> + เตือน "⚠ ล้น"</td></tr>
+  </table>
+</div>
+</div>
+
+<h2><span class="n">08</span>ส่งออก: ให้ Edge พิมพ์หน้าเดียวกัน</h2>
+<div class="grid g2">
+<pre><code class="language-python"># canvas.py — export()
+doc['_data'] = prepare(doc, dpi)          # วาดแผนที่ใหม่ที่ dpi ส่งออก
+tok = uuid.uuid4().hex; PRINTS[tok] = doc  # ฝากไว้ให้หน้า /report/print/&lt;tok&gt;
+args = [exe, '--headless=new', '--disable-gpu', '--hide-scrollbars',
+        f'--user-data-dir={DIRS["cache"] / "edge_profile"}',
+        '--virtual-time-budget=20000']
+if fmt == 'pdf':
+    args += ['--no-pdf-header-footer', f'--print-to-pdf={out}']
+else:
+    args += [f'--window-size={round(W/25.4*96)},{round(H/25.4*96)}',
+             f'--force-device-scale-factor={dpi/96:.4f}', f'--screenshot={out}']
+subprocess.run(args + [f'{base_url}/report/print/{tok}'], timeout=180,
+               creationflags=subprocess.CREATE_NO_WINDOW)
+return out.read_bytes()
+
+# print_html() — หน้าที่ Edge เปิด
+@page { size: 297mm 210mm; margin: 0 }
+&lt;script src="/static/report.js"&gt;&lt;/script&gt;
+&lt;script&gt;const DOC = {...}; RPT.render(page, DOC, DOC._data, { print: true })&lt;/script&gt;</code></pre>
+<div>
+  <div class="grid g2">
+    <div class="card"><div class="stat" style="color:var(--eng)">0.01 วิ</div><div class="stat-l">ขอภาพแผนที่ซ้ำ (แคช hash)</div></div>
+    <div class="card"><div class="stat" style="color:var(--ui)">2–4 วิ</div><div class="stat-l">พรีวิวแผนที่ทั้งประเทศ</div></div>
+    <div class="card"><div class="stat" style="color:var(--job)">6–7 วิ</div><div class="stat-l">ส่งออก PNG ต่อหน้า (รวมเปิด Edge)</div></div>
+    <div class="card"><div class="stat" style="color:var(--srv)">~20 วิ</div><div class="stat-l">PDF 200 dpi (วาดแผนที่ใหม่ความละเอียดสูง)</div></div>
+  </div>
+  <div class="card" style="margin-top:16px">
+    <h3 style="margin-top:0">ข้อควรรู้</h3>
+    <ul style="margin:0;padding-left:18px;font-size:14px">
+      <li>ต้องมี Edge หรือ Chrome ในเครื่อง (Windows มี Edge อยู่แล้ว) · ระบุเองได้ด้วยตัวแปร <code>AINU_BROWSER</code></li>
+      <li>ฟอนต์โหลดจาก Google Fonts → ตอนส่งออกต้องต่ออินเทอร์เน็ต</li>
+      <li>เซิร์ฟเวอร์ต้องรับหลายคำขอพร้อมกัน (<code>threaded=True</code>) เพราะ Edge ขอหน้า/ภาพกลับมาที่เซิร์ฟเวอร์ตัวเดียวกันระหว่างที่คำขอส่งออกยังรออยู่</li>
+      <li>สำเนาไฟล์ล่าสุดต่อแบบหน้าอยู่ที่ <code>cache/report/last_&lt;template&gt;.pdf|png</code></li>
+    </ul>
+  </div>
+</div>
+</div>
+
+<footer>Ainulindalë · infographic สร้างจากโค้ดเวอร์ชัน 0.5.0 · ไฟล์อ้างอิง: app/canvas.py (render_map, render_inset, info, prepare, export, print_html) · app/layout.py (_mosaic_4326, _raster, _vector_gdf, _legend_items, _stats) · static/report.js (RPT.render, R.*, TEMPLATES) · static/app.js (pageReport) · app/server.py (/api/report/*)</footer>
+</div>
+<script>hljs.highlightAll();</script>
+</body>
+</html>

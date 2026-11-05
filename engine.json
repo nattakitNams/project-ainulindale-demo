@@ -1,0 +1,9 @@
+{
+  "_help": "หน้าเว็บที่อนุญาตให้สั่งงานตัวประมวลผลเครื่องนี้ (CORS) · web_url = หน้าที่เปิดให้ตอนเริ่ม (พร้อมลิงก์จับคู่) · ว่าง = ใช้หน้าสำรองในเครื่อง http://127.0.0.1:5200/ui/",
+  "web_url": "https://nattakitnams.github.io/project-ainulindale-demo/",
+  "allowed_origins": [
+    "https://nattakitnams.github.io",
+    "http://127.0.0.1:8090",
+    "http://localhost:8090"
+  ]
+}
