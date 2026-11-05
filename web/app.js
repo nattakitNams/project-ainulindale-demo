@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.3';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.4';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -412,6 +412,11 @@ async function symPanel(d, o = {}) {
   const r = o.style ? { style: o.style, saved: false } : await api(`${ENGINE}/api/datasets/${d.id}/style`);
   let sty = JSON.parse(JSON.stringify(r.style || { type: 'pseudocolor', stops: [] }));
   let saved = r.saved, pvTimer = null, override = !!o.style;
+  if (!o.viewer && d.kind === 'raster' && window._rasterLayer) {   // ความทึบตั้งต้นตามสไตล์ (night light = 100% แบบ QGIS)
+    const op0 = sty.opacity ?? .85;
+    window._rasterLayer.setOpacity(op0);
+    if ($('#op')) $('#op').value = op0;
+  }
   const legend = s => o.viewer ? o.onStyle?.(s) : setMapLegend(s);
   const isCount = d.value_type === 'count';
   const items = () => sty.type === 'paletted' ? (sty.entries ||= []) : (sty.stops ||= []);
@@ -471,7 +476,12 @@ async function symPanel(d, o = {}) {
       <div class="row" style="margin-top:14px"><button id="sSave" class="primary">${IC.check}บันทึกสไตล์</button><button id="sReset" class="ghost">คืนค่าเริ่มต้น</button>
         ${d.role === 'derived' ? '<span class="tiny muted">บันทึกแล้วเขียน .qml คู่ไฟล์ให้ QGIS เปิดแล้วสีขึ้นเอง</span>' : '<span class="tiny muted">ไฟล์ต้นฉบับไม่ถูกแก้ — ดาวน์โหลด .qml ได้จากปุ่มด้านบน</span>'}</div>`}`;
     const num = id => { const v = $(id)?.value; return v === '' || v == null ? null : parseFloat(v); };
-    $('#sType').onchange = async () => { sty.type = $('#sType').value; if (sty.type !== 'gray') await reclass(); else { draw(); preview(); } };
+    $('#sType').onchange = async () => {
+      const prev = sty.type;
+      sty.type = $('#sType').value;
+      if (sty.type === 'gray') { draw(); preview(); return; }
+      if (!await reclass()) { sty.type = prev; draw(); }        // เปลี่ยนไม่ได้ (เช่น ค่าไม่ซ้ำเกิน 256) → กลับเป็นแบบเดิม ไม่ให้หน้าจอค้างไม่ตรงกับแผนที่
+    };
     $('#sMetric') && ($('#sMetric').onchange = async () => { sty.metric = $('#sMetric').value; sty.min = sty.max = null; await reclass(); });
     if ($('#rampBtn')) {
       $('#rampBtn').onclick = () => $('#rampList').classList.toggle('hide');
@@ -510,7 +520,8 @@ async function symPanel(d, o = {}) {
         hide_values: sty.hide_values || [], range: sty.range || null, opacity: sty.opacity ?? .85 };
       const r = await api(`${ENGINE}/api/datasets/${d.id}/classify`, { json: req });
       sty = r.style; draw(); preview();
-    } catch (e) { toast(e.message, true); }
+      return true;
+    } catch (e) { toast(e.message, true); return false; }
   };
   // เปลี่ยน ramp → ระบายสีรายการเดิมใหม่ (ไม่เปลี่ยนค่า)
   const recolor = () => {
@@ -1649,7 +1660,7 @@ function viewerAdd(items) {                       // ใช้จากหน้
 }
 function vLayerFromDs(d, i = 0) {
   const kind = d.kind === 'link' ? (d.meta.view ? 'linktile' : 'linkdata') : d.kind;
-  return { key: (d.kind === 'link' ? 'lk:' : 'ds:') + d.id, kind, id: d.id, name: d.name, visible: true, opacity: kind === 'raster' ? .85 : 1,
+  return { key: (d.kind === 'link' ? 'lk:' : 'ds:') + d.id, kind, id: d.id, name: d.name, visible: true, opacity: 1,
     style: { stroke: V_PAL[i % V_PAL.length], width: 1.2, fill: V_PAL[i % V_PAL.length], fillOpacity: .15, useColor: (d.meta.fields || []).some(f => (f.name || f) === 'color') } };
 }
 

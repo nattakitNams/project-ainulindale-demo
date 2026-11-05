@@ -165,15 +165,13 @@ def data_profile(ds, s=None):
 
 def continuous_default(ds):
     """สไตล์เริ่มต้นของข้อมูลต่อเนื่อง แบบ QGIS: Singleband pseudocolor · ไล่สีเชิงเส้น · min/max ตัดสะสม 2–98%
-    index → RdYlGn (น้ำตาล→เขียว) · nightlight → inferno + ซ่อน 0 + ยืดสีจากพิกเซลที่มีค่า · อื่นๆ → viridis"""
+    index → RdYlGn (น้ำตาล→เขียว) · nightlight → Singleband gray ดำ→ขาว ทึบ 100% (เหมือนเปิดใน QGIS) · อื่นๆ → viridis"""
     st = ds.get('stats') or {}
     s = sample_values(ds, 'value')
     prof = data_profile(ds, s)
     hide = []
     if s is not None and s.size:
         base = s
-        if prof == 'nightlight' and (s > 0).any():
-            base, hide = s[s > 0], [0]
         lo, hi = float(np.quantile(base, 0.02)), float(np.quantile(base, 0.98))
     else:
         pct = st.get('pct') or {}
@@ -182,7 +180,15 @@ def continuous_default(ds):
             lo, hi = st.get('min', 0) or 0, st.get('max', 1) or 1
     if hi <= lo:
         hi = lo + (abs(lo) or 1) * 1e-3
-    ramp = {'index': 'RdYlGn', 'nightlight': 'inferno'}.get(prof, 'viridis')
+    if prof == 'nightlight':
+        # แบบที่เปิดใน QGIS: Singleband gray ดำ→ขาว · ทึบ 100% · ไม่ซ่อนค่า · ตัดสะสม 2–98% จากทุกพิกเซล
+        # (เดิมซ่อน 0 + ทึบ 85% → พื้นมืดโปร่งสลับกับพิกเซลแสงจาง เป็นลายกระดำกระด่างทับภาพดาวเทียม)
+        if s is not None and s.size:
+            lo, hi = float(np.quantile(s, 0.02)), float(np.quantile(s, 0.98))
+            if hi <= lo:
+                hi = lo + (abs(lo) or 1) * 1e-3
+        return dict(type='gray', min=lo, max=hi, invert=False, metric='value', hide_values=[], opacity=1.0, profile=prof)
+    ramp = {'index': 'RdYlGn'}.get(prof, 'viridis')
     out = classify(ds, dict(type='pseudocolor', ramp=ramp, mode='continuous', interp='linear', classes=5, min=lo, max=hi, metric='value',
                             hide_values=hide))
     out['profile'] = prof
