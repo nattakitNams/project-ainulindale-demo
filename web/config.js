@@ -31,8 +31,9 @@ var ENGINE, ENGINE_TOKEN;
   const _fetch = window.fetch.bind(window);
   window.fetch = (u, o = {}) => {
     if (typeof u === 'string' && u.startsWith('/api/')) u = ENGINE + u;
-    if (typeof u === 'string' && ENGINE_TOKEN && u.startsWith(ENGINE)) {
-      o = Object.assign({}, o, { headers: Object.assign({}, o.headers || {}, { 'X-Ainu-Token': ENGINE_TOKEN }) });
+    if (typeof u === 'string' && u.startsWith(ENGINE) && !SAME) {
+      o = Object.assign({ targetAddressSpace: 'loopback' }, o);          // Chrome Local Network Access: บอกว่าตั้งใจคุยกับเครื่องตัวเอง
+      if (ENGINE_TOKEN) o.headers = Object.assign({}, o.headers || {}, { 'X-Ainu-Token': ENGINE_TOKEN });
     }
     return _fetch(u, o);
   };
@@ -44,6 +45,8 @@ var ENGINE, ENGINE_TOKEN;
     #ainuGate ol{padding-left:20px;font-size:14px;line-height:1.8;color:#d5d7ea} #ainuGate code{background:#ffffff12;padding:1px 6px;border-radius:5px;font-size:12.5px}
     #ainuGate .row{display:flex;gap:8px;margin-top:10px} #ainuGate input{flex:1;background:#15172a;border:1px solid #ffffff26;border-radius:10px;color:#fff;padding:8px 10px;font:13px 'JetBrains Mono',monospace}
     #ainuGate button{background:#c3b6ff;color:#1b1d30;border:0;border-radius:10px;padding:8px 14px;font:600 13px Anuphan,sans-serif;cursor:pointer}
+    #ainuGate .lna{margin:12px 0;padding:10px 12px;border-radius:10px;background:#f6e3a114;border:1px solid #f6e3a155;font-size:13px;line-height:1.6;color:#f6e3a1}
+    #ainuGate .lna.bad{background:#ff9aa814;border-color:#ff9aa866;color:#ffc4cc} #ainuGate .lna a{color:#c3b6ff}
     #ainuGate .st{font-size:12.5px;color:#9ee8d4;margin-top:12px} #ainuGate .priv{font-size:12px;color:#8e92ad;border-top:1px solid #ffffff14;margin-top:16px;padding-top:12px}
     .ainu-eng{display:flex;align-items:center;gap:6px;font-size:11.5px;color:#9ee8d4;margin-top:6px} .ainu-eng i{width:7px;height:7px;border-radius:50%;background:#9ee8d4;box-shadow:0 0 8px #9ee8d4}`;
   let el = null;
@@ -53,7 +56,12 @@ var ENGINE, ENGINE_TOKEN;
       el = document.createElement('div'); el.id = 'ainuGate'; document.body.appendChild(el);
     }
     const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-    el.innerHTML = state === 'down' ? `<div class="box"><h2>ใช้ Ainulindalë บนเครื่องของคุณ</h2>
+    const lna = info?.lna;                                      // สิทธิ์ Local Network Access ของ Chrome/Edge
+    const lnaBox = lna === 'denied' ? `<div class="lna bad"><b>เบราว์เซอร์บล็อกไม่ให้หน้านี้คุยกับเครื่องของคุณ</b><br>
+          คลิกไอคอน <b>ⓘ / แม่กุญแจ</b> หน้าที่อยู่เว็บ → <b>การเข้าถึงเครือข่ายภายใน / Local network access</b> → <b>อนุญาต (Allow)</b> แล้วรีเฟรชหน้านี้<br>
+          หรือใช้หน้าสำรองในเครื่องแทน: <a href="${esc(ENGINE)}/ui/" target="_blank" rel="noopener">${esc(ENGINE)}/ui/</a> (ต้องเปิด Ainulindale.bat ก่อน)</div>`
+      : lna === 'prompt' ? `<div class="lna">ถ้าเบราว์เซอร์ถาม <b>"อนุญาตให้เข้าถึงแอป/อุปกรณ์ในเครื่องนี้"</b> ให้กด <b>อนุญาต (Allow)</b> — หน้านี้ต้องคุยกับตัวประมวลผลในเครื่องคุณ (127.0.0.1) ไม่ได้ออกไปเครือข่ายอื่น</div>` : '';
+    el.innerHTML = state === 'down' ? `<div class="box"><h2>ใช้ Ainulindalë บนเครื่องของคุณ</h2>${lnaBox}
         <p>หน้าเว็บนี้เป็นแค่หน้าจอ — การคำนวณใช้ CPU / RAM / ไฟล์ของเครื่องคุณ ผ่านตัวประมวลผลเล็กๆ ที่รันในเครื่อง</p>
         <p><b>ติดตั้งครั้งแรก</b> (Windows 10/11 · ไม่ต้องใช้สิทธิ์ admin)</p>
         <ol><li><a href="${esc(window.AINU_DOWNLOAD_URL || 'download/Ainulindale-setup.zip')}" style="color:#c3b6ff;font-weight:600">ดาวน์โหลด Ainulindale-setup.zip</a> (~15 MB)</li>
@@ -61,6 +69,7 @@ var ENGINE, ENGINE_TOKEN;
           <li>ดับเบิลคลิก <code>Ainulindale.bat</code> → หน้าเว็บนี้จะเปิดตัวช่วยติดตั้งให้เอง</li></ol>
         <p style="font-size:12.5px">Windows อาจเตือน "Windows protected your PC" เพราะไฟล์ยังไม่ได้ลงนามดิจิทัล → กด <b>More info → Run anyway</b> · โค้ดทั้งหมดเปิดให้ตรวจได้</p>
         <p><b>ติดตั้งแล้ว?</b> เปิด <code>Ainulindale.bat</code> แล้วหน้านี้จะเชื่อมต่อเอง</p>
+        <p style="font-size:13px">เปิดแล้วแต่หน้านี้เชื่อมต่อไม่ได้? ใช้หน้าสำรองในเครื่อง <a href="${esc(ENGINE)}/ui/" target="_blank" rel="noopener" style="color:#c3b6ff">${esc(ENGINE)}/ui/</a> (ไม่ต้องขอสิทธิ์เบราว์เซอร์)</p>
         <p>ตัวประมวลผลอยู่ที่อื่น? แก้ที่อยู่:</p>
         <div class="row"><input id="agUrl" value="${esc(ENGINE)}"><button id="agSave">เชื่อมต่อ</button></div>
         <div class="st">กำลังลองเชื่อมต่อ ${esc(ENGINE)} ทุก 3 วินาที…</div>
@@ -76,13 +85,19 @@ var ENGINE, ENGINE_TOKEN;
     const pr = el.querySelector('#agPair');
     if (pr) pr.onclick = () => { put('ainu.token', el.querySelector('#agTok').value.trim()); location.reload(); };
   };
+  const lnaState = async () => {
+    for (const name of ['local-network-access', 'loopback-network']) {
+      try { return (await navigator.permissions.query({ name })).state; } catch { }
+    }
+    return null;                                                // เบราว์เซอร์ไม่มีระบบนี้
+  };
   const probe = async () => {
     try {
-      const r = await _fetch(ENGINE + '/api/engine/hello', { headers: ENGINE_TOKEN ? { 'X-Ainu-Token': ENGINE_TOKEN } : {} });
+      const r = await _fetch(ENGINE + '/api/engine/hello', { headers: ENGINE_TOKEN ? { 'X-Ainu-Token': ENGINE_TOKEN } : {}, targetAddressSpace: 'loopback' });
       const info = await r.json();
       const ok = SAME || info.paired;
       return { state: !ok ? 'unpaired' : info.mode === 'setup' ? 'setup' : 'ok', info };
-    } catch { return { state: 'down' }; }
+    } catch { return { state: 'down', info: { lna: SAME ? null : await lnaState() } }; }
   };
 
   window.ainuEngine = {
@@ -97,7 +112,8 @@ var ENGINE, ENGINE_TOKEN;
         }
         if (SAME && state !== 'down') return info;
         if (state === 'ok') { if (el) { el.remove(); el = null; } return info; }
-        if (!el || el.dataset.state !== state || state === 'unpaired') { show(state, info); el.dataset.state = state; }
+        const key = state + (info?.lna || '');
+        if (!el || el.dataset.state !== key || state === 'unpaired') { show(state, info); el.dataset.state = key; }
         if (state === 'unpaired') return new Promise(() => { });        // รอผู้ใช้วางโทเคน (หน้าโหลดใหม่เอง)
         await new Promise(r => setTimeout(r, 3000));
       }
