@@ -200,10 +200,9 @@ def auto_breaks(ds, cfg):
     if v is None or v.size == 0:
         raise EngineError(f'ชุดข้อมูล "{ds["name"]}" ยังไม่มีค่าสุ่ม — รอให้งานเตรียมข้อมูลเสร็จก่อน')
     if cfg['method'] == 'quantile':
-        b = [float(np.quantile(v, i / n)) for i in range(1, n)]
-    else:
-        lo, hi = float(v.min()), float(v.max())
-        b = [lo + (hi - lo) * i / n for i in range(1, n)]
+        return engine.quantile_breaks(v, n)                 # ทนค่าซ้ำ (เช่น ศูนย์จำนวนมาก) — ไม่มีชั้นว่าง
+    lo, hi = float(v.min()), float(v.max())
+    b = [lo + (hi - lo) * i / n for i in range(1, n)]
     out = []
     for x in b:                                   # กันเกณฑ์ซ้ำ (ข้อมูลกองที่ค่าเดียว)
         if out and x <= out[-1]:
@@ -431,6 +430,9 @@ def op_bivariate(job, P, log, stats_only=False):
     highlight = [int(c) for c in p.get('highlight', [])]
     warnings = []
     for og, d in ((ogx, dsx), (ogy, dsy)):
+        if og.mode == 'warp':
+            warnings.append(f'จัดกริดถ่วงพื้นที่: เส้นกริดของ "{d["name"]}" เหลื่อม {og.misalign:.2f} พิกเซล — '
+                            'ค่าแต่ละพิกเซลคิดจากพิกเซลต้นทางที่ทับตามสัดส่วนพื้นที่ (count ผลรวมไม่หาย · density เฉลี่ย · class ครองพื้นที่มากสุด)')
         if og.mode == 'up' and d['value_type'] == 'count':
             warnings.append(f'ความแม่นยำเทียม: "{d["name"]}" ถูกแบ่งลงพิกเซลละเอียดขึ้น {og.k}×{og.k} แบบเท่ากัน')
     if nx * ny > 16:

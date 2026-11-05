@@ -1,10 +1,13 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.0';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.2';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const fmt = (v, d = 2) => v == null || Number.isNaN(+v) ? '–' : Number(v).toLocaleString('th-TH', { maximumFractionDigits: d });
+const pxLabel = n => n >= 1e6 ? `${(n / 1e6).toLocaleString('th-TH', { maximumFractionDigits: 1 })} ล้านพิกเซล` : `${Math.round(n).toLocaleString('th-TH')} พิกเซล`;
+const fmt = (v, d = 2) => v == null || Number.isNaN(+v) ? '–'
+  : (+v !== 0 && Math.abs(+v) < 1) ? Number(v).toLocaleString('th-TH', { maximumSignificantDigits: Math.max(3, d) })   // ค่า 0–1 ละเอียด ไม่ปัดเป็น 0
+    : Number(v).toLocaleString('th-TH', { maximumFractionDigits: d });
 const bytes = b => b == null ? '–' : b < 1024 ** 2 ? (b / 1024).toFixed(0) + ' KB' : b < 1024 ** 3 ? (b / 1024 ** 2).toFixed(1) + ' MB' : (b / 1024 ** 3).toFixed(2) + ' GB';
 const attr = s => esc(JSON.stringify(s));
 const VT = { count: 'จำนวนนับ (เช่น คน/พิกเซล)', density: 'ความหนาแน่น / ค่าต่อเนื่อง', class: 'ชั้น / หมวดหมู่' };
@@ -238,7 +241,7 @@ async function pageDataset(id) {
     ['รูปแบบ', `${esc(m.driver)} · ${esc(d.format)}${m.vrt ? ` · ${fmt(m.vrt.sources, 0)} ไฟล์ย่อย` : ''}`],
     ['CRS', esc(m.crs_name)],
     ['ความละเอียด', `<b>${esc(m.res_label)}</b><div class="tiny muted">ค่าในไฟล์ ${m.res.map(x => x.toPrecision(10)).join(' × ')} ${m.geographic ? '°' : 'ม.'} · ค่าแม่นยำ ${esc(m.res_exact)} ${m.res_unit === 'arcsec' ? 'ฟิลิปดา' : 'ม.'}</div>`],
-    ['ขนาด', `${fmt(m.width, 0)} × ${fmt(m.height, 0)} (${fmt(m.pixels / 1e6, 1)} ล้านพิกเซล) · ${m.count} แบนด์ · ${esc(m.dtypes.join(', '))}`],
+    ['ขนาด', `${fmt(m.width, 0)} × ${fmt(m.height, 0)} (${pxLabel(m.pixels)}) · ${m.count} แบนด์ · ${esc(m.dtypes.join(', '))}`],
     ['nodata ในไฟล์', esc(m.nodata ?? 'ไม่มี')],
     ['ขอบเขต (WGS84)', m.bounds_wgs84 ? m.bounds_wgs84.map(x => x.toFixed(4)).join(', ') : '–'],
     ['มุมเริ่มกริด', `<span class="mono">${m.transform[2]}, ${m.transform[5]}</span>`],
@@ -356,7 +359,7 @@ async function pageDataset(id) {
     };
     if ($('#band')) $('#band').onchange = async () => { await api(ENGINE + '/api/datasets/' + id, { method: 'PATCH', json: { band: +$('#band').value } }); route(); };
     const opts = d.res_options || [];
-    const optHtml = (list, mark) => list.map(o => `<option value="${o.value}">${esc(o.label)} · ${fmt(o.px / 1e6, 1)} ล้านพิกเซล${o.is_source.includes(d.id) ? ' · เท่าเดิม' : mark && o.px > m.pixels ? ' · ละเอียดขึ้น' : ''}</option>`).join('');
+    const optHtml = (list, mark) => list.map(o => `<option value="${o.value}">${esc(o.label)} · ${pxLabel(o.px)}${o.is_source.includes(d.id) ? ' · เท่าเดิม' : mark && o.px > m.pixels ? ' · ละเอียดขึ้น' : ''}</option>`).join('');
     $('#rsRes').innerHTML = optHtml(opts, true);
     const coarser = opts.find(o => o.px < m.pixels);
     $('#rsRes').value = coarser ? coarser.value : opts[0]?.value;
@@ -941,7 +944,7 @@ async function pageBiv() {
       const r = await api(ENGINE + '/api/res-options?ids=' + ids.join(','));
       resOpts = r.options;
       const finer = r.options.filter(o => o.is_source.length).map(o => o.value)[0];
-      sel.innerHTML = r.options.map(o => `<option value="${o.value}">${esc(o.label)} · ${fmt(o.px / 1e6, 1)} ล้านพิกเซล${o.is_source.length ? ' · = ข้อมูล #' + o.is_source.join(', #') : ''}</option>`).join('');
+      sel.innerHTML = r.options.map(o => `<option value="${o.value}">${esc(o.label)} · ${pxLabel(o.px)}${o.is_source.length ? ' · = ข้อมูล #' + o.is_source.join(', #') : ''}</option>`).join('');
       sel.value = BIV.target_res && r.options.some(o => o.value === BIV.target_res) ? BIV.target_res : finer;
       $('#resNote').textContent = 'เสนอเฉพาะพหุคูณจำนวนเต็มของทั้งสองชุด (แม่-ลูกแม่นยำ)';
       fillMask();
@@ -2534,6 +2537,13 @@ async function aoiPicker() {
 function versionBanner() {
   const b = document.createElement('div');
   b.className = 'ver-banner';
+  if (!ainuEngine.same) {                          // v1: หน้าเว็บอัปเดตเองแล้ว แต่ตัวประมวลผลในเครื่องต้องดาวน์โหลดรุ่นใหม่
+    b.innerHTML = `<b>ตัวประมวลผลในเครื่องเป็นรุ่นเก่า</b> (v${esc(STATE.version)}) แต่หน้าเว็บเป็น v${UI_VERSION} — การแก้ไขใหม่ยังไม่มีผล
+      <a class="btn sm primary" href="${esc(window.AINU_DOWNLOAD_URL)}">ดาวน์โหลดรุ่นใหม่</a>
+      <span class="tiny muted">ปิดหน้าต่าง Ainulindale → แตก zip ทับโฟลเดอร์เดิม (ข้อมูลใน workspace ไม่หาย) → เปิด Ainulindale.bat</span>`;
+    document.body.appendChild(b);
+    return;
+  }
   b.innerHTML = `<b>เซิร์ฟเวอร์ยังเป็นรุ่นเก่า</b> (v${esc(STATE.version)}) แต่หน้าเว็บเป็น v${UI_VERSION} — ฟีเจอร์ใหม่บางอย่างจะใช้ไม่ได้ <button class="sm primary" id="vbGo">รีสตาร์ตเซิร์ฟเวอร์</button><span class="tiny muted">หรือปิดหน้าต่าง run.bat แล้วเปิดใหม่</span>`;
   document.body.appendChild(b);
   $('#vbGo').onclick = async () => {

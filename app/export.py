@@ -119,11 +119,11 @@ def class_labels(clf_cfg, unit=''):
     if n == 1:
         return ['ทั้งหมด']
 
-    def fm(v):
-        return f'{v:,.0f}' if float(v).is_integer() else f'{v:,.4g}'
-    out = [f'<{fm(b[0])}']
+    from .engine import fmt_breaks
+    fb = fmt_breaks(b)                                      # หลักทศนิยมพอให้ทุกเกณฑ์ต่างกัน (ข้อมูล 0–1 ละเอียด)
+    out = [f'<{fb[0]}']
     for i in range(1, n - 1):
-        out.append(f'{fm(b[i - 1])}–<{fm(b[i])}')
-    out.append(f'≥{fm(b[-1])}')
+        out.append(f'{fb[i - 1]}–<{fb[i]}')
+    out.append(f'≥{fb[-1]}')
     names = clf_cfg.get('class_names') or []
     return [f'{names[i]} {out[i]}' if i < len(names) and names[i] else out[i] for i in range(n)]

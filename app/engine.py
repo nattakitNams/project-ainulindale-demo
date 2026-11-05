@@ -173,6 +173,51 @@ class Classifier:
         return c
 
 
+def quantile_breaks(v, n):
+    """เกณฑ์ควอนไทล์ n ชั้น (n−1 ค่า) ที่ทนค่าซ้ำ
+    ข้อมูลทั่วไป → เหมือน np.quantile(v, i/n) ทุกประการ (ผลเดิมไม่เปลี่ยน)
+    ข้อมูลที่กองอยู่ค่าเดียวมาก (เช่น แสงไฟกลางคืนที่ 70% เป็น 0) → ค่าที่กองได้ชั้นของตัวเอง
+    แล้วแบ่งค่าที่เหลือเป็นชั้นละเท่าๆ กัน — ไม่มีชั้นว่าง ไม่มีเกณฑ์ซ้ำ"""
+    v = np.asarray(v, 'float64')
+    v = np.sort(v[np.isfinite(v)])
+    if v.size == 0:
+        raise EngineError('ไม่มีค่าสำหรับคำนวณเกณฑ์')
+    b = [float(np.quantile(v, i / n)) for i in range(1, n)]
+    if all(x > v[0] for x in b) and all(y > x for x, y in zip(b, b[1:])):
+        return b                                             # ไม่มีชั้นว่าง → แบบเดิม
+    nu = np.unique(v).size
+    if nu < n:
+        raise EngineError(f'ข้อมูลมีค่าต่างกันเพียง {nu} ค่า — แบ่งได้ไม่เกิน {nu} ชั้น')
+    out, lo = [], 0
+    for i in range(1, n):
+        rest = v[lo:]
+        q = float(np.quantile(rest, 1 / (n - i + 1)))       # หนึ่งชั้นจากส่วนที่เหลือ
+        if q <= rest[0]:                                     # ค่าต่ำสุดที่เหลือกองเกินหนึ่งชั้น → ให้มันเป็นชั้นเดียว
+            up = rest[rest > rest[0]]
+            if up.size == 0:
+                raise EngineError(f'แบ่งได้ไม่ครบ {n} ชั้น — ค่าส่วนใหญ่ซ้ำกัน ลองลดจำนวนชั้น')
+            q = float(up[0])
+        out.append(q)
+        lo = int(np.searchsorted(v, q, 'left'))              # ค่า ≥ เกณฑ์ ขึ้นชั้นถัดไป
+        if lo >= v.size:
+            raise EngineError(f'แบ่งได้ไม่ครบ {n} ชั้น — ลองลดจำนวนชั้น')
+    return out
+
+
+def fmt_breaks(vals):
+    """จัดรูปตัวเลขชุดหนึ่งด้วยจำนวนหลักเท่ากัน มากพอให้ไม่มีสองค่าแสดงเหมือนกัน (เช่น 0.0031 กับ 0.0048 ไม่กลายเป็น 0 ทั้งคู่)"""
+    def fin(x):
+        return x is not None and math.isfinite(float(x))
+    xs = sorted({float(x) for x in vals if fin(x)})
+    if all(x.is_integer() for x in xs):
+        return [f'{int(float(x)):,}' if fin(x) else '∞' for x in vals]
+    for sig in range(3, 13):
+        s = {x: f'{x:,.{sig}g}' for x in xs}
+        if len(set(s.values())) == len(xs):
+            break
+    return [s[float(x)] if fin(x) else '∞' for x in vals]
+
+
 def metric_of(src_vt, metric, vals, area_rows):
     if src_vt == 'count' and metric == 'density':
         return vals / area_rows[:, None]
@@ -214,54 +259,145 @@ def majority_values(vals, valid, m, tie='high'):
 
 
 # ---------- ต้นทางบนกริดเป้าหมาย ----------
+ALIGN_TOL = 0.01          # ยอมให้มุมกริดคลาดได้ไม่เกิน 1% พิกเซล (≈1 ม. ที่ 3″) — ไฟล์จริงคลาดจากเศษทศนิยม เช่น WorldPop 0.0013 พิกเซล
+
+
+def _offset(a, b, unit):
+    """(a − b) / unit → (จำนวนเต็มที่ใกล้สุด, ส่วนที่ไม่ลงตัวเป็นสัดส่วนพิกเซล)"""
+    f = (a - b) / unit
+    n = round(f)
+    return n, abs(f - n)
+
+
+def _axis_weights(t0, tstep, n, s0, sstep, dirn):
+    """น้ำหนักการทับกันบนแกนเดียว: พิกเซลเป้าหมาย n ช่อง (ขอบเริ่ม t0 ห่าง tstep) กับพิกเซลต้นทาง (ขอบเริ่ม s0 ห่าง sstep)
+    dirn = +1 แกน x · −1 แกน y (ลงใต้) → (แถว/คอลัมน์ต้นทางแรก, จำนวน, csr n × จำนวน = สัดส่วนของพิกเซลต้นทางที่ทับ)"""
+    from scipy import sparse
+    ut = dirn * (t0 - s0) / sstep + np.arange(n + 1) * (tstep / sstep)     # ขอบเป้าหมายในหน่วยพิกเซลต้นทาง
+    j0 = int(math.floor(ut[0] + 1e-9))
+    j1 = int(math.ceil(ut[-1] - 1e-9))
+    lo = np.floor(ut[:-1] + 1e-9).astype(np.int64)
+    hi = np.ceil(ut[1:] - 1e-9).astype(np.int64)
+    span = int((hi - lo).max())
+    ii = np.repeat(np.arange(n), span)
+    jj = (lo[:, None] + np.arange(span)[None, :]).ravel()
+    ov = np.minimum(ut[1:][ii], jj + 1) - np.maximum(ut[:-1][ii], jj)
+    keep = (ov > 1e-12) & (jj < hi[ii])
+    return j0, j1 - j0, sparse.csr_matrix((ov[keep], (ii[keep], jj[keep] - j0)), shape=(n, j1 - j0))
+
+
+def _area_majority(stack_fn, keys, tie):
+    """พื้นที่ของแต่ละค่า (หรือชั้น) → ค่าที่ครองพื้นที่มากสุด (เสมอ → ค่าสูงกว่า/ต่ำกว่า) · คืน (ดัชนี, มีข้อมูล)"""
+    a = np.stack([stack_fn(k) for k in keys], -1)
+    idx = (len(keys) - 1 - np.argmax(a[..., ::-1], -1)) if tie == 'high' else np.argmax(a, -1)
+    return idx, a.sum(-1) > 1e-12
+
+
 class OnGrid:
+    """ต้นทางบนกริดเป้าหมาย
+    เส้นกริดอยู่บนแลตทิซเดียวกัน (มุมเลื่อนเป็นจำนวนเต็มพิกเซล) → อ่านตรงพิกเซล ไม่ resample (same/up/down)
+      ระยะเลื่อน (dr, dc): โหมด same/up นับเป็นพิกเซลเป้าหมาย · โหมด down นับเป็นพิกเซลต้นทาง
+    เส้นกริดเหลื่อมแบบไม่ลงตัว (เช่น VIIRS วางกึ่งกลางพิกเซลที่ −180°) → โหมด warp: ถ่วงพื้นที่ที่ทับกันจริง
+      count = แบ่งตามสัดส่วนพื้นที่ (ผลรวมไม่หาย) · density = เฉลี่ยถ่วงพื้นที่ · class = ชั้นที่ครองพื้นที่มากสุด"""
+
     def __init__(self, src, grid, count_down_valid='positive', tie='high'):
         if src.meta.get('crs_key') != _grid_crs_key(grid, src):
             raise EngineError(f'CRS ของ "{src.name}" ไม่ตรงกับกริดเป้าหมาย')
-        tol = min(src.rx, grid.rx) * 1e-3
-        if abs(src.x0 - grid.x0) > tol or abs(src.y0 - grid.y0) > tol:
-            raise EngineError(f'มุมเริ่มของกริด "{src.name}" ไม่ตรงกับกริดเป้าหมาย — V1 รองรับเฉพาะกริดที่เริ่มมุมเดียวกัน')
         r = gm.int_ratio(src.res_frac / grid.res_frac)
         if r is None:
             raise EngineError(f'ความละเอียด "{src.name}" ({gm.frac_str(src.res_frac)}) กับเป้าหมาย '
                               f'({gm.frac_str(grid.res_frac)}) ไม่เป็นพหุคูณจำนวนเต็มของกัน')
         self.src, self.grid = src, grid
         self.mode, self.k = r
+        ux, uy = (src.rx, src.ry) if self.mode == 'down' else (grid.rx, grid.ry)
+        self.dc, ex = _offset(grid.x0, src.x0, ux)
+        self.dr, ey = _offset(src.y0, grid.y0, uy)
+        self.fine = self.mode == 'down'
+        self.misalign = max(ex, ey) / (self.k if self.mode == 'up' else 1)   # วัดเป็นสัดส่วนพิกเซลต้นทาง
+        if self.misalign > ALIGN_TOL:                        # เส้นกริดเหลื่อม → ถ่วงพื้นที่ (resample ระหว่างคำนวณ)
+            self.mode = 'warp'
         self.count_down_valid = count_down_valid
         self.tie = tie
 
     def src_px(self, h, w):
         """จำนวนพิกเซลต้นทางที่ต้องอ่านต่อไทล์เป้าหมาย (ใช้เรียงลำดับอ่านตัวที่ถูกกว่าก่อน)"""
         if self.mode == 'up':
-            return math.ceil(h / self.k) * math.ceil(w / self.k)
-        if self.mode == 'down':
+            return (math.ceil(h / self.k) + 1) * (math.ceil(w / self.k) + 1)
+        if self.mode == 'down' or (self.mode == 'warp' and self.fine):
             return h * w * self.k * self.k
+        if self.mode == 'warp':
+            return (math.ceil(h / self.k) + 2) * (math.ceil(w / self.k) + 2)
         return h * w
 
+    def _warp_read(self, r0, c0, h, w):
+        g, s = self.grid, self.src
+        sr0, R, Wy = _axis_weights(g.y0 - r0 * g.ry, g.ry, h, s.y0, s.ry, -1)
+        sc0, C, Wx = _axis_weights(g.x0 + c0 * g.rx, g.rx, w, s.x0, s.rx, +1)
+        v, ok = s.read_raw(sr0, sc0, R, C)
+        a = s.area_rows(sr0, R)[:, None]                     # พื้นที่จริงของแถวต้นทาง (ละติจูดต่างกัน)
+        WxT = Wx.T.tocsr()
+        return v, ok, a, (lambda A: np.asarray(Wy @ A @ WxT))
+
+    def _warp_values(self, r0, c0, h, w):
+        v, ok, a, P = self._warp_read(r0, c0, h, w)
+        vt = self.src.vt
+        if vt == 'count':
+            s = P(np.where(ok, v, 0.0))
+            cov = P(ok.astype('float64'))
+            valid = (s > 0) if (self.fine and self.count_down_valid == 'positive') else cov > 1e-12
+            return s, valid
+        if vt == 'density':
+            wa = ok * a
+            den = P(wa)
+            valid = den > 1e-12
+            return np.where(valid, P(np.where(ok, v, 0.0) * wa) / np.where(valid, den, 1), 0.0), valid
+        u = np.unique(v[ok])
+        if len(u) > 256:
+            raise EngineError(f'ข้อมูลชั้นมีค่าต่างกัน {len(u)} ค่าในไทล์เดียว (> 256) — น่าจะไม่ใช่ข้อมูลชั้น ตรวจประเภทค่า')
+        if not len(u):
+            return np.zeros((h, w)), np.zeros((h, w), bool)
+        idx, valid = _area_majority(lambda x: P(((v == x) & ok) * a), list(u), self.tie)
+        return np.where(valid, u[idx], 0.0), valid
+
+    def _warp_classes(self, clf, r0, c0, h, w):
+        vt = self.src.vt
+        if vt == 'class' or clf.order == 'classify_first':
+            v, ok, a, P = self._warp_read(r0, c0, h, w)
+            c = clf.classify(metric_of(vt, clf.metric, v, a[:, 0]), ok)
+            idx, valid = _area_majority(lambda k: P((c == k) * a), list(range(clf.n)), self.tie)
+            return np.where(valid, idx, -1).astype('int16')
+        val, valid = self._warp_values(r0, c0, h, w)
+        return clf.classify(metric_of(vt, clf.metric, val, self.grid.area_rows(r0, h)), valid)
+
     def _raw_for(self, r0, c0, h, w):
+        """อ่านต้นทางที่ครอบไทล์ → ((ค่า, valid), แถวต้นทางแรก, เฟส (แถว, คอลัมน์) ภายในพิกเซลแม่ของโหมด up)"""
         k = self.k
         if self.mode == 'same':
-            return self.src.read_raw(r0, c0, h, w), r0
+            return self.src.read_raw(r0 + self.dr, c0 + self.dc, h, w), r0 + self.dr, (0, 0)
         if self.mode == 'up':
-            assert r0 % k == 0 and c0 % k == 0
-            sr0, sc0 = r0 // k, c0 // k
-            return self.src.read_raw(sr0, sc0, math.ceil(h / k), math.ceil(w / k)), sr0
-        return self.src.read_raw(r0 * k, c0 * k, h * k, w * k), r0 * k
+            ar, ac = r0 + self.dr, c0 + self.dc                  # ตำแหน่งนับจากมุมต้นทาง (หน่วยพิกเซลเป้าหมาย)
+            sr0, sc0 = ar // k, ac // k
+            nr, nc = (ar + h - 1) // k - sr0 + 1, (ac + w - 1) // k - sc0 + 1
+            return self.src.read_raw(sr0, sc0, nr, nc), sr0, (ar - sr0 * k, ac - sc0 * k)
+        sr0 = r0 * k + self.dr
+        return self.src.read_raw(sr0, c0 * k + self.dc, h * k, w * k), sr0, (0, 0)
 
-    def _up(self, a, h, w):
+    def _up(self, a, h, w, ph=(0, 0)):
         k = self.k
-        return np.repeat(np.repeat(a, k, 0), k, 1)[:h, :w]
+        return np.repeat(np.repeat(a, k, 0), k, 1)[ph[0]:ph[0] + h, ph[1]:ph[1] + w]
 
     # ค่า (สำหรับ resample / น้ำหนักสถิติ)
     def values(self, r0, c0, h, w):
-        (v, ok), sr0 = self._raw_for(r0, c0, h, w)
+        if self.mode == 'warp':
+            return self._warp_values(r0, c0, h, w)
+        (v, ok), sr0, ph = self._raw_for(r0, c0, h, w)
         vt, k = self.src.vt, self.k
         if self.mode == 'same':
             return v, ok
         if self.mode == 'up':
             if vt == 'count':
                 v = v / (k * k)
-            return self._up(v, h, w), self._up(ok, h, w)
+            return self._up(v, h, w, ph), self._up(ok, h, w, ph)
         # down
         if vt == 'count':
             s = block_sum(np.where(ok, v, 0.0), k)
@@ -277,11 +413,13 @@ class OnGrid:
 
     # ชั้น (สำหรับไบแวเรียต)
     def classes(self, clf, r0, c0, h, w):
-        (v, ok), sr0 = self._raw_for(r0, c0, h, w)
+        if self.mode == 'warp':
+            return self._warp_classes(clf, r0, c0, h, w)
+        (v, ok), sr0, ph = self._raw_for(r0, c0, h, w)
         vt, k = self.src.vt, self.k
         if self.mode in ('same', 'up'):
             c = clf.classify(metric_of(vt, clf.metric, v, self.src.area_rows(sr0, v.shape[0])), ok)
-            return c if self.mode == 'same' else self._up(c, h, w)
+            return c if self.mode == 'same' else self._up(c, h, w, ph)
         if vt == 'class' or clf.order == 'classify_first':
             c = clf.classify(metric_of(vt, clf.metric, v, self.src.area_rows(sr0, v.shape[0])), ok)
             return majority_classes(c, clf.n, k, self.tie)
@@ -294,21 +432,102 @@ def _grid_crs_key(grid, src):
 
 
 # ---------- สร้างกริดเป้าหมายจากต้นทาง ----------
+class GridSpec:
+    """ข้อมูลกริดของชุดข้อมูลจาก meta (ใช้ตรวจโดยไม่ต้องเปิดไฟล์)"""
+
+    def __init__(self, meta, name='', vt=None):
+        t = meta['transform']
+        self.name, self.meta, self.vt = name, meta, vt
+        self.x0, self.y0, self.rx, self.ry = t[2], t[5], abs(t[0]), abs(t[4])
+        self.w, self.h = meta['width'], meta['height']
+        self.res_frac = Fraction(meta['res_exact'])
+
+
+def _align_axis(srcs, res_frac, ref, step, attr):
+    """หาจุดเริ่มกริดเป้าหมายบนแกนเดียว: อยู่บนแลตทิซของ ref (ห่างทีละ step) · เริ่มที่หรือหลังขอบที่ทับกัน ·
+    และทุกชุดเลื่อนเป็นจำนวนเต็มพิกเซลตามกติกาโหมด → (จุดเริ่ม, None) หรือ (None, รายละเอียดที่ไม่ลงตัว)"""
+    sign = 1 if attr == 'x0' else -1                         # แกน x เพิ่มไปทางขวา · แกน y ลดลงไปทางใต้
+    edge = max(getattr(s, attr) for s in srcs) if sign == 1 else min(getattr(s, attr) for s in srcs)
+    t0 = math.ceil(sign * (edge - getattr(ref, attr)) / step - ALIGN_TOL)
+    worst = None
+    for t in range(t0, t0 + 2000):
+        p = getattr(ref, attr) + sign * t * step
+        bad = None
+        for s in srcs:
+            r = gm.int_ratio(s.res_frac / res_frac)
+            unit = (s.rx if attr == 'x0' else s.ry) if r and r[0] == 'down' else step
+            _, err = _offset(p, getattr(s, attr), unit)
+            err /= r[1] if r and r[0] == 'up' else 1                       # คลาดวัดเทียบพิกเซลต้นทาง
+            if err > ALIGN_TOL:
+                bad = (s, err)
+                break
+        if bad is None:
+            return p, None
+        if worst is None:
+            worst = bad
+    return getattr(ref, attr) + sign * t0 * step, worst      # ไม่มีจุดที่ทุกชุดลงตัว → ยึดแลตทิซของ ref (ชุดอื่นถ่วงพื้นที่)
+
+
+def align(srcs, res_frac):
+    """จุดเริ่ม + ขนาดกริดเป้าหมาย (มุมเริ่มต่างกันได้)
+    เลือกแลตทิซอ้างอิงที่: 1) ชุดที่ต้องถ่วงพื้นที่ (warp) น้อยที่สุด 2) ถ้าต้องมี warp ให้ชุด count (เช่น ประชากร) ตรงพิกเซล
+    3) ความละเอียดใกล้เป้าหมายที่สุด (ทศนิยมของ transform เหมือนไฟล์เดิม) → dict + warp = [(ชื่อ, ระยะเหลื่อม)]"""
+    res_frac = Fraction(res_frac)
+    for s in srcs:
+        if gm.int_ratio(s.res_frac / res_frac) is None:
+            raise EngineError(f'ความละเอียด "{s.name}" ({gm.frac_str(s.res_frac)}) กับเป้าหมาย ({gm.frac_str(res_frac)}) ไม่เป็นพหุคูณจำนวนเต็มของกัน')
+    best = None
+    for ref in srcs:
+        rx = ref.rx * float(res_frac / ref.res_frac)
+        ry = ref.ry * float(res_frac / ref.res_frac)
+        x0, _ = _align_axis(srcs, res_frac, ref, rx, 'x0')
+        y0, _ = _align_axis(srcs, res_frac, ref, ry, 'y0')
+        warp = []
+        for s in srcs:
+            r = gm.int_ratio(s.res_frac / res_frac)
+            ux, uy = (s.rx, s.ry) if r[0] == 'down' else (rx, ry)
+            err = max(_offset(x0, s.x0, ux)[1], _offset(s.y0, y0, uy)[1]) / (r[1] if r[0] == 'up' else 1)   # พิกเซลต้นทาง
+            if err > ALIGN_TOL:
+                warp.append((s, err))
+        is_count = getattr(ref, 'vt', None) == 'count'
+        key = (len(warp), (not is_count) if warp else 0, abs(math.log(float(ref.res_frac / res_frac))))
+        if best is None or key < best[0]:
+            best = (key, dict(x0=x0, y0=y0, rx=rx, ry=ry, ref=ref, warp=warp))
+    a = best[1]
+    x0, y0, rx, ry = a['x0'], a['y0'], a['rx'], a['ry']
+    W = H = None
+    for s in srcs:
+        r = gm.int_ratio(s.res_frac / res_frac)
+        if any(s is w for w, _ in a['warp']):                # ถ่วงพื้นที่: ใช้ขอบเขตจริง
+            w = math.ceil((s.x0 + s.w * s.rx - x0) / rx - 1e-6)
+            h = math.ceil((y0 - (s.y0 - s.h * s.ry)) / ry - 1e-6)
+        else:
+            if r[0] == 'down':                               # ระยะเลื่อน (พิกเซลต้นทาง) → พิกเซลเป้าหมาย
+                ox = Fraction(_offset(x0, s.x0, s.rx)[0]) * s.res_frac / res_frac
+                oy = Fraction(_offset(s.y0, y0, s.ry)[0]) * s.res_frac / res_frac
+            else:
+                ox, oy = _offset(x0, s.x0, rx)[0], _offset(s.y0, y0, ry)[0]
+            w = math.ceil(Fraction(s.w) * s.res_frac / res_frac - ox - Fraction(1, 10 ** 9))
+            h = math.ceil(Fraction(s.h) * s.res_frac / res_frac - oy - Fraction(1, 10 ** 9))
+        W, H = (w if W is None else min(W, w)), (h if H is None else min(H, h))
+    if W < 1 or H < 1:
+        raise EngineError('ชุดข้อมูลไม่มีพื้นที่ทับกัน')
+    a.update(W=W, H=H, warp=[(s.name, round(e, 3)) for s, e in a['warp']])
+    return a
+
+
 def make_grid(sources, res_frac):
-    """กริดเป้าหมาย: มุมเริ่มเดียวกับต้นทาง, ความละเอียด res_frac, ขอบเขต = ส่วนที่ทับกันของทุกชุด"""
+    """กริดเป้าหมาย: ความละเอียด res_frac · ขอบเขต = ส่วนที่ทับกันของทุกชุด · มุมเริ่มอยู่บนแลตทิซร่วมของทุกชุด
+    (ชุดที่มุมตรงกัน → มุมเริ่มเดิมทุกประการ ผลเหมือนเวอร์ชันก่อน)"""
     s0 = sources[0]
     for s in sources[1:]:
         if s.meta.get('crs_key') != s0.meta.get('crs_key'):
             raise EngineError(f'CRS ไม่ตรงกัน: "{s0.name}" ({s0.meta.get("crs_key")}) กับ "{s.name}" ({s.meta.get("crs_key")}) '
                               '— V1 ยังไม่ reproject')
     res_frac = Fraction(res_frac)
-    # ใช้ค่าทศนิยมแบบเดียวกับไฟล์ต้นทางที่ใกล้ที่สุด (เช่น 0.00083333333 × 10 = 0.0083333333 เหมือนไฟล์เดิม)
-    ref = min(sources, key=lambda s: abs(math.log(float(s.res_frac / res_frac))))
-    rx = ref.rx * float(res_frac / ref.res_frac)
-    ry = ref.ry * float(res_frac / ref.res_frac)
-    W = min(math.ceil(s.w * s.res_frac / res_frac - 1e-9) for s in sources)
-    H = min(math.ceil(s.h * s.res_frac / res_frac - 1e-9) for s in sources)
-    g = Grid(ref.x0, ref.y0, rx, ry, W, H, ref.ds.crs, ref.geographic, res_frac)
+    a = align(sources, res_frac)
+    ref = a['ref']
+    g = Grid(a['x0'], a['y0'], a['rx'], a['ry'], a['W'], a['H'], ref.ds.crs, ref.geographic, res_frac)
     g.crs_key = ref.meta.get('crs_key')
     return g
 
@@ -327,7 +546,7 @@ def tile_size(ogs, inmem, extra=1):
     L = snap_unit(ogs, extra)
     if not inmem:
         L = L * 512 // math.gcd(L, 512)
-    maxm = max([o.k for o in ogs if o.mode == 'down'] or [1])
+    maxm = max([o.k for o in ogs if o.mode == 'down' or (o.mode == 'warp' and o.fine)] or [1])
     cap = 2560 if maxm == 1 else max(1, 5120 // maxm)
     return max(L, cap // L * L)
 

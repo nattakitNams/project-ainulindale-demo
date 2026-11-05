@@ -273,6 +273,8 @@ def guess_value_type(meta, name):
     if 'float' in dt:
         if re.search(r'pop|ppp|worldpop|ประชากร|count|_cn_', n):
             return 'count', 'ทศนิยม + ชื่อไฟล์เกี่ยวกับประชากร → น่าจะเป็นจำนวนนับต่อพิกเซล'
+        if re.search(r'night|viirs|vnl|ntl|dnb|black.?marble|radiance|แสงไฟ|ไฟกลางคืน', n):
+            return 'density', 'ค่าความสว่างแสงไฟกลางคืน (ค่าต่อพื้นที่ ไม่ใช่จำนวนนับ) — รวมพิกเซลด้วยค่าเฉลี่ย'
         if re.search(r'dens|ความหนาแน่น|per_?km', n):
             return 'density', 'ชื่อไฟล์บอกความหนาแน่น'
         return 'density', 'ทศนิยม → น่าจะเป็นค่าต่อเนื่อง (ความหนาแน่น/ความสูง/ดัชนี)'

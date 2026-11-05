@@ -192,8 +192,14 @@ def classify(ds, req):
     if mode == 'quantile':
         ss = s[(s >= lo) & (s <= hi)] if s is not None else None
         ss = ss if ss is not None and ss.size else s
-        qs = [i / n for i in range(1, n)] if interp == 'discrete' else [i / (n - 1) for i in range(n)]
-        vals = [float(np.quantile(ss, q)) for q in qs]
+        if interp == 'discrete':
+            from .engine import EngineError, quantile_breaks
+            try:
+                vals = quantile_breaks(ss, n)               # ทนค่าซ้ำ: ค่าที่กอง (เช่น 0) ได้ชั้นของตัวเอง
+            except EngineError as e:
+                raise ValueError(str(e))
+        else:
+            vals = [float(np.quantile(ss, i / (n - 1))) for i in range(n)]
     else:                                         # continuous / equal
         vals = [lo + (hi - lo) * i / n for i in range(1, n)] if interp == 'discrete' else [lo + (hi - lo) * i / (n - 1) for i in range(n)]
     vals = sorted(set(vals))                     # ข้อมูลกองที่ค่าเดียว (เช่น จำนวนเต็ม) → เกณฑ์ซ้ำ → รวมชั้น
@@ -201,12 +207,14 @@ def classify(ds, req):
         vals = vals + [math.inf]
     n = len(vals)
     cols = ramp_colors(ramp, n, inv)
+    from .engine import fmt_breaks
+    fv = fmt_breaks(vals)                                    # หลักพอให้ป้ายไม่ซ้ำกัน
     stops = []
     for i, v in enumerate(vals):
         if interp == 'discrete':
-            lbl = f'≤ {fmtv(v)}' if i == 0 else (f'> {fmtv(vals[i - 1])}' if math.isinf(v) else f'{fmtv(vals[i - 1])} – {fmtv(v)}')
+            lbl = f'≤ {fv[0]}' if i == 0 else (f'> {fv[i - 1]}' if math.isinf(v) else f'{fv[i - 1]} – {fv[i]}')
         else:
-            lbl = fmtv(v)
+            lbl = fv[i]
         stops.append(dict(value=v, color=cols[i], label=lbl, visible=True))
     out.update(min=lo, max=hi, classes=n, stops=stops)
     return out

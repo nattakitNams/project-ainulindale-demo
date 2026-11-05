@@ -781,14 +781,24 @@ def res_options(dss):
     for o in others:
         if gm.family_key(o['meta']) == fam and o['meta'].get('res_exact'):
             cand.add(Fraction(o['meta']['res_exact']))
-    out = []
+    specs = [engine.GridSpec(d['meta'], d['name'], d.get('value_type')) for d in dss]
+    out, why = [], None
     for c in sorted(cand):
         if all(gm.int_ratio(f / c) for f in fr):
+            try:                                   # มุมเริ่มต่างกันได้ · เส้นกริดเหลื่อม → ชุดนั้นถ่วงพื้นที่ (warp)
+                al = engine.align(specs, c)
+            except engine.EngineError as e:
+                why = why or str(e)
+                continue
+            warp = ', '.join(f'{n} (เหลื่อม {e:.2f} พิกเซล)' for n, e in al['warp'])
             finer = c < min(fr)                    # ละเอียดกว่าข้อมูลทุกชุด = ไม่มีรายละเอียดใหม่ แค่ไฟล์ใหญ่ขึ้น
-            out.append(dict(value=gm.frac_str(c), label=gm.res_label(c, geo, m0.get('center_lat')) + (' · ⚠ ละเอียดกว่าข้อมูล' if finer else ''),
+            out.append(dict(value=gm.frac_str(c), label=gm.res_label(c, geo, m0.get('center_lat')) + (' · ⚠ ละเอียดกว่าข้อมูล' if finer else '')
+                            + (' · ↔ จัดกริดถ่วงพื้นที่' if warp else ''), warp=warp or None,
                             finer=finer, is_source=[d['id'] for d, f in zip(dss, fr) if f == c],
                             px=int(min(d['meta']['width'] * Fraction(d['meta']['res_exact']) / c for d in dss) *
                                    min(d['meta']['height'] * Fraction(d['meta']['res_exact']) / c for d in dss))))
+    if not out and why:
+        raise ApiError(why)
     return out
 
 
@@ -803,9 +813,7 @@ def api_res_options():
         a, b = dss[0]['meta'], dss[1]['meta']
         if a.get('crs_key') != b.get('crs_key'):
             raise ApiError(f'CRS ต่างกัน ({a.get("crs_key")} กับ {b.get("crs_key")}) — V1 ยังไม่ reproject')
-        if not gm.same_origin(a, b):
-            raise ApiError('มุมเริ่มของกริดไม่ตรงกัน — V1 รองรับเฉพาะกริดที่เริ่มมุมเดียวกัน (warp อยู่ใน V2)')
-    return jsonify(options=res_options(dss))
+    return jsonify(options=res_options(dss))       # มุมเริ่มต่างกันได้ — res_options ตรวจแลตทิซร่วมให้แต่ละความละเอียด
 
 
 @app.route('/api/classes-preview', methods=['POST'])
