@@ -62,7 +62,8 @@ JSON_COLS = {'meta', 'stats', 'params', 'result', 'colors', 'source', 'bbox', 's
 
 # คอลัมน์ที่เพิ่มทีหลัง (ไฟล์ catalog.db เก่าไม่มี) → ALTER TABLE ตอนเปิดแอป
 MIGRATE = {
-    'datasets': [('style', 'TEXT'), ('exclude_values', 'TEXT')],
+    'datasets': [('style', 'TEXT'), ('exclude_values', 'TEXT'), ('trashed_at', 'TEXT')],     # trashed_at: อยู่ในถังขยะ
+    'aoi': [('trashed_at', 'TEXT')],
     'jobs': [('eta_s', 'REAL'), ('elapsed_s', 'REAL')],
 }
 

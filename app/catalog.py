@@ -154,7 +154,7 @@ def check_status(ds):
 
 
 def list_datasets():
-    out = db.query('SELECT * FROM datasets ORDER BY id')
+    out = db.query('SELECT * FROM datasets WHERE trashed_at IS NULL ORDER BY id')     # ในถังขยะ → ซ่อนจากทุกหน้า
     for d in out:
         check_status(d)
     return out

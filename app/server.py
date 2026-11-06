@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import aoi as aoimod
-from . import basedata, catalog, db, dsinfo, engine, export, jobs, links, ops, ops3, palettes, symbology, tiles, vault
+from . import basedata, catalog, db, dsinfo, engine, export, jobs, links, ops, ops3, palettes, symbology, tiles, trash, vault
 from . import gridmath as gm
 from .config import APP_NAME, APP_VERSION, DIRS, PORT, ROOT, STATIC, WORKSPACE, ensure_workspace
 
@@ -303,14 +303,55 @@ def patch_ds(did):
 
 @app.route('/api/datasets/<int:did>', methods=['DELETE'])
 def del_ds(did):
+    """ลบ = ย้ายเข้าถังขยะ (กู้คืนได้) · ลบถาวรทำในถังขยะ"""
     d = ds_or_404(did)
-    db.delete('datasets', did)
-    if d['kind'] == 'link':
-        basedata.mark_removed(d['path'])                    # ข้อมูลพื้นฐานที่ผู้ใช้ลบ → ไม่เพิ่มกลับเอง
-    note = 'ลบออกจากทะเบียนแล้ว (ไม่ได้ลบไฟล์)'
-    if d.get('copied') or d.get('role') != 'input':
-        note += f' — ไฟล์ยังอยู่ที่ {Path(d["path"]).parent}'
-    return jsonify(ok=True, note=note)
+    trash.move_dataset(d)
+    return jsonify(ok=True, note=f'ย้าย "{d["name"]}" ไปถังขยะแล้ว — กู้คืนได้จากถังขยะ', trash=trash.count())
+
+
+# ---------------- ถังขยะ ----------------
+@app.route('/api/trash')
+def trash_list():
+    return jsonify(items=trash.items(), count=trash.count())
+
+
+def _trash_item(kind, iid):
+    if kind == 'dataset':
+        d = db.get('datasets', iid)
+    elif kind == 'aoi':
+        d = db.get('aoi', iid)
+    else:
+        raise ApiError('ไม่รู้จักชนิด')
+    if not d or not d.get('trashed_at'):
+        raise ApiError('ไม่พบในถังขยะ')
+    return d
+
+
+@app.route('/api/trash/<kind>/<int:iid>/restore', methods=['POST'])
+def trash_restore(kind, iid):
+    d = _trash_item(kind, iid)
+    if kind == 'dataset':
+        trash.restore_dataset(d)
+    else:
+        db.update('aoi', iid, trashed_at=None)
+    return jsonify(ok=True, count=trash.count())
+
+
+@app.route('/api/trash/<kind>/<int:iid>', methods=['DELETE'])
+def trash_purge(kind, iid):
+    d = _trash_item(kind, iid)
+    r = trash.purge_dataset(d) if kind == 'dataset' else trash.purge_aoi(d)
+    return jsonify(ok=True, count=trash.count(), **r)
+
+
+@app.route('/api/trash', methods=['DELETE'])
+def trash_empty():
+    freed = n = 0
+    for it in trash.items():
+        d = _trash_item(it['kind'], it['id'])
+        freed += (trash.purge_dataset(d) if it['kind'] == 'dataset' else trash.purge_aoi(d)).get('freed', 0)
+        n += 1
+    return jsonify(ok=True, removed=n, freed=freed, count=0)
 
 
 @app.route('/api/datasets/<int:did>/prepare', methods=['POST'])
@@ -462,7 +503,7 @@ def basedata_api():
     """GET = รายการข้อมูลพื้นฐาน + สถานะ · POST = เพิ่มชุดที่ขาด (รวมที่ผู้ใช้เคยลบ)"""
     if request.method == 'POST':
         basedata.seed(force=True)
-    have = {basedata._norm(r['path']) for r in db.query("SELECT path FROM datasets WHERE kind='link'")}
+    have = {basedata._norm(r['path']) for r in db.query("SELECT path FROM datasets WHERE kind='link' AND trashed_at IS NULL")}
     return jsonify(items=[dict(name=n, url=u, description=d, present=basedata._norm(u) in have) for n, u, d in basedata.BASE],
                    status=basedata.STATUS)
 
@@ -1094,7 +1135,7 @@ def cancel_job(jid):
 # ---------------- พื้นที่ศึกษา ----------------
 @app.route('/api/aoi')
 def aoi_list():
-    return jsonify(db.query('SELECT * FROM aoi ORDER BY id DESC'))
+    return jsonify(db.query('SELECT * FROM aoi WHERE trashed_at IS NULL ORDER BY id DESC'))
 
 
 @app.route('/api/aoi', methods=['POST'])
@@ -1130,13 +1171,9 @@ def aoi_parse_coords():
 
 @app.route('/api/aoi/<int:aid>', methods=['DELETE'])
 def aoi_delete(aid):
-    a = aoimod.get(aid)
-    db.delete('aoi', aid)
-    try:
-        Path(a['path']).unlink()
-    except OSError:
-        pass
-    return jsonify(ok=True)
+    aoimod.get(aid)
+    db.update('aoi', aid, trashed_at=db.now())                # ย้ายเข้าถังขยะ · ลบไฟล์ตอนลบถาวร
+    return jsonify(ok=True, trash=trash.count())
 
 
 @app.route('/api/aoi/<int:aid>.geojson')

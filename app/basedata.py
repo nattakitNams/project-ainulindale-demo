@@ -41,6 +41,14 @@ def mark_removed(url):
         save_settings(basedata_removed=sorted(rm))
 
 
+def unmark_removed(url):
+    """กู้คืนจากถังขยะ → เลิกจำว่าผู้ใช้ลบ"""
+    rm = set(load_settings().get('basedata_removed') or [])
+    if _norm(url) in rm:
+        rm.discard(_norm(url))
+        save_settings(basedata_removed=sorted(rm))
+
+
 def seed(force=False):
     """เพิ่มชุดที่ยังไม่มี · force=True = คืนชุดที่ผู้ใช้เคยลบด้วย"""
     if not _lock.acquire(blocking=False):
@@ -49,6 +57,10 @@ def seed(force=False):
         STATUS.update(state='running', added=[], failed=[])
         if force:
             save_settings(basedata_removed=[])
+            for r in db.query("SELECT id, path FROM datasets WHERE kind='link' AND trashed_at IS NOT NULL"):
+                if is_base(r['path']):                       # อยู่ในถังขยะ → กู้คืนแทนการเพิ่มซ้ำ
+                    db.update('datasets', r['id'], trashed_at=None)
+                    STATUS['added'].append(r['path'])
         removed = set(load_settings().get('basedata_removed') or [])
         have = _existing()
         for name, url, desc in BASE:

@@ -40,6 +40,16 @@ a { color: var(--lav); text-decoration: none; }
 #nav a.on::before { content: ""; position: absolute; left: -16px; top: 10px; bottom: 10px; width: 3px; border-radius: 3px; background: var(--lav); box-shadow: 0 0 12px var(--lav); }
 #nav i svg, .ic svg { width: 19px; height: 19px; display: block; }
 #nav em { margin-left: auto; font-style: normal; font-size: 11px; font-weight: 700; color: var(--on-primary); background: var(--butter); border-radius: 20px; padding: 0 8px; }
+.side-trash { margin-top: auto; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 10px; color: var(--muted); font-size: 12.5px; }
+.side-trash:hover, .side-trash.on { color: var(--text); background: rgba(255, 255, 255, .04); }
+.side-trash i svg { width: 15px; height: 15px; display: block; }
+.side-trash em { margin-left: auto; font-style: normal; font-size: 10.5px; font-weight: 700; color: var(--text); background: rgba(255, 154, 168, .25); border-radius: 20px; padding: 0 7px; }
+.side-trash + .side-foot { margin-top: 0; }
+.trash-tbl td { vertical-align: middle; }
+.trash-tbl td:first-child { word-break: break-word; overflow-wrap: anywhere; min-width: 180px; }
+.trash-tbl td:nth-child(4) { min-width: 150px; }
+.trash-tbl button { white-space: nowrap; }
+.card:has(> .trash-tbl) { overflow-x: auto; }
 .side-foot { margin-top: auto; padding: 12px; border-radius: var(--r); background: rgba(255, 255, 255, .03); border: 1px solid var(--line); }
 .side-foot .mono { word-break: break-all; color: var(--text-2); margin: 2px 0 6px; }
 

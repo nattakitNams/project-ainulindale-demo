@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.7';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.8';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -92,8 +92,8 @@ async function route() {
   maps.forEach(m => m.remove()); maps = [];
   clearInterval(window._poll);
   const h = location.hash || '#/';
-  const r = ['viewer', 'report', 'biv', 'zonal', 'change', 'aoi', 'jobs', 'system'].find(k => h.startsWith('#/' + k)) || 'home';
-  $$('#nav a').forEach(a => a.classList.toggle('on', a.dataset.r === r));
+  const r = ['viewer', 'report', 'biv', 'change', 'aoi', 'jobs', 'system', 'trash'].find(k => h.startsWith('#/' + k)) || 'home';
+  $$('#nav a, .side-trash').forEach(a => a.classList.toggle('on', a.dataset.r === r));
   const v = $('#view');
   v.innerHTML = '<p class="muted">กำลังโหลด…</p>';
   window.scrollTo(0, 0);
@@ -102,7 +102,7 @@ async function route() {
     else if (r === 'biv') await pageBiv();
     else if (r === 'aoi') await pageAoi(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'jobs') await pageJobs();
-    else if (r === 'zonal') await pageZonal();
+    else if (r === 'trash') await pageTrash();
     else if (r === 'viewer') await pageViewer();
     else if (r === 'report') await pageReport(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'change') await pageChange();
@@ -110,6 +110,7 @@ async function route() {
     else await pageHome();
   } catch (e) { v.innerHTML = `<div class="note err">${esc(e.message)}</div>`; console.error(e); }
   enhanceAoiSelects();
+  if (r !== 'trash') trashBadge();
 }
 window.addEventListener('hashchange', route);
 async function jobBadge() {
@@ -190,8 +191,8 @@ async function pageHome() {
   });
   $$('[data-del]').forEach(b => b.onclick = async () => {
     const d = list.find(x => x.id == b.dataset.del);
-    if (!await ui.confirm('ลบออกจากทะเบียน?', `<p>"${esc(d.name)}" จะหายจากรายการ แต่<b>ไม่ลบไฟล์จริง</b></p>`, 'ลบออก')) return;
-    const r = await api(ENGINE + '/api/datasets/' + d.id, { method: 'DELETE' }); toast(r.note); pageHome();
+    if (!await ui.confirm('ย้ายไปถังขยะ?', `<p>"${esc(d.name)}" จะหายจากรายการ — กู้คืนได้จากถังขยะ (มุมล่างของแถบซ้าย)</p>`, 'ย้ายไปถังขยะ')) return;
+    const r = await api(ENGINE + '/api/datasets/' + d.id, { method: 'DELETE' }); toast(r.note); trashBadge(r.trash); pageHome();
   });
   const showRes = r => {
     $('#addMsg').innerHTML = (r.added.length ? `<div class="note ok">เพิ่มแล้ว ${r.added.length} ชุด — กำลังเตรียมสถิติ/พรีวิวในแท็บงาน</div>` : '')
@@ -226,7 +227,7 @@ function cardHtml(d) {
   const c = d.role === 'map' ? 'var(--rose)' : d.role === 'derived' ? 'var(--peach)' : d.kind === 'vector' ? 'var(--mint)' : 'var(--sky)';
   if (d.kind === 'link') {
     return `<div class="ds" data-id="${d.id}" style="--c:var(--lav)">
-      <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ลบออกจากทะเบียน">${IC.trash}</button></div>
+      <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
       <div class="t"><div class="ico">${IC.link}</div><div style="min-width:0;padding-right:54px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
       ${m.description ? `<div class="tiny muted" style="margin:-2px 0 8px">${esc(m.description)}</div>` : ''}
       <div class="chips">${m.builtin ? '<span class="chip" style="color:var(--butter);border-color:#f6e3a155">ข้อมูลพื้นฐาน</span>' : ''}<span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? '<span class="chip">🔒 โทเคน</span>' : ''}</div>
@@ -236,7 +237,7 @@ function cardHtml(d) {
   const vt = d.kind === 'raster' ? (d.value_type_confirmed ? `<span class="chip">${esc(VT_SHORT[d.value_type] || d.value_type)}</span>` : `<span class="chip warn">${esc(VT_SHORT[d.value_type] || '?')} · ยังไม่ยืนยัน</span>`) : '';
   const res = d.kind === 'raster' ? esc((m.res_label || '').split(' (')[0]) : `${fmt(m.features, 0)} feature`;
   return `<div class="ds" data-id="${d.id}" style="--c:${c}">
-    <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ลบออกจากทะเบียน">${IC.trash}</button></div>
+    <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
     <div class="t"><div class="ico">${IC[icon]}</div><div style="min-width:0;padding-right:54px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
     <div class="chips"><span class="chip ${d.kind}">${d.kind}</span>${vt}<span class="chip">${res}</span>${d.copied ? '<span class="chip">ก๊อปแล้ว</span>' : ''}</div>
     <div class="foot"><span class="status-dot ${d.status}"></span>${d.status === 'ok' ? 'พร้อมใช้' : d.status === 'missing' ? 'ไม่พบไฟล์' : 'ไฟล์เปลี่ยน'}<span class="spacer"></span>${bytes(m.file_bytes)} · #${d.id}</div></div>`;
@@ -1241,7 +1242,7 @@ async function pageAoi(qs) {
   };
   $$('tr[data-a]').forEach(tr => tr.onclick = e => { if (!e.target.closest('button')) showSaved(+tr.dataset.a); });
   $$('[data-del]').forEach(b => b.onclick = async () => {
-    if (!await ui.confirm('ลบพื้นที่ศึกษา?', '<p>ผลลัพธ์ที่สร้างไปแล้วไม่ได้รับผลกระทบ (lineage เก็บที่มาไว้)</p>', 'ลบ')) return;
+    if (!await ui.confirm('ย้ายพื้นที่ศึกษาไปถังขยะ?', '<p>กู้คืนได้จากถังขยะ · ผลลัพธ์ที่สร้างไปแล้วไม่ได้รับผลกระทบ (lineage เก็บที่มาไว้)</p>', 'ย้ายไปถังขยะ')) return;
     await api(ENGINE + '/api/aoi/' + b.dataset.del, { method: 'DELETE' }); route();
   });
   $('#aSave').onclick = async () => {
@@ -1509,86 +1510,43 @@ async function ensureLinkFields(d) {
   }
 }
 
-// ================= V3: ไบแวเรียตรายพื้นที่ (3.4) =================
-const ZSTAT = { sum: 'ผลรวม', density: 'ผลรวม ÷ พื้นที่ (ต่อ ตร.กม.)', mean: 'ค่าเฉลี่ย (ถ่วงพื้นที่)', share_area: '% พื้นที่ที่ค่า ≥ เกณฑ์', share_weight: '% น้ำหนัก (เช่น คน) ในจุดที่ค่า ≥ เกณฑ์' };
-const ZB = { x: { stat: 'density', n: 3, method: 'quantile', breaks: [300, 1500], threshold: 1, label: '' }, y: { stat: 'share_weight', n: 3, method: 'quantile', breaks: [10, 30], threshold: 1, label: '' }, pal: null, colors: null, highlight: [8, 9] };
-async function pageZonal() {
-  const [all, aois] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), loadPals()]);
-  const rs = all.filter(d => d.kind === 'raster' && d.value_type_confirmed);
-  const vs = all.filter(isPolySrc);
-  const counts = rs.filter(d => d.value_type === 'count');
-  if (!ZB.pal) ZB.pal = 'b:' + STATE.default_palette;
+// ================= ถังขยะ =================
+// ลบ = ย้ายเข้าถัง (กู้คืนได้) · ลบในถัง = ลบถาวร: ไฟล์ใน workspace หายจริง ไฟล์ต้นฉบับนอก workspace ไม่ถูกแตะ
+async function trashBadge(n) {
+  try { if (n == null) n = (await api(ENGINE + '/api/trash')).count; } catch { return; }
+  const b = $('#trashBadge'); if (!b) return;
+  b.textContent = n; b.classList.toggle('hide', !n);
+}
+const fmtBytes = n => n >= 1e9 ? fmt(n / 1e9, 2) + ' GB' : n >= 1e6 ? fmt(n / 1e6, 1) + ' MB' : n >= 1e3 ? fmt(n / 1e3, 0) + ' KB' : n ? n + ' B' : '';
+async function pageTrash() {
+  const r = await api(ENGINE + '/api/trash');
+  trashBadge(r.count);
   const v = $('#view');
-  const opt = (list, sel) => list.map(d => `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>#${d.id} ${esc(d.name)} · ${esc((d.meta.res_label || '').split(' (')[0])} · ${esc(VT_SHORT[d.value_type] || '')}</option>`).join('');
-  v.innerHTML = head('Zonal bivariate', 'ไบแวเรียตรายพื้นที่', 'สรุปค่าในแต่ละโพลิกอน (จังหวัด / อำเภอ / ตำบล) แล้วไขว้ — ได้แผนที่ choropleth + ตาราง')
-    + `<div class="steps">
-    <div class="step"><div class="card"><div class="card-head"><h2>พื้นที่</h2></div>
-      ${vs.length ? `<div class="grid-form"><label class="field"><span>ชั้นโพลิกอน</span><select id="zDs">${vs.map(d => `<option value="${d.id}" ${d.id == ZB.zones ? 'selected' : ''}>${srcLabel(d)}</option>`).join('')}</select></label>
-        <label class="field"><span>ฟิลด์ชื่อพื้นที่</span><select id="zField"></select></label>
-        <label class="field"><span>เฉพาะพื้นที่ที่ทับพื้นที่ศึกษา</span><select id="zAoi"><option value="">ทั้งหมด</option>${aois.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
-        <label class="field"><span>พิกเซลเป็นของพื้นที่ตาม</span><select id="zRule"><option value="center">ศูนย์กลางพิกเซล</option><option value="touch">แตะ</option></select></label></div>`
-      : '<div class="note info">ยังไม่มีชั้นโพลิกอน — เพิ่มขอบเขตอำเภอ/ตำบลที่คลังข้อมูลก่อน</div>'}</div></div>
-    <div class="step"><div class="cols2">${['x', 'y'].map(a => `<div class="card axis" id="z_${a}" style="--c:${a === 'x' ? 'var(--sky)' : 'var(--rose)'}">
-      <div class="card-head"><h2>แกน ${a.toUpperCase()} <span class="muted small">${a === 'x' ? 'ซ้าย → ขวา' : 'ล่าง → บน'}</span></h2></div>
-      <div class="grid-form">
-        <label class="field full"><span>ชุดข้อมูล</span><select data-k="dataset_id"><option value="">— เลือก —</option>${opt(rs, ZB[a].dataset_id)}</select></label>
-        <label class="field full"><span>สรุปค่าในพื้นที่ด้วย</span><select data-k="stat">${Object.entries(ZSTAT).map(([k, t]) => `<option value="${k}" ${k === ZB[a].stat ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-        <label class="field thr"><span>เกณฑ์ (ค่า ≥)</span><input type="number" step="any" data-k="threshold" value="${ZB[a].threshold}"></label>
-        <label class="field wds"><span>ชุดน้ำหนัก</span><select data-k="weight_dataset_id"><option value="">—</option>${opt(counts, ZB[a].weight_dataset_id)}</select></label>
-        <label class="field"><span>ชื่อแกน</span><input type="text" data-k="label" value="${esc(ZB[a].label)}"></label>
-        <label class="field"><span>คลาส</span><select data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == ZB[a].n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-        <label class="field"><span>วิธีแบ่ง</span><select data-k="method"><option value="quantile">ควอนไทล์ (ตามจำนวนพื้นที่)</option><option value="equal">ช่วงเท่ากัน</option><option value="breaks">กำหนดเกณฑ์เอง</option></select></label>
-        <label class="field brk"><span>เกณฑ์ (คั่นด้วย ,)</span><input type="text" data-k="breaks" value="${ZB[a].breaks.join(', ')}"></label>
-      </div></div>`).join('')}</div></div>
-    <div class="step"><div class="card"><div class="card-head"><h2>สีและผลลัพธ์</h2><button class="sm" id="zPalT">${IC.palette}เปลี่ยนพาเลท</button></div>
-      <div class="cols2"><div><div class="pals hide" id="zPals"></div><div id="zLeg" style="margin-top:10px"></div><div class="tiny muted" style="margin-top:6px">คลิกช่อง = เลือก/ยกเลิกเขตเน้น</div></div>
-      <div class="grid-form" style="align-content:start">
-        <label class="field full"><span>ความละเอียดพิกเซลที่ใช้สรุป</span><select id="zRes"></select></label>
-        <label class="field full"><span>ชื่อผลลัพธ์</span><input type="text" id="zName" placeholder="เช่น flood_pop_amphoe"></label>
-        <div class="full"><button id="zRun" class="primary">${IC.play}สร้างแผนที่รายพื้นที่</button></div></div></div></div></div></div>`;
-  if (!vs.length) return;
-  const loadFields = async () => {
-    const d = vs.find(x => x.id == $('#zDs').value);
-    try { await ensureLinkFields(d); } catch (e) { toast(e.message, true); }
-    const fs = fieldNames(d);
-    const g = guessNameField(fs);
-    $('#zField').innerHTML = fs.map(f => `<option ${f === g ? 'selected' : ''}>${esc(f)}</option>`).join('');
-  };
-  $('#zDs').onchange = () => { ZB.zones = +$('#zDs').value; loadFields(); }; loadFields();
-  const sync = a => {
-    const el = $('#z_' + a), c = ZB[a];
-    $$('[data-k]', el).forEach(i => { const k = i.dataset.k; c[k] = k === 'breaks' ? i.value.split(',').map(parseFloat).filter(x => !isNaN(x)) : ['n', 'dataset_id', 'weight_dataset_id'].includes(k) ? (i.value === '' ? null : +i.value) : k === 'threshold' ? +i.value : i.value; });
-    $('.thr', el).classList.toggle('hide', !c.stat.startsWith('share'));
-    $('.wds', el).classList.toggle('hide', c.stat !== 'share_weight');
-    $('.brk', el).classList.toggle('hide', c.method !== 'breaks');
-  };
-  const drawPal = (reset) => {
-    const nx = ZB.x.n, ny = ZB.y.n, ch = palChoices(nx, ny);
-    let cur = ch.find(p => p.key === ZB.pal) || ch[0];
-    if (reset || !ZB.colors || ZB.colors.length !== nx * ny) ZB.colors = cur.colors.slice();
-    ZB.highlight = ZB.highlight.filter(c => c <= nx * ny);
-    palGallery($('#zPals'), nx, ny, ZB.pal, p => { ZB.pal = p.key; drawPal(true); });
-    $('#zLeg').innerHTML = legendHtml(nx, ny, ZB.colors, ZB.highlight, ZB.x.label || 'X', ZB.y.label || 'Y', false);
-    $$('#zLeg .cell').forEach(c => c.onclick = () => { const k = +c.dataset.code; ZB.highlight = ZB.highlight.includes(k) ? ZB.highlight.filter(x => x !== k) : [...ZB.highlight, k]; drawPal(); });
-  };
-  const loadRes = async () => {
-    const ids = [...new Set(['x', 'y'].flatMap(a => [ZB[a].dataset_id, ZB[a].stat === 'share_weight' ? ZB[a].weight_dataset_id : null]).filter(Boolean))];
-    if (!ids.length) return;
-    try {
-      const r = await api(ENGINE + '/api/res-options?ids=' + ids.join(','));
-      $('#zRes').innerHTML = r.options.map(o => `<option value="${o.value}">${esc(o.label)}${o.is_source.length ? ' · = ข้อมูล #' + o.is_source.join(', #') : ''}</option>`).join('');
-      $('#zRes').value = r.options.filter(o => o.is_source.length).map(o => o.value)[0];
-    } catch (e) { $('#zRes').innerHTML = `<option>${esc(e.message)}</option>`; }
-  };
-  ['x', 'y'].forEach(a => { $$('#z_' + a + ' [data-k]').forEach(i => { if (i.dataset.k === 'method') i.value = ZB[a].method; i.onchange = () => { sync(a); if (['n'].includes(i.dataset.k)) drawPal(true); if (['dataset_id', 'weight_dataset_id', 'stat'].includes(i.dataset.k)) loadRes(); if (i.dataset.k === 'label') drawPal(); }; }); sync(a); });
-  $('#zPalT').onclick = () => $('#zPals').classList.toggle('hide');
-  drawPal(); loadRes();
-  $('#zRun').onclick = () => {
-    ['x', 'y'].forEach(sync);
-    const ax = a => ({ ...ZB[a], label: ZB[a].label || rs.find(d => d.id == ZB[a].dataset_id)?.name });
-    if (!ZB.x.dataset_id || !ZB.y.dataset_id) return toast('เลือกชุดข้อมูลทั้งสองแกน', true);
-    runJob('zonal', { zones_dataset_id: +$('#zDs').value, zone_field: $('#zField').value, aoi_id: +$('#zAoi').value || null, rule: $('#zRule').value,
-      x: ax('x'), y: ax('y'), target_res: $('#zRes').value, colors: ZB.colors, highlight: ZB.highlight, name: $('#zName').value.trim() || null }, () => location.hash = '#/jobs');
+  const KIND = { raster: 'raster', vector: 'vector', link: 'ลิงก์', aoi: 'พื้นที่ศึกษา' };
+  const total = r.items.reduce((s, it) => s + (it.purge.bytes || 0), 0);
+  v.innerHTML = head('Trash', 'ถังขยะ', 'ของที่ลบจะมาอยู่ที่นี่ก่อน — กู้คืนได้ · ลบในถังขยะ = ลบถาวร (ไฟล์ที่แอปเก็บใน workspace จะถูกลบจริง ไฟล์ต้นฉบับของคุณนอก workspace ไม่ถูกแตะ)',
+    r.items.length ? `<button class="ghost danger" id="tEmpty">${IC.trash}ล้างถังขยะ${total ? ' · ' + fmtBytes(total) : ''}</button>` : '')
+    + (r.items.length ? `<div class="card"><table class="tbl trash-tbl"><thead><tr><th>ชื่อ</th><th>ชนิด</th><th>ลบเมื่อ</th><th>ถ้าลบถาวร</th><th></th></tr></thead><tbody>
+      ${r.items.map(it => `<tr><td><b>${esc(it.name)}</b></td><td class="small muted">${KIND[it.type] || it.type}${it.role === 'map' ? ' · แผนที่ไบแวเรียต' : it.role === 'derived' ? ' · ผลลัพธ์' : ''}</td>
+        <td class="small muted">${esc(it.trashed_at.replace('T', ' '))}</td>
+        <td class="small">${it.purge.action === 'delete' ? `<span style="color:var(--coral)" title="${esc(it.purge.path || '')}">${esc(it.purge.note)}</span>${it.purge.bytes ? ' · ' + fmtBytes(it.purge.bytes) : ''}` : `<span class="muted">${esc(it.purge.note)}</span>`}</td>
+        <td><div class="row" style="justify-content:flex-end;flex-wrap:nowrap"><button class="sm" data-rs="${it.kind}:${it.id}">${IC.refresh}กู้คืน</button><button class="sm ghost danger" data-pg="${it.kind}:${it.id}">${IC.trash}ลบถาวร</button></div></td></tr>`).join('')}
+      </tbody></table></div>`
+      : `<div class="card"><p class="muted" style="margin:0">ถังขยะว่าง</p></div>`);
+  const item = k => r.items.find(it => `${it.kind}:${it.id}` === k);
+  $$('[data-rs]').forEach(b => b.onclick = async () => {
+    const [k, id] = b.dataset.rs.split(':');
+    await api(`${ENGINE}/api/trash/${k}/${id}/restore`, { json: {} }); toast(`กู้คืน "${item(b.dataset.rs).name}" แล้ว`); pageTrash();
+  });
+  $$('[data-pg]').forEach(b => b.onclick = async () => {
+    const it = item(b.dataset.pg), [k, id] = b.dataset.pg.split(':');
+    if (!await ui.confirm('ลบถาวร?', `<p>"${esc(it.name)}"</p><p>${it.purge.action === 'delete' ? `<b style="color:var(--coral)">${esc(it.purge.note)}</b>${it.purge.bytes ? ' (' + fmtBytes(it.purge.bytes) + ')' : ''} — <b>ย้อนกลับไม่ได้</b>` : esc(it.purge.note)}</p>`, 'ลบถาวร')) return;
+    const x = await api(`${ENGINE}/api/trash/${k}/${id}`, { method: 'DELETE' }); toast('ลบถาวรแล้ว' + (x.freed ? ' · คืนพื้นที่ ' + fmtBytes(x.freed) : '')); pageTrash();
+  });
+  if ($('#tEmpty')) $('#tEmpty').onclick = async () => {
+    const del = r.items.filter(it => it.purge.action === 'delete').length;
+    if (!await ui.confirm('ล้างถังขยะ?', `<p>ลบถาวรทั้งหมด ${r.items.length} รายการ${del ? ` · ลบไฟล์ใน workspace ${del} รายการ (${fmtBytes(total)})` : ''} — <b>ย้อนกลับไม่ได้</b></p><p class="small muted">ไฟล์ต้นฉบับของคุณนอก workspace ไม่ถูกลบ</p>`, 'ล้างถังขยะ')) return;
+    const x = await api(ENGINE + '/api/trash', { method: 'DELETE' }); toast(`ลบถาวร ${x.removed} รายการ` + (x.freed ? ' · คืนพื้นที่ ' + fmtBytes(x.freed) : '')); pageTrash();
   };
 }
 
