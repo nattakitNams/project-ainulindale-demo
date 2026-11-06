@@ -2,6 +2,7 @@
 """สร้าง Data hub (web/hub/) จากแคตตาล็อกรายชื่อดาต้าเซ็ต — ไม่เก็บไฟล์ข้อมูล เก็บแค่ "ใครมีอะไร อยู่ที่ไหน"
 
 คำอธิบายของแต่ละชุด **ไม่เขียนเอง** — ดึงจากต้นทางพร้อมบอกที่มา:
+  พอร์ทัลข้อมูลเปิด (CKAN: GISTDA, กรมพัฒนาที่ดิน, data.go.th, HDX) → แตกเป็นรายชุด + คำอธิบายที่ผู้ให้ข้อมูลเขียนในพอร์ทัล + รายการไฟล์
   Planetary Computer → STAC API ของ Microsoft (description ทางการ)
   Earth Engine       → แคตตาล็อก STAC ของ Google (description + citation + terms of use)
   แหล่งอื่น/แพลตฟอร์ม → Wikipedia (REST summary, CC BY-SA) ถ้ามีบทความ ไม่มี → meta description ที่หน้าเว็บผู้ผลิตเขียนเอง
@@ -16,9 +17,10 @@ import html
 import json
 import re
 import time
+from collections import Counter
 from datetime import date
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
 
 import requests
 
@@ -63,6 +65,22 @@ CAT_MAP = {
     'ขอบเขตและข้อมูลพื้นฐาน': ['base'], 'ประวัติศาสตร์': ['hist'], 'ประเทศไทย': [], 'อื่น ๆ': [],
 }
 # คำในชื่อ/คีย์เวิร์ดจากต้นทาง → หมวดเพิ่ม (ช่วยให้ค้นเจอข้ามหมวด เช่น night light อยู่ทั้งภาพดาวเทียมและประชากร)
+KW_RULES_TH = [
+    ('pop', r'ประชากร|ครัวเรือน|ชุมชน|หมู่บ้าน|อาคาร|สิ่งปลูกสร้าง|เมือง|แสงไฟ|ผังเมือง'),
+    ('lulc', r'การใช้ที่ดิน|สิ่งปกคลุม|ใช้ประโยชน์ที่ดิน'),
+    ('forest', r'ป่า|ไม้|ชีวภาพ|สัตว์|อุทยาน|เขตรักษาพันธุ์|ป่าชายเลน|พื้นที่คุ้มครอง'),
+    ('agri', r'เกษตร|ข้าว|นาข้าว|พืช|อ้อย|มันสำปะหลัง|ยางพารา|ปาล์ม|เพาะปลูก|ชลประทาน|ผลผลิต'),
+    ('water', r'น้ำ|ลุ่มน้ำ|แม่น้ำ|อ่างเก็บ|เขื่อน|แหล่งน้ำ|บาดาล|คลอง'),
+    ('climate', r'ฝน|อุณหภูมิ|ภูมิอากาศ|อากาศ|ลม|พายุ|ความชื้น'),
+    ('atmos', r'ฝุ่น|pm ?2\.?5|คุณภาพอากาศ|มลพิษ|หมอกควัน'),
+    ('elev', r'ความสูง|ระดับความสูง|ภูมิประเทศ|เส้นชั้นความสูง|ความลาดชัน'),
+    ('soil', r'ดิน|ธรณี|แร่|หิน'),
+    ('ocean', r'ทะเล|ชายฝั่ง|ปะการัง|กัดเซาะ|ประมง|หญ้าทะเล'),
+    ('hazard', r'ภัย|ไฟป่า|จุดความร้อน|น้ำท่วม|อุทกภัย|ภัยแล้ง|แผ่นดินไหว|ดินถล่ม|เผา|พื้นที่เสี่ยง'),
+    ('imagery', r'ภาพถ่าย|ดาวเทียม|ไทยโชต|ภาพจาก'),
+    ('base', r'ขอบเขต|จังหวัด|อำเภอ|ตำบล|เทศบาล|ถนน|ทาง|สถานที่|ตั้ง|แผนที่ฐาน|โครงข่าย|สาธารณูปโภค|ไฟฟ้า|สถานี'),
+    ('socio', r'สถิติ|เศรษฐกิจ|รายได้|ความยากจน|สุขภาพ|การศึกษา|โรงเรียน|โรงพยาบาล|ท่องเที่ยว|แรงงาน'),
+]
 KW_RULES = [
     ('pop', r'\bpopulation|worldpop|settlement|built.?up|\bghsl|night.?(time)?.?light|\bviirs\b.*(night|dnb)|\bvnl\b|urban|building'),
     ('lulc', r'land.?cover|land.?use|\blulc\b|worldcover|dynamic world|impervious'),
@@ -234,10 +252,97 @@ def themes_for(cats, text):
             if t not in out:
                 out.append(t)
     low = text.lower()
-    for t, pat in KW_RULES:
+    for t, pat in KW_RULES + KW_RULES_TH:
         if t not in out and re.search(pat, low):
             out.append(t)
     return out or ['base']
+
+
+# ---------- พอร์ทัลข้อมูลเปิด (CKAN) → รายชุด ----------
+CKAN_VEC = {'shp', 'shapefile', 'geojson', 'kml', 'kmz', 'gpkg', 'geopackage', 'wfs', 'gml', 'gdb', 'file geodatabase'}
+CKAN_RAS = {'geotiff', 'tiff', 'tif', 'tms', 'xyz', 'cog', 'netcdf', 'hdf', 'img'}
+CKAN_SVC = {'wms', 'wmts', 'map', 'esri rest', 'arcgis geoservices rest api', 'api', 'url', 'html'}
+
+
+def ckan_type(fmts):
+    f = {x.strip().lower().lstrip('.') for x in fmts if x}
+    if f & CKAN_VEC:
+        return 'vector'
+    if f & CKAN_RAS:
+        return 'raster'
+    if f & CKAN_SVC and not f & {'csv', 'xlsx', 'xls', 'json'}:
+        return 'service'
+    return 'table'
+
+
+def ckan_lic(lid, title):
+    s = f'{lid or ""} {title or ""}'.lower()
+    if 'nc' in re.findall(r'\bnc\b|non-?commercial', s) or 'non-commercial' in s or '-nc' in s:
+        return 'nc'
+    if re.search(r'cc-?by|cc0|cc-?zero|odc|pddl|odbl|other-open|open data|open-data|public domain|ogl', s):
+        return 'open'
+    return 'check'
+
+
+SECRET_PARAM = re.compile(r'([?&](?:token|key|api_?key|apikey|access_?token|auth|sig|signature|secret|password|pass|client_secret)=)([^&#\s"\'<>)\]]*)', re.I)
+
+
+def redact(s):
+    """คีย์/โทเคนที่ผู้ให้ข้อมูลฝังไว้ในลิงก์หรือคำอธิบาย → แทนด้วย {YOUR_API_KEY} (ไม่เผยแพร่ซ้ำ ใช้คีย์ของตัวเองแทน)"""
+    if not s:
+        return s, False
+    out = SECRET_PARAM.sub(lambda m: m.group(1) + ('{YOUR_API_KEY}' if m.group(2) else ''), s)
+    return out, out != s and bool(SECRET_PARAM.search(s) and any(g for _, g in SECRET_PARAM.findall(s)))
+
+
+def ckan_harvest(portal, fetch):
+    base, fq = portal['base'].rstrip('/'), portal.get('fq')
+    out, start = [], 0
+    while True:
+        q = dict(rows=500, start=start, sort='name asc')
+        if fq:
+            q['fq'] = fq
+        g = fetch.get(f'{base}/api/3/action/package_search?{urlencode(q)}', 'json')
+        res = ((g.get('body') or {}).get('result') or {})
+        rows = res.get('results') or []
+        out += rows
+        start += len(rows)
+        if not rows or start >= (res.get('count') or 0):
+            break
+    recs = []
+    for r in out:
+        if r.get('private') or r.get('state', 'active') != 'active':
+            continue
+        org = (r.get('organization') or {}).get('title') or (r.get('organization') or {}).get('name') or ''
+        resources = []
+        for x in (r.get('resources') or []):
+            if not (x.get('url') or '').startswith(('http://', 'https://')):
+                continue
+            u, hid = redact(x['url'])
+            resources.append(dict(name=(x.get('name') or x.get('description') or '').strip()[:120] or None, format=(x.get('format') or '').strip() or None,
+                                  url=u, **({'key': True} if hid or '{YOUR' in u.upper() or '[YOUR' in u.upper() else {})))
+        tags = [x.get('display_name') or x.get('name') for x in (r.get('tags') or []) if x]
+        page = f'{base}/dataset/{r["name"]}'
+        notes = redact((r.get('notes') or '').strip())[0]
+        rec = dict(src='ckan', platform=portal['name'], id=r['name'], title=r.get('title') or r['name'], provider=org, og=[org] if org else [],
+                   type=ckan_type([x['format'] for x in resources if x['format']]), type_raw=', '.join(sorted({x['format'] for x in resources if x['format']}))[:120] or None,
+                   license=r.get('license_title') or r.get('license_id'), lic=ckan_lic(r.get('license_id'), r.get('license_title')),
+                   url=page, meta_url=f'{base}/api/3/action/package_show?id={r["name"]}', keywords=tags[:20], cats_src=[],
+                   updated=(r.get('metadata_modified') or '')[:10] or None, resources=resources[:60], n_res=len(resources),
+                   cover='thailand', source_page=redact(r.get('url'))[0] if (r.get('url') or '').startswith('http') else None)
+        rec['desc'] = dict(text=notes, fmt='md', source=f'คำอธิบายที่ผู้ให้ข้อมูลเขียนใน {portal["name"]}', source_url=page,
+                           license_note='ข้อความโดยผู้ให้ข้อมูล') if notes else None
+        recs.append(rec)
+    print(f'  {portal["name"]}: {len(recs):,} ชุด')
+    return recs
+
+
+def _orgs(rec):
+    """หน่วยงานของชุด (ใช้กรอง): STAC = ผู้ผลิต/ผู้ให้สิทธิ์ (ไม่นับผู้โฮสต์) · อื่น = ช่องผู้ผลิตในแคตตาล็อก"""
+    names = [p['name'] for p in (rec.get('providers') or []) if p.get('name') and set(p.get('roles') or []) - {'host'}]
+    if not names and rec.get('provider'):
+        names = [rec['provider']]
+    return [re.sub(r'\s+', ' ', n).strip() for n in dict.fromkeys(names) if n and n.strip()][:6]
 
 
 def build(src, fetch):
@@ -262,7 +367,27 @@ def build(src, fetch):
             jobs[i] = (kind, r, r['ลิงก์'], 'html')
             got[i] = fetch.get(r['ลิงก์'], 'html')
 
-    stats = dict(pc=0, gee=0, wiki=0, site=0, none=0)
+    stats = dict(pc=0, gee=0, wiki=0, site=0, none=0, ckan=0)
+    portals = cur.get('ckan', [])
+    replaced = {pt['replaces']: pt for pt in portals if pt.get('replaces')}
+    ck_count, seen, mirrored = {}, {}, 0
+    for pt in portals:                                    # ลำดับใน hub_curated = พอร์ทัลของหน่วยงานก่อน data.go.th (ที่ดึงสำเนาไป)
+        for rec in ckan_harvest(pt, fetch):
+            dk = (re.sub(r'\s+', ' ', rec['title']).strip().lower(), rec['provider'])
+            first = seen.get(dk)
+            if first is not None and first['platform'] != pt['name']:
+                first.setdefault('mirrors', []).append(dict(platform=pt['name'], url=rec['url']))     # ชุดเดียวกันในพอร์ทัลอื่น → ลิงก์เสริม
+                mirrored += 1
+                continue
+            seen.setdefault(dk, rec)
+            ck_count[pt['name']] = ck_count.get(pt['name'], 0) + 1
+            if rec['desc']:
+                stats['ckan'] += 1
+            text = ' '.join([rec['title'], rec['provider'], ' '.join(rec['keywords']), rec['id']])
+            rec['themes'] = themes_for([], text)
+            rec['key'] = re.sub(r'[^0-9a-zก-๙:._-]+', '-', ('ckan:' + pt['base'].split('//')[1].split('.')[0] + ':' + rec['id']).lower()).strip('-')
+            recs.append(rec)
+    print(f'  ชุดซ้ำข้ามพอร์ทัล (เก็บพอร์ทัลของหน่วยงาน + ลิงก์สำเนา): {mirrored}')
     for (kind, r, url, k), g in zip(jobs, got):
         body = g.get('body')
         rec = dict(platform={'pc': 'Microsoft Planetary Computer', 'gee': 'Google Earth Engine'}.get(kind, r.get('แพลตฟอร์ม') or ''),
@@ -302,6 +427,11 @@ def build(src, fetch):
                        platform=name if kind == 'platform' else 'แหล่งผู้ผลิตโดยตรง')
             if kind == 'platform':
                 rec['note'] = r.get('สถานะในไฟล์นี้')
+            if name in replaced:                          # พอร์ทัลที่แตกเป็นรายชุดแล้ว → แสดงเป็นแพลตฟอร์ม
+                pt = replaced[name]
+                rec.update(type='platform', platform=pt['name'], src='platform',
+                           note=f'แตกเป็น {ck_count.get(pt["name"], 0):,} ชุดในรายการ' + (f' ({pt["note"]})' if pt.get('note') else '') + ' — เลือกแหล่งนี้ในตัวกรองเพื่อดูทั้งหมด')
+                kind = 'platform'
             cv = cur['cover'].get(name) or cur['cover'].get(r.get('หมวดหมู่') or '') or 'global'
             rec['cover'] = cv
             if k == 'json' and isinstance(body, dict) and body.get('extract'):
@@ -322,6 +452,7 @@ def build(src, fetch):
         if 'cover' not in rec:
             rec['cover'] = covers(rec.get('bbox')) or 'unknown'
         rec['lic'] = lic_class(rec.get('license')) if kind not in ('other', 'platform') else 'check'
+        rec['og'] = _orgs(rec)
         rec['desc'] = desc
         rec['key'] = (kind + ':' + (rec['id'] or rec['title'])).lower()
         rec['key'] = re.sub(r'[^0-9a-zก-๙:._-]+', '-', rec['key']).strip('-')
@@ -333,29 +464,35 @@ def write(recs, stats):
     OUT.mkdir(parents=True, exist_ok=True)
     for f in OUT.glob('desc_*.json'):
         f.unlink()
+    fix = json.loads(CURATED.read_text(encoding='utf-8')).get('url_fix', {})
     for r in recs:                                       # ชื่อจากต้นทางบางชุดมี HTML entity (เช่น 0.05&deg;)
         r['title'] = html.unescape(r['title'] or '')
-    order = {'other': 0, 'platform': 1, 'pc': 2, 'gee': 3}
+        r['url'] = fix.get(r['url'], r['url'])
+    order = {'other': 0, 'ckan': 1, 'platform': 2, 'pc': 3, 'gee': 4}
     recs.sort(key=lambda r: (order[r['src']], (r['title'] or '').lower()))
     index, shards = [], {}
     for i, r in enumerate(recs):
         sh = i // SHARD
         shards.setdefault(sh, {})[r['key']] = dict(desc=r.get('desc'), citation=r.get('citation'), terms=r.get('terms'),
-                                                     providers=r.get('providers'), keywords=r.get('keywords'))
+                                                     providers=r.get('providers'), keywords=r.get('keywords'), resources=r.get('resources'),
+                                                     source_page=r.get('source_page'), mirrors=r.get('mirrors'))
         has = bool(r.get('desc') and r['desc'].get('text'))
         index.append({k: v for k, v in dict(
             k=r['key'], t=r['title'], id=r.get('id'), p=r['platform'], s=r['src'], pr=r.get('provider'), ty=r['type'], tr=r.get('type_raw'),
             th=r['themes'], a=r.get('start'), b=r.get('end'), l=r.get('license'), lc=r['lic'], u=r['url'], m=r.get('meta_url'),
             bb=r.get('bbox'), cv=r['cover'], g=r.get('gsd'), cd=r.get('cadence'), dp=r.get('deprecated') or None, sh=sh, d=has or None,
-            sd=r.get('short'), n=r.get('note'), kw=(r.get('keywords') or [])[:8] or None).items() if v not in (None, [], '')})
+            sd=r.get('short'), n=r.get('note'), kw=(r.get('keywords') or [])[:8] or None, og=r.get('og') or None, up=r.get('updated'),
+            nr=r.get('n_res'), ds=(r.get('desc') or {}).get('source')).items() if v not in (None, [], '')})
     for sh, d in shards.items():
         (OUT / f'desc_{sh:02d}.json').write_text(json.dumps(d, ensure_ascii=False, separators=(',', ':')), encoding='utf-8')
     meta = dict(built=date.today().isoformat(), count=len(recs), stats=stats,
                 themes=[dict(k=k, th=t, en=e) for k, t, e in THEMES], types=TYPE_LABEL,
-                platforms=sorted({r['platform'] for r in recs}),
+                platforms=sorted(Counter(r['platform'] for r in recs).items(), key=lambda x: -x[1]),
+                orgs=sorted(Counter(o for r in recs for o in (r.get('og') or [])).items(), key=lambda x: (-x[1], x[0])),
                 credits=[
                     'รายชื่อ collection: Planetary-Computer-Catalog และ Earth-Engine-Catalog (giswqs บน GitHub)',
                     'คำอธิบาย Planetary Computer: STAC API ของ Microsoft · Earth Engine: แคตตาล็อก STAC ของ Google (earthengine-catalog)',
+                    'พอร์ทัลข้อมูลเปิด (GISTDA, กรมพัฒนาที่ดิน, data.go.th, HDX): รายชื่อ คำอธิบาย และไฟล์จาก CKAN API ของแต่ละพอร์ทัล',
                     'คำอธิบายจาก Wikipedia ใช้ภายใต้ CC BY-SA 4.0 — ลิงก์ไปบทความต้นฉบับอยู่ในแต่ละรายการ',
                     'ตรวจเงื่อนไขการใช้ (License / Terms of use) ของแต่ละชุดที่ต้นทางก่อนนำไปใช้หรือเผยแพร่ซ้ำ'])
     (OUT / 'index.json').write_text(json.dumps(dict(meta=meta, items=index), ensure_ascii=False, separators=(',', ':')), encoding='utf-8')

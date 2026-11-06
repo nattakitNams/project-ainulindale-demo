@@ -484,3 +484,9 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 /* ---------- หกเหลี่ยม ---------- */
 #outSeg button { display: inline-flex; align-items: center; gap: 6px; }
 #outSeg button svg { width: 15px; height: 15px; }
+
+.hub-run { display: flex; flex-direction: column; gap: 10px; }
+.hub-prog { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, .06); overflow: hidden; }
+.hub-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--lav), var(--mint)); transition: width .3s; }
+.hub-org input { min-width: 260px; }
+.hub-src.s-ckan { color: var(--butter); }

@@ -49,7 +49,12 @@ def check(url):
         for method in ('HEAD', 'GET'):
             cur, hops = url, 0
             while True:
-                r = _hop(s, method, cur)
+                try:
+                    r = _hop(s, method, cur)
+                except Blocked as e:
+                    if hops:                                # ต้นทางส่งต่อ (redirect) ไปที่อยู่ภายใน เช่น http://localhost/… = เว็บต้นทางตั้งค่าผิด
+                        raise Blocked(f'เว็บต้นทางส่งต่อไปที่อยู่ภายใน ({cur[:80]}) — ลิงก์น่าจะผิด (ลองเติม / ท้ายลิงก์)')
+                    raise
                 r.close()
                 if r.is_redirect and hops < 6:
                     cur = urljoin(cur, r.headers.get('Location', ''))

@@ -1,5 +1,5 @@
 {
-  "_note": "ค่าที่คัดเอง: ชื่อบทความ Wikipedia ของแหล่งข้อมูลนอก PC/GEE (ใช้คำอธิบายจาก Wikipedia ก่อน ไม่มี → ใช้คำอธิบายที่หน้าเว็บผู้ผลิตเขียนเอง) · cover = global | thailand | partial · wiki_direct = บทความ Wikipedia เป็นเรื่องของชุดข้อมูลนั้นโดยตรง (ชื่อไม่ตรงกันจนตรวจอัตโนมัติไม่ได้)",
+  "_note": "ค่าที่คัดเอง: ชื่อบทความ Wikipedia ของแหล่งข้อมูลนอก PC/GEE (ใช้คำอธิบายจาก Wikipedia ก่อน ไม่มี → ใช้คำอธิบายที่หน้าเว็บผู้ผลิตเขียนเอง) · cover = global | thailand | partial · wiki_direct = บทความ Wikipedia เป็นเรื่องของชุดข้อมูลนั้นโดยตรง (ชื่อไม่ตรงกันจนตรวจอัตโนมัติไม่ได้) · ckan = พอร์ทัลข้อมูลเปิด (CKAN) ที่แตกเป็นรายชุด: ชื่อ, base, fq (ตัวกรองของ package_search), replaces = แถวใน Other_Sources ที่กลายเป็นพอร์ทัล · url_fix = ลิงก์ในแคตตาล็อกที่ต้องแก้ (เช่น ต้นทาง redirect ผิดไป localhost เมื่อไม่มี / ท้าย)",
   "wiki": {
     "GADM": "en:GADM",
     "Natural Earth": "en:Natural Earth",
@@ -59,5 +59,36 @@
   },
   "wiki_direct": [
     "GEBCO Gridded Bathymetry"
-  ]
+  ],
+  "ckan": [
+    {
+      "name": "GISTDA Open Data",
+      "base": "https://opendata.gistda.or.th",
+      "replaces": "GISTDA Open Data",
+      "fq": null
+    },
+    {
+      "name": "LDD Catalog (กรมพัฒนาที่ดิน)",
+      "base": "https://lddcatalog.ldd.go.th",
+      "replaces": "LDD Catalog (ชุดดิน/การใช้ที่ดิน)",
+      "fq": null
+    },
+    {
+      "name": "ข้อมูลเปิดภาครัฐ (data.go.th)",
+      "base": "https://data.go.th",
+      "replaces": "ข้อมูลเปิดภาครัฐ",
+      "fq": "res_format:(SHP OR GeoJSON OR KML OR KMZ OR WMS OR WFS OR GeoTIFF OR GPKG OR MAP OR TMS)",
+      "note": "เฉพาะชุดที่มีไฟล์/บริการแผนที่"
+    },
+    {
+      "name": "HDX (ประเทศไทย)",
+      "base": "https://data.humdata.org",
+      "replaces": null,
+      "fq": "groups:tha",
+      "note": "เฉพาะชุดของประเทศไทย"
+    }
+  ],
+  "url_fix": {
+    "https://earthquake.usgs.gov/earthquakes/search": "https://earthquake.usgs.gov/earthquakes/search/"
+  }
 }
