@@ -27,8 +27,8 @@ jobs:
       - name: ดาวน์โหลด Python แบบพกพา + get-pip (แหล่งทางการ)
         run: |
           mkdir -p tools/cache
-          curl -fsSL -o tools/cache/python-${PY_EMBED}-embed-amd64.zip https://www.python.org/ftp/python/${PY_EMBED}/python-${PY_EMBED}-embed-amd64.zip
-          curl -fsSL -o tools/cache/get-pip.py https://bootstrap.pypa.io/get-pip.py
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o tools/cache/python-${PY_EMBED}-embed-amd64.zip https://www.python.org/ftp/python/${PY_EMBED}/python-${PY_EMBED}-embed-amd64.zip
+          curl -fsSL --retry 5 --retry-delay 10 --retry-all-errors -o tools/cache/get-pip.py https://bootstrap.pypa.io/get-pip.py
           sha256sum tools/cache/*
       - name: สร้างตัวติดตั้ง
         run: python tools/build_installer.py --embed tools/cache/python-${PY_EMBED}-embed-amd64.zip --getpip tools/cache/get-pip.py --web-url "$WEB_URL" --origin "$ORIGIN"
