@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.6';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.7';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -708,7 +708,7 @@ function pointHtml(r) {
     return box(`${r.features.length} feature` + r.features.map(f => `<table class="kv">${Object.entries(f.attrs).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`).join('<hr style="border-color:var(--line)">'));
   }
   if (r.outside) return box('<span class="muted">อยู่นอกขอบเขตข้อมูล</span>');
-  const rows = r.bands.map(b => [`แบนด์ ${b.band}${b.desc ? ' ' + esc(b.desc) : ''}`, b.nodata ? `nodata (${esc(b.value)})${r.nodata_as != null ? ` → นับเป็น ${r.nodata_as}` : ''}` : `<b style="color:var(--text);font-size:15px">${fmt(b.value, 6)}</b>`]);
+  const rows = r.bands.map(b => [`แบนด์ ${b.band}${b.desc ? ' ' + esc(b.desc) : ''}`, b.nodata ? `nodata (${esc(b.value)})${r.nodata_as != null ? ` → นับเป็น ${r.nodata_as}` : ''}` : `<b style="color:var(--text);font-size:15px">${fmt(b.value, 6)}</b>${b.raw != null ? ` <span class="tiny muted">(ค่าดิบ ${fmt(b.raw, 6)} × scale ${b.scale}${b.offset ? ` + ${b.offset}` : ''})</span>` : ''}`]);
   rows.push(['พิกเซล (แถว, คอลัมน์)', `${fmt(r.row, 0)}, ${fmt(r.col, 0)}`]);
   rows.push(['พื้นที่พิกเซล', r.pixel_area_km2 < 0.01 ? `${fmt(r.pixel_area_km2 * 1e6, 1)} ตร.ม.` : `${fmt(r.pixel_area_km2, 4)} ตร.กม.`]);
   if (r.density != null) rows.push(['ความหนาแน่น', `${fmt(r.density, 2)} ต่อ ตร.กม.`]);

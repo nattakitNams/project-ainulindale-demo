@@ -15,7 +15,7 @@ from rasterio.windows import Window
 from rio_tiler.io import Reader
 from rio_tiler.errors import TileOutsideBounds
 
-from . import gridmath as gm
+from . import engine, gridmath as gm
 
 DENS_BINS = [10, 50, 100, 300, 600, 1500, 3000]
 POP_COLS = ['#fff7bc', '#fee391', '#fec44f', '#fe9929', '#ec7014', '#cc4c02', '#993404', '#662506']
@@ -215,10 +215,11 @@ def render(ds, z, x, y, cols=None, style=None):
             if not r.tile_exists(x, y, z):
                 return EMPTY, True
             img = r.tile(x, y, z, indexes=band, resampling_method='nearest', reproject_method='nearest')
+            sc = engine.band_scale(r.dataset, band)
     except TileOutsideBounds:
         return EMPTY, True
     arr = img.array[0]
-    a = np.asarray(arr.filled(0)).astype('float64')
+    a = engine.unscale(np.asarray(arr.filled(0)).astype('float64'), *sc)
     valid = ~np.ma.getmaskarray(arr) & np.isfinite(a)
     load_cmap(ds)
     if style and cols is None:
@@ -249,7 +250,11 @@ def point_raster(ds, lon, lat):
         for i, v in enumerate(vals, 1):
             v = v.item()
             isnod = (nod is not None and (v == nod or (isinstance(nod, float) and math.isnan(nod) and math.isnan(v))))
-            out['bands'].append(dict(band=i, value=v, nodata=bool(isnod), desc=d.descriptions[i - 1]))
+            sc, of = engine.band_scale(d, i)
+            e = dict(band=i, value=v, nodata=bool(isnod), desc=d.descriptions[i - 1])
+            if (sc, of) != (1.0, 0.0) and not isnod:
+                e.update(raw=v, value=v * sc + of, scale=sc, offset=of)      # แสดงค่าหลังคูณเหมือน QGIS
+            out['bands'].append(e)
         res = abs(d.transform.a)
     if m.get('geographic'):
         a = float(gm.row_area_km2(res, m['transform'][5] - abs(m['transform'][4]) * (row + 0.5)))

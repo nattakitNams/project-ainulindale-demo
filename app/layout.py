@@ -20,7 +20,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import db, symbology, tiles
+from . import db, engine, symbology, tiles
 from .config import APP_VERSION, DIRS
 
 # ---------- แผนที่พื้นหลัง ----------
@@ -166,10 +166,11 @@ def _raster(ax, d, ext, px_w, px_h, opacity):
         oh = int(max(1, ow * win.height / win.width))
         rs = Resampling.nearest if style.get('type') == 'paletted' or d.get('value_type') == 'class' else Resampling.average
         arr = s.read(int(d.get('band') or 1), window=win, out_shape=(oh, ow), masked=True, resampling=rs)
+        sc = engine.band_scale(s, int(d.get('band') or 1))
         wb = rasterio.windows.bounds(win, s.transform)
         res = abs(s.transform.a)
         lat = wb[3] - (np.arange(oh) + 0.5) * (wb[3] - wb[1]) / oh
-    a = np.asarray(arr.filled(0)).astype('float64')
+    a = engine.unscale(np.asarray(arr.filled(0)).astype('float64'), *sc)
     rgba = symbology.render(d, style, a, ~np.ma.getmaskarray(arr), res, lat)
     rgba[..., 3] = (rgba[..., 3] * opacity).astype('uint8')
     ax.imshow(rgba, extent=[wb[0], wb[2], wb[1], wb[3]], interpolation='nearest', zorder=3)

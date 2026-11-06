@@ -126,8 +126,18 @@ class Source:
     def area_rows(self, r0, n):
         return gm.pixel_area_rows(self.geographic, self.rx, self.ry, self.y0, r0, n)
 
+    @property
+    def scale(self):
+        if not hasattr(self, '_scale'):
+            self._scale = band_scale(self.ds, self.band)
+        return self._scale
+
+    @property
+    def scaled(self):
+        return self.scale != (1.0, 0.0)
+
     def read_raw(self, r0, c0, h, w):
-        """อ่านหน้าต่าง (หน่วยพิกเซลต้นทาง) — นอกขอบภาพ = ไม่มีข้อมูล ; คืน (ค่า float64, valid)"""
+        """อ่านหน้าต่าง (หน่วยพิกเซลต้นทาง) — นอกขอบภาพ = ไม่มีข้อมูล ; คืน (ค่า float64 หลังคูณ scale/offset, valid)"""
         val = np.zeros((h, w), 'float64')
         ok = np.zeros((h, w), bool)
         rr0, cc0 = max(r0, 0), max(c0, 0)
@@ -137,6 +147,7 @@ class Source:
             v = np.isfinite(a)
             if self.nodata is not None and not (isinstance(self.nodata, float) and math.isnan(self.nodata)):
                 v &= a != self.nodata
+            a = unscale(a, *self.scale)                     # nodata เทียบกับค่าดิบ · ที่เหลือ (ค่าที่ไม่นับ ฯลฯ) ใช้ค่าจริง
             if self.nodata_as is not None:
                 a[~v] = self.nodata_as
                 v[:] = True
@@ -146,6 +157,18 @@ class Source:
             sl = (slice(rr0 - r0, rr1 - r0), slice(cc0 - c0, cc1 - c0))
             val[sl], ok[sl] = a, v
         return val, ok
+
+
+def band_scale(rds, band):
+    """scale/offset ของแบนด์ (เช่น VIIRS VNL int16 ×10, MODIS NDVI ×0.0001) — QGIS แสดงค่าหลังคูณ → แอปต้องคูณเหมือนกัน
+    ไฟล์ที่แอปเขียนเอง (สำเนาพรีวิว/ผลลัพธ์) เก็บค่าจริงแล้ว ไม่มี scale = (1, 0)"""
+    sc = rds.scales[band - 1] if rds.scales else 1.0
+    of = rds.offsets[band - 1] if rds.offsets else 0.0
+    return float(sc if sc not in (None, 0) else 1.0), float(of or 0.0)
+
+
+def unscale(a, sc, of):
+    return a * sc + of if (sc != 1.0 or of != 0.0) else a
 
 
 # ---------- จัดชั้น ----------

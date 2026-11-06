@@ -59,6 +59,7 @@ def op_download(job, P, log):
                             tiled=True, blockxsize=512, blockysize=512, compress='deflate', BIGTIFF='IF_SAFER')
                 log(f'ตัดตามพื้นที่ศึกษา: {int(win.width):,} × {int(win.height):,} พิกเซล')
                 with rasterio.open(outp, 'w', **prof) as o:
+                    o.scales, o.offsets = d.scales, d.offsets          # คง scale/offset ของต้นฉบับ (ค่าดิบเหมือนเดิม)
                     for b in range(1, d.count + 1):
                         o.write(d.read(b, window=win), b)
                         P(0.9 * b / d.count, f'แบนด์ {b}/{d.count}')

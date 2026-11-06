@@ -8,7 +8,7 @@ from pathlib import Path
 
 import numpy as np
 
-from . import db, symbology, tiles
+from . import db, engine, symbology, tiles
 from .config import APP_VERSION
 
 
@@ -40,10 +40,11 @@ def _raster_img(ds, style, max_px=1600):
         arr = d.read(int(ds.get('band') or 1), out_shape=(H, W), masked=True,
                      resampling=rasterio.enums.Resampling.nearest if style.get('type') == 'paletted' else rasterio.enums.Resampling.average)
         t = d.transform
+        sc = engine.band_scale(d, int(ds.get('band') or 1))
         ext = [t.c, t.c + t.a * d.width, t.f + t.e * d.height, t.f]
         res = abs(t.a) * d.width / W
         lat = t.f - (np.arange(H) + 0.5) * abs(t.e) * d.height / H
-    a = np.asarray(arr.filled(0)).astype('float64')
+    a = engine.unscale(np.asarray(arr.filled(0)).astype('float64'), *sc)
     valid = ~np.ma.getmaskarray(arr)
     if style.get('metric') == 'density' and ds.get('value_type') == 'count':
         res = abs(t.a)                   # average resampling = ค่าเฉลี่ยต่อพิกเซลเดิม → หารด้วยพื้นที่พิกเซลเดิม

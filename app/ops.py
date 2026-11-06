@@ -46,7 +46,7 @@ def preview_factor(meta):
 
 
 def preview_key(ds, F):
-    return f"{ds.get('fingerprint')}|{ds.get('value_type')}|{ds.get('band') or 1}|F{F}|v2"
+    return f"{ds.get('fingerprint')}|{ds.get('value_type')}|{ds.get('band') or 1}|F{F}|v4"
 
 
 def op_prepare(job, P, log):
@@ -60,8 +60,11 @@ def op_prepare(job, P, log):
     F = preview_factor(m)
     vt = ds['value_type']
     dt = m['dtypes'][(ds.get('band') or 1) - 1]
-    is_int = 'int' in dt
+    sc, of = src.scale
+    is_int = 'int' in dt and sc.is_integer() and of.is_integer()     # คูณ scale ทศนิยม (เช่น ×0.0001) → ไม่ใช่จำนวนเต็มแล้ว
     W, H = src.w, src.h
+    if src.scaled:
+        log(f'ไฟล์มี scale ×{sc:g} offset {of:g} → ใช้ค่าหลังคูณ (แบบเดียวกับ QGIS)')
     log(f'ขนาด {W:,} × {H:,} พิกเซล · ประเภทค่า {vt} · สำเนาพรีวิว F={F}')
 
     # ขนาดบล็อก: ถ้าทำพรีวิว บล็อกต้องตรงกับบล็อก 512 ของไฟล์พรีวิว
@@ -75,7 +78,7 @@ def op_prepare(job, P, log):
         tmp = pv_path.with_suffix('.tmp.tif')
         PW, PH = math.ceil(W / F), math.ceil(H / F)
         if vt == 'class':
-            pdt = dt if is_int else 'float32'
+            pdt = dt if is_int and not src.scaled else 'float32'
             pnod = m.get('nodata')
         else:
             pdt, pnod = 'float32', (None if vt == 'count' else float('nan'))
@@ -105,10 +108,13 @@ def op_prepare(job, P, log):
         if nv:
             s_sum += float(vv.sum())
             vmin, vmax = min(vmin, float(vv.min())), max(vmax, float(vv.max()))
-            if is_int and vmax - vmin <= 4096:
+            if is_int and ihist is not None:
+                # นับครบทั้งไฟล์หรือไม่นับเลย (เดิมตัดตามช่วง min–max ระหว่างทาง → ได้ฮิสโตแกรมครึ่งๆ กลางๆ เมื่อเจอค่าสุดโต่งทีหลัง)
                 u, c = np.unique(vv, return_counts=True)
                 for a, b in zip(u.tolist(), c.tolist()):
                     ihist[a] = ihist.get(a, 0) + b
+                if len(ihist) > 4096:
+                    ihist = None
             k = rng.binomial(nv, rate) if rate < 1 else nv
             if k:
                 sel = rng.choice(nv, size=min(k, nv), replace=False)
@@ -345,6 +351,8 @@ def op_resample(job, P, log):
     if vt == 'count':
         odt, onod = ('float64' if og.mode == 'down' else 'float32'), -99999.0
     elif vt == 'density':
+        odt, onod = 'float32', -99999.0
+    elif src.scaled:                                  # ค่าหลังคูณ scale อาจเกินช่วงชนิดเดิม (int16 ×10) → float32
         odt, onod = 'float32', -99999.0
     else:
         st = ds.get('stats') or {}
