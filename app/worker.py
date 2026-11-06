@@ -9,7 +9,7 @@ os.environ.setdefault('GDAL_NUM_THREADS', 'ALL_CPUS')
 import traceback
 from datetime import datetime
 
-from . import db, ops, ops3
+from . import db, ops, ops3, ops_hex
 from .config import ensure_workspace
 
 
@@ -62,7 +62,7 @@ def main(jid):
     if job.get('out_dir'):
         log(f'โฟลเดอร์ผลลัพธ์: {job["out_dir"]}')
     try:
-        res = {**ops.OPS, **ops3.OPS3}[job['kind']](job, progress, log)
+        res = {**ops.OPS, **ops3.OPS3, **ops_hex.OPS_HEX}[job['kind']](job, progress, log)
         run_s = time.time() - t0
         fin = db.now()
         timing = dict(queued_at=job.get('created_at'), started_at=datetime.fromtimestamp(t0).isoformat(timespec='seconds'),

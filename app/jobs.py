@@ -11,7 +11,7 @@ from . import db, export
 from .config import DIRS, ROOT
 
 OUT_BASE = dict(resample='derived', bivariate='maps', rasterize='derived', vgrid='derived',
-                download='database', zonal='maps', change='derived', sensitivity='maps')
+                download='database', zonal='maps', change='derived', sensitivity='maps', hex='derived', hexbiv='maps')
 _lock = threading.Lock()
 _procs = {}
 

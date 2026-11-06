@@ -943,6 +943,18 @@ def _confirmed_raster(did):
 def validate_job(kind, p):
     """ตรวจค่าที่ตั้ง + ประเมินขนาดผลลัพธ์ก่อนรัน"""
     warns = []
+    if kind in ('hex', 'hexbiv'):
+        from . import ops_hex
+        if kind == 'hexbiv':
+            for a in ('x', 'y'):
+                if not (p.get(a) or {}).get('dataset_id'):
+                    raise ApiError(f'เลือกชุดข้อมูลแกน {a.upper()}')
+        elif not p.get('dataset_ids'):
+            raise ApiError('เลือกชุดข้อมูลอย่างน้อย 1 ชุด')
+        est = ops_hex.estimate(kind, p)
+        if p.get('aoi_id'):
+            est['aoi'] = aoimod.get(int(p['aoi_id']))['name']
+        return est
     if kind == 'resample':
         d = _confirmed_raster(p['dataset_id'])
         s = engine.Source(d)
@@ -1100,6 +1112,10 @@ def create_job():
         title = p.get('name') or f'เปลี่ยนแปลง ({p.get("mode")}) · {res}{aoi_txt}'
     elif kind == 'sensitivity':
         title = (p.get('name') or 'เทียบหลายค่าที่ตั้ง') + aoi_txt
+    elif kind == 'hex':
+        title = p.get('name') or f'แปลงเป็นหกเหลี่ยม {res}: ' + ', '.join(db.get('datasets', int(i))['name'] for i in p['dataset_ids'][:3]) + aoi_txt
+    elif kind == 'hexbiv':
+        title = (p.get('name') or 'ไบแวเรียตหกเหลี่ยม') + f' · {res}{aoi_txt}'
     else:
         title = (p.get('name') or 'ไบแวเรียต') + f' · {res}{aoi_txt}'
     jid = jobs.submit(kind, p, title)

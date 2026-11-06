@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 
 APP_NAME = 'project_Ainulindale'
-APP_VERSION = '1.0.9'
+APP_VERSION = '1.0.10'
 
 ROOT = Path(__file__).resolve().parent.parent
 SETTINGS_PATH = ROOT / 'settings.json'

@@ -480,3 +480,7 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 .hub-st { text-align: right; flex-shrink: 0; max-width: 45%; }
 .hub-credit { margin-top: 18px; line-height: 1.7; }
 .chip.warn { color: var(--butter); border: 1px solid rgba(246, 227, 161, .4); font-size: 11px; padding: 0 7px; border-radius: 20px; white-space: nowrap; }
+
+/* ---------- หกเหลี่ยม ---------- */
+#outSeg button { display: inline-flex; align-items: center; gap: 6px; }
+#outSeg button svg { width: 15px; height: 15px; }

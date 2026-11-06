@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.9';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.10';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,10 +45,39 @@ const IC = {
   layers: P('<path d="m12 3.5 8.5 4.5-8.5 4.5-8.5-4.5z"/><path d="m3.5 12 8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5"/>'),
   gear: P('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   pdf: P('<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5M9 13h6M9 16.5h4"/>'),
+  hex: P('<path d="M12 3 19.8 7.5v9L12 21l-7.8-4.5v-9z"/>'),
   globe: P('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5s1.2-5.9 3.7-8.5z"/>'),
   download: P('<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/>'),
 };
 const ic = k => `<span class="ic">${IC[k] || ''}</span>`;
+// ---------- หกเหลี่ยม ----------
+const isHex = d => !!(d && d.meta && d.meta.hex);
+const niceKm = x => { const p = 10 ** Math.floor(Math.log10(x)); return [1, 2, 5, 10].map(k => k * p).find(v => v >= x) || 10 * p; };
+const frac = s => { const [a, b] = String(s).split('/'); return +a / (+b || 1); };
+const pxKm = m => m.res_exact ? (m.geographic ? frac(m.res_exact) / 3600 * 111.32 : frac(m.res_exact) / 1000) : null;
+const hexFields = d => (d.meta.hex?.fields || []).flatMap(f => Object.entries(f.columns || {}).map(([c, t]) => ({ c, t, name: f.name, vt: f.value_type, main: c === f.main })));
+function hexCard(d, all, aoiOpts) {
+  const m = d.meta, px = d.kind === 'raster' ? pxKm(m) : null;
+  const size = px ? niceKm(Math.max(px * 3, 0.1)) : 1;
+  const others = all.filter(x => x.id !== d.id && !isHex(x) && ((x.kind === 'raster' && x.value_type_confirmed) || x.kind === 'vector'));
+  return `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>แปลงเป็นหกเหลี่ยม (hex)</h2></div>
+    <p class="small muted" style="margin-top:0">ช่องหกเหลี่ยมพื้นที่เท่ากัน + ค่าของแต่ละชุด (GeoPackage) — ${d.kind === 'raster' ? 'นับ = ผลรวม · ต่อเนื่อง = เฉลี่ยถ่วงพื้นที่ · ชั้น = ค่าที่กินพื้นที่มากสุด' : 'โพลิกอน = % พื้นที่ที่ทับ · เส้น = ความยาว กม. · จุด = จำนวน'} · คิดที่ความละเอียดต้นทาง (ไม่แตกพิกเซล)</p>
+    <div class="grid-form">
+      <label class="field"><span>ขนาด (กม. ระหว่างศูนย์กลาง)</span><input type="number" id="hxSize" min="0.01" step="any" value="${size}"><span class="tiny muted" id="hxArea"></span></label>
+      <label class="field"><span>พื้นที่ศึกษา</span><select id="hxAoi">${aoiOpts}</select></label>
+      <div class="field full"><span>ใส่ค่าจากชุดอื่นด้วย</span><div class="checklist" id="hxMore">${others.map(x => `<label><input type="checkbox" value="${x.id}"><span>#${x.id} ${esc(x.name)} <span class="tiny muted">${x.kind === 'raster' ? esc(VT_SHORT[x.value_type] || '') + ' · ' + esc((x.meta.res_label || '').split(' (')[0]) : esc(x.meta.geometry_type || 'vector')}</span></span></label>`).join('') || '<div class="tiny muted" style="padding:6px 8px">ไม่มีชุดอื่น</div>'}</div></div>
+      <label class="row small full"><input type="checkbox" id="hxDrop" checked> ตัดช่องที่ว่าง/เป็น 0 ทุกชุดออก</label>
+      <label class="field full"><span>ชื่อผลลัพธ์</span><input type="text" id="hxName" placeholder="เว้นว่าง = ตั้งให้"></label>
+    </div>
+    <div class="tiny muted" style="margin:8px 0">${px ? `พิกเซลข้อมูลกว้าง ≈ ${fmt(px, 3)} กม. — ช่องควรกว้างกว่าพิกเซลหลายเท่า (ค่าเริ่มต้น ≈ 3 เท่า)` : ''} · ทำ hex แล้วนำไปทำไบแวเรียตหกเหลี่ยม หรือแปลงกลับเป็นราสเตอร์ได้</div>
+    <button id="hxRun" class="mint">${IC.hex}สร้างหกเหลี่ยม</button></div>`;
+}
+function hexCardBind(d) {
+  const area = () => { const s = +$('#hxSize').value; $('#hxArea').textContent = s > 0 ? `≈ ${fmt(Math.sqrt(3) / 2 * s * s, 3)} ตร.กม./ช่อง` : ''; };
+  $('#hxSize').oninput = area; area();
+  $('#hxRun').onclick = () => runJob('hex', { dataset_ids: [d.id, ...$$('#hxMore input:checked').map(o => +o.value)], size_km: +$('#hxSize').value,
+    aoi_id: +$('#hxAoi').value || null, drop_empty: $('#hxDrop').checked, name: $('#hxName').value.trim() || null }, () => location.hash = '#/jobs');
+}
 
 let STATE = null, PALS = { builtin: [], custom: [] };
 let maps = [];
@@ -319,7 +348,8 @@ async function pageDataset(id) {
           <label class="field"><span>พื้นที่ศึกษา</span><select id="vgAoi">${aoiOpts}</select></label>
           <div class="field full"><span>ใส่ค่าจากชุดอื่นด้วย (กริดเดียวกัน)</span><div class="checklist" id="vgMore">${rasters.filter(x => x.id !== d.id && x.meta.grid_family === m.grid_family && x.value_type_confirmed).map(x => `<label><input type="checkbox" value="${x.id}"><span>#${x.id} ${esc(x.name)} <span class="tiny muted">${esc(VT_SHORT[x.value_type] || '')} · ${esc((x.meta.res_label || '').split(' (')[0])}</span></span></label>`).join('') || '<div class="tiny muted" style="padding:6px 8px">ไม่มีชุดอื่นในกริดเดียวกัน</div>'}</div></div>
         </div>
-        <button id="vgRun" class="mint" style="margin-top:10px">${IC.grid}สร้างกริด</button></div>` : `
+        <button id="vgRun" class="mint" style="margin-top:10px">${IC.grid}สร้างกริด</button></div>
+        ${d.role !== 'map' ? hexCard(d, all, aoiOpts) : ''}` : `
         <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>แปลงเป็นราสเตอร์</h2></div>
         <div class="grid-form">
           <label class="field full"><span>กริดอ้างอิง (raster)</span><select id="rzRef">${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${esc((x.meta.res_label || '').split(' (')[0])}</option>`).join('')}</select></label>
@@ -330,7 +360,12 @@ async function pageDataset(id) {
           <label class="field full"><span>พื้นที่ศึกษา</span><select id="rzAoi">${aoiOpts}</select></label>
         </div>
         <div class="tiny muted" style="margin:8px 0">สัดส่วน/majority คำนวณจากการแตกพิกเซลละเอียดขึ้น 10 เท่า · feature ที่ซ้อนกัน ตัวหลังทับตัวก่อน</div>
-        <button id="rzRun" class="primary">${IC.raster}แปลง</button></div>
+        <button id="rzRun" class="primary">${IC.raster}แปลง</button>
+        ${isHex(d) ? '<div class="tiny muted" style="margin-top:8px">ชุดหกเหลี่ยม → ราสเตอร์: เลือก "ค่าจากฟิลด์" แล้วเลือกคอลัมน์ค่า</div>' : ''}</div>
+        ${isHex(d) ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>หกเหลี่ยม</h2></div>
+          <table class="kv"><tr><td>ขนาด</td><td>${fmt(m.hex.d_km, 3)} กม. · ${fmt(m.hex.area_km2, 4)} ตร.กม./ช่อง</td></tr><tr><td>พิกัดฉาย</td><td>${esc(m.hex.crs_label || m.hex.crs)}</td></tr>
+          ${(m.hex.fields || []).map(f => `<tr><td>${esc(f.name)}</td><td>${Object.entries(f.columns || {}).map(([c, x]) => `<code>${esc(c)}</code> <span class="tiny muted">${esc(x)}</span>`).join('<br>')}<div class="tiny muted">${esc(f.rule || '')}</div></td></tr>`).join('')}</table>
+          ${d.role !== 'map' ? `<a class="btn" style="margin-top:10px" href="#/biv?hex=${d.id}">${IC.grid}ใช้ทำไบแวเรียตหกเหลี่ยม</a>` : ''}</div>` : (d.role !== 'map' && /Polygon|Line|Point/i.test(m.geometry_type || '') ? hexCard(d, all, aoiOpts) : '')}
         ${/Polygon/.test(m.geometry_type || '') ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav)"></span>ใช้เป็นพื้นที่ศึกษา</h2></div><p class="small muted" style="margin-top:0">เลือกจังหวัด / อำเภอ / ตำบล จากชั้นนี้</p><a class="btn" href="#/aoi?ds=${d.id}">${IC.target}เลือกพื้นที่จากชั้นนี้</a></div>` : ''}`}
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--muted);color:var(--muted)"></span>รายละเอียด</h2></div>${kv(info)}
       ${isR && st.valid != null && d.role !== 'map' ? '<h3>ฮิสโทแกรม (ค่าสุ่ม)</h3><canvas class="hist" id="hist"></canvas><div class="tiny muted" id="histNote"></div>' : ''}</div>
@@ -385,6 +420,7 @@ async function pageDataset(id) {
     $('#vgRes').value = (vgo.find(o => o.px < 2e6) || vgo.at(-1))?.value;
     $('#rsRun').onclick = () => runJob('resample', { dataset_id: id, target_res: $('#rsRes').value, tie: $('#rsTie')?.value || 'high', aoi_id: +$('#rsAoi').value || null, aoi_rule: $('#rsRule').value });
     $('#vgRun').onclick = () => runJob('vgrid', { dataset_ids: [id, ...$$('#vgMore input:checked').map(o => +o.value)], target_res: $('#vgRes').value, aoi_id: +$('#vgAoi').value || null });
+    if ($('#hxRun')) hexCardBind(d);
     if (st.valid != null && d.role !== 'map') drawHist(id);
     if (d.role === 'map') mapPalette(d);
   } else {
@@ -396,6 +432,7 @@ async function pageDataset(id) {
       } catch (e) { toast(e.message, true); }
     };
     if (rasters.length) { $('#rzRef').onchange = loadRz; loadRz(); } else $('#rzRun').disabled = true;
+    if ($('#hxRun')) hexCardBind(d);
     $('#rzRun').onclick = () => runJob('rasterize', { dataset_id: id, ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value, mode: $('#rzMode').value, field: $('#rzField').value || null, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
   }
   initMap(d);
@@ -575,12 +612,16 @@ function zonalLegend(d) {
   const lp = d.lineage.params, s = d.lineage.stats_summary || {};
   const nx = +lp.x.n, ny = +lp.y.n;
   const csv = (d.lineage.outputs || []).find(o => o.endsWith('_table.csv'));
-  return `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--rose);color:var(--rose)"></span>ไบแวเรียตรายพื้นที่</h2>
+  const ax = a => { const q = lp[a].stat_label || ({ density: 'ต่อ ตร.กม.', per_pixel: 'ต่อช่อง', value: '' }[lp[a].metric] ?? lp[a].metric) || lp[a].field || lp[a].stat || ''; return `${lp[a].label || a.toUpperCase()}${q ? ' (' + q + ')' : ''}`; };
+  const hx = lp.hex;
+  return `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--rose);color:var(--rose)"></span>${hx ? `ไบแวเรียตหกเหลี่ยม ${fmt(hx.d_km, 3)} กม.` : 'ไบแวเรียตรายพื้นที่'}</h2>
     ${csv ? `<button class="sm ghost" onclick='openFolder(${attr(csv)})'>${IC.folder}ตาราง CSV</button>` : ''}</div>
-    ${legendHtml(nx, ny, lp.colors, lp.highlight || [], `${lp.x.label || 'X'} (${lp.x.stat_label || lp.x.stat})`, `${lp.y.label || 'Y'} (${lp.y.stat_label || lp.y.stat})`, false)}
+    ${legendHtml(nx, ny, lp.colors, lp.highlight || [], ax('x'), ax('y'), false)}
     <table class="kv" style="margin-top:12px"><tr><td>เกณฑ์ X</td><td>${(lp.x.resolved_breaks || []).map(b => fmt(b, 3)).join(' / ') || '–'}</td></tr>
       <tr><td>เกณฑ์ Y</td><td>${(lp.y.resolved_breaks || []).map(b => fmt(b, 3)).join(' / ') || '–'}</td></tr>
-      <tr><td>พื้นที่</td><td>${fmt(s.zones, 0)} · มีรหัส ${fmt(s.zones_coded, 0)} · เขตเน้น <b style="color:var(--butter)">${fmt(s.zones_highlight, 0)}</b></td></tr></table>
+      ${hx ? `<tr><td>ช่อง</td><td>${fmt(s.hexes, 0)} ช่อง · เขตเน้น <b style="color:var(--butter)">${fmt(s.hexes_highlight, 0)}</b> (${fmt(s.hexes_highlight * hx.area_km2, 1)} ตร.กม.)</td></tr>
+        ${s.weight_total != null ? `<tr><td>${esc(s.weight_name || 'น้ำหนัก')}</td><td>รวม ${fmt(s.weight_total, 0)} · ในเขตเน้น <b style="color:var(--butter)">${fmt(s.weight_highlight, 0)}</b> (${fmt(s.weight_highlight / (s.weight_total || 1) * 100, 1)}%)</td></tr>` : ''}`
+      : `<tr><td>พื้นที่</td><td>${fmt(s.zones, 0)} · มีรหัส ${fmt(s.zones_coded, 0)} · เขตเน้น <b style="color:var(--butter)">${fmt(s.zones_highlight, 0)}</b></td></tr>`}</table>
     <div class="tiny muted" style="margin-top:6px">คลิกพื้นที่บนแผนที่เพื่อดูค่า x_value / y_value ของพื้นที่นั้น</div></div>`;
 }
 
@@ -592,7 +633,7 @@ async function runJob(kind, params, then) {
     const mode = o => !o ? '' : o.mode === 'same' ? 'เท่าเดิม' : o.mode === 'up' ? `แตกพิกเซล ×${o.factor}` : `รวมพิกเซล ${o.factor}×${o.factor}`;
     const body = `<table class="kv">
       <tr><td>ความละเอียด</td><td>${esc(e.grid.res_label)}</td></tr>
-      <tr><td>ขนาดผลลัพธ์</td><td>${fmt(e.grid.width, 0)} × ${fmt(e.grid.height, 0)} พิกเซล</td></tr>
+      ${e.hex ? `<tr><td>จำนวนช่อง</td><td>ประมาณ ${fmt(e.hex.n, 0)} ช่อง · ${esc(e.hex.crs)}</td></tr>` : `<tr><td>ขนาดผลลัพธ์</td><td>${fmt(e.grid.width, 0)} × ${fmt(e.grid.height, 0)} พิกเซล</td></tr>`}
       ${e.aoi ? `<tr><td>พื้นที่ศึกษา</td><td>${esc(e.aoi)}</td></tr>` : ''}
       ${e.mode ? `<tr><td>วิธี</td><td>${mode(e)}</td></tr>` : ''}${e.x ? `<tr><td>แกน X / Y</td><td>${mode(e.x)} / ${mode(e.y)}</td></tr>` : ''}
       ${e.cells_max ? `<tr><td>จำนวนช่องสูงสุด</td><td>${fmt(e.cells_max, 0)}</td></tr>` : ''}</table>`
@@ -836,16 +877,19 @@ async function mapPalette(d) {
 const BIV = {
   x: { dataset_id: null, n: 3, method: 'breaks', breaks: [300, 1500], metric: 'density', order: 'auto', label: '' },
   y: { dataset_id: null, n: 3, method: 'breaks', breaks: [1, 5], metric: 'value', order: 'auto', label: '' },
-  pal: null, colors: null, highlight: [8, 9], tie: 'high', count_down_valid: 'positive', target_res: null, name: '', hlMode: false,
+  pal: null, colors: null, highlight: [8, 9], tie: 'high', count_down_valid: 'positive', target_res: null, name: '', hlMode: false, out: 'raster', size_km: 1,
   aoi_id: null, aoi_rule: 'center', aoi_mask_res: '',
 };
 
 async function pageBiv() {
   const [all, aois] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), loadPals()]);
-  const list = all.filter(d => d.kind === 'raster');
+  const list = all.filter(d => d.kind === 'raster' || (isHex(d) && d.role !== 'map'));
+  const qh = +new URLSearchParams(location.hash.split('?')[1] || '').get('hex');
+  if (qh && list.some(d => d.id === qh)) { BIV.out = 'hex'; if (!isHex(list.find(d => d.id === BIV.x.dataset_id))) { BIV.x.dataset_id = qh; BIV.x.method = 'quantile'; } }
   if (!BIV.pal) BIV.pal = 'b:' + STATE.default_palette;
   const v = $('#view');
-  const opt = sel => list.map(d => `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>#${d.id} ${esc(d.name)} · ${esc(d.meta.res_label.split(' (')[0])} · ${esc(VT_SHORT[d.value_type] || '')}${d.value_type_confirmed ? '' : ' (ยังไม่ยืนยัน)'}</option>`).join('');
+  const opt = sel => list.map(d => isHex(d) ? `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>⬡ #${d.id} ${esc(d.name)} · หกเหลี่ยม ${fmt(d.meta.hex.d_km, 3)} กม.</option>`
+    : `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>#${d.id} ${esc(d.name)} · ${esc(d.meta.res_label.split(' (')[0])} · ${esc(VT_SHORT[d.value_type] || '')}${d.value_type_confirmed ? '' : ' (ยังไม่ยืนยัน)'}</option>`).join('');
   v.innerHTML = head('Bivariate', 'สร้างแผนที่ไบแวเรียต', 'ไขว้ข้อมูล 2 ชุด → ตาราง nX × nY สี · ผลเป็น GeoTIFF + QML + legend + สถิติ + lineage',
     `<button id="preset">${IC.refresh}ตั้งค่าแบบงานเดิม (น้ำท่วม × ประชากร)</button>`)
     + `<div class="steps">
@@ -854,6 +898,7 @@ async function pageBiv() {
         <div class="card-head"><h2>แกน ${ax.toUpperCase()} <span class="muted small">${ax === 'x' ? 'ซ้าย → ขวา' : 'ล่าง → บน'}</span></h2></div>
         <div class="grid-form">
           <label class="field full"><span>ชุดข้อมูล</span><select data-k="dataset_id"><option value="">— เลือก —</option>${opt(BIV[ax].dataset_id)}</select></label>
+          <label class="field full hexF hide"><span>คอลัมน์ค่าในชุดหกเหลี่ยม</span><select data-k="field"></select></label>
           <label class="field"><span>ชื่อแกน</span><input type="text" data-k="label" value="${esc(BIV[ax].label)}" placeholder="เช่น ประชากร"></label>
           <label class="field"><span>จำนวนคลาส</span><select data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == BIV[ax].n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
           <label class="field"><span>วิธีแบ่ง</span><select data-k="method"><option value="breaks">กำหนดเกณฑ์เอง</option><option value="quantile">ควอนไทล์</option><option value="equal">ช่วงเท่ากัน</option><option value="degurba">DEGURBA กลุ่มช่อง (1 กม.)</option></select></label>
@@ -874,16 +919,17 @@ async function pageBiv() {
           <div class="tiny muted" style="margin-top:4px">ปกติคลิกช่อง = แก้สี · เปิดโหมดเขตเน้นแล้วคลิกช่องที่ต้องการนับแยก</div></div>
       </div></div></div>
     <div class="step"><div class="card">
-      <div class="card-head"><h2>พื้นที่และผลลัพธ์</h2></div>
+      <div class="card-head"><h2>พื้นที่และผลลัพธ์</h2><div class="seg" id="outSeg"><button data-o="raster">${IC.raster}กริดสี่เหลี่ยม (raster)</button><button data-o="hex">${IC.hex}หกเหลี่ยม (hex)</button></div></div>
       <div class="cols2">
         <div class="grid-form" style="align-content:start">
+          <label class="field full hexOnly"><span>ขนาดหกเหลี่ยม (กม. ระหว่างศูนย์กลาง)</span><input type="number" id="hxSizeB" min="0.01" step="any" value="${BIV.size_km}"><span class="tiny muted" id="hxNoteB"></span></label>
           <label class="field full"><span>พื้นที่ศึกษา</span><select id="aoi"><option value="">ทั้งขอบเขตข้อมูล (ประเทศไทย)</option>${aois.map(a => `<option value="${a.id}">${esc(a.name)} · ${fmt(a.area_km2, 0)} ตร.กม.</option>`).join('')}</select></label>
-          <label class="field"><span>กติกาตัดพื้นที่</span><select id="aoiRule"><option value="center">ศูนย์กลางพิกเซล</option><option value="touch">แตะ</option></select></label>
-          <label class="field"><span>ตัดพื้นที่อิงพิกเซลขนาด</span><select id="aoiMask"></select></label>
-          <label class="field full"><span>ความละเอียดผลลัพธ์</span><select id="res"></select><span class="tiny muted" id="resNote"></span></label>
-          <label class="field"><span>เสมอกันใน majority</span><select id="tie"><option value="high">ชั้นที่สูงกว่า</option><option value="low">ชั้นที่ต่ำกว่า</option></select></label>
-          <label class="field"><span>ค่านับรวม = 0</span><select id="cdv"><option value="positive">ไม่ให้รหัส (แบบงานเดิม)</option><option value="any">ให้รหัสถ้ามีข้อมูล</option></select></label>
-          <label class="field"><span>น้ำหนักสถิติ</span><select id="wds"><option value="">อัตโนมัติ (แกนจำนวนนับ)</option>${list.filter(d => d.value_type === 'count').map(d => `<option value="${d.id}">#${d.id} ${esc(d.name)}</option>`).join('')}</select></label>
+          <label class="field rasOnly"><span>กติกาตัดพื้นที่</span><select id="aoiRule"><option value="center">ศูนย์กลางพิกเซล</option><option value="touch">แตะ</option></select></label>
+          <label class="field rasOnly"><span>ตัดพื้นที่อิงพิกเซลขนาด</span><select id="aoiMask"></select></label>
+          <label class="field full rasOnly"><span>ความละเอียดผลลัพธ์</span><select id="res"></select><span class="tiny muted" id="resNote"></span></label>
+          <label class="field rasOnly"><span>เสมอกันใน majority</span><select id="tie"><option value="high">ชั้นที่สูงกว่า</option><option value="low">ชั้นที่ต่ำกว่า</option></select></label>
+          <label class="field rasOnly"><span>ค่านับรวม = 0</span><select id="cdv"><option value="positive">ไม่ให้รหัส (แบบงานเดิม)</option><option value="any">ให้รหัสถ้ามีข้อมูล</option></select></label>
+          <label class="field rasOnly"><span>น้ำหนักสถิติ</span><select id="wds"><option value="">อัตโนมัติ (แกนจำนวนนับ)</option>${list.filter(d => d.value_type === 'count').map(d => `<option value="${d.id}">#${d.id} ${esc(d.name)}</option>`).join('')}</select></label>
           <label class="field"><span>ชื่อผลลัพธ์</span><input type="text" id="bname" value="${esc(BIV.name)}" placeholder="flood_pop_10m"></label>
           <div class="full tiny muted"><a href="#/aoi">+ สร้างพื้นที่ศึกษา (จังหวัด / อำเภอ / ตำบล / วาดเอง)</a></div>
         </div>
@@ -892,7 +938,7 @@ async function pageBiv() {
     <div class="step"><div class="card">
       <div class="card-head"><h2>ตรวจและสร้าง</h2></div>
       <div id="est" class="small muted">กด "ตรวจค่าที่ตั้ง" เพื่อดูขนาดผลลัพธ์ก่อนรัน</div>
-      <div class="row" style="margin-top:14px"><button id="check">${IC.check}ตรวจค่าที่ตั้ง</button><button id="run" class="primary">${IC.play}สร้างแผนที่</button><span class="spacer"></span><button id="sensT" class="ghost">${IC.layers}เทียบหลายค่าที่ตั้ง…</button></div>
+      <div class="row" style="margin-top:14px"><button id="check">${IC.check}ตรวจค่าที่ตั้ง</button><button id="run" class="primary">${IC.play}สร้างแผนที่</button><span class="spacer"></span><button id="sensT" class="ghost rasOnly">${IC.layers}เทียบหลายค่าที่ตั้ง…</button></div>
       <div id="sens" class="hide" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--line)">
         <h3 style="margin-top:0">เทียบหลายค่าที่ตั้ง <span class="tiny muted">ดูว่าตัวเลขเขตเน้นเปลี่ยนแค่ไหนเมื่อเปลี่ยนเกณฑ์/ความละเอียด (สถิติอย่างเดียว ไม่สร้างแผนที่)</span></h3>
         <div class="grid-form">
@@ -906,14 +952,24 @@ async function pageBiv() {
   const dsOf = id => list.find(d => d.id == id);
   const readAxis = ax => {
     const el = $('#ax_' + ax), c = BIV[ax];
-    $$('[data-k]', el).forEach(i => { const k = i.dataset.k; c[k] = ['n', 'dataset_id'].includes(k) ? (i.value === '' ? null : +i.value) : i.value; });
+    $$('[data-k]', el).forEach(i => { const k = i.dataset.k; if (k === 'field' && i.closest('.hide')) return; c[k] = ['n', 'dataset_id'].includes(k) ? (i.value === '' ? null : +i.value) : i.value; });
     c.breaks = $$('.brk input', el).map(i => parseFloat(i.value)).filter(x => !isNaN(x));
   };
   const axisColors = ax => BIV.colors ? (ax === 'x' ? Array.from({ length: BIV.x.n }, (_, i) => BIV.colors[i]) : Array.from({ length: BIV.y.n }, (_, i) => BIV.colors[i * BIV.x.n])) : [];
   const drawAxis = ax => {
     const el = $('#ax_' + ax), c = BIV[ax], d = dsOf(c.dataset_id);
+    const hx = isHex(d);
+    $('.hexF', el).classList.toggle('hide', !hx);
+    if (hx) {
+      const fs = hexFields(d);
+      if (!fs.some(f => f.c === c.field)) c.field = (fs.find(f => f.main && f.vt === 'count' && fs.some(g => g.c === f.c + '_km2')) ? fs.find(f => f.main).c + '_km2' : fs.find(f => f.main)?.c) || fs[0]?.c;
+      $('[data-k="field"]', el).innerHTML = fs.map(f => `<option value="${f.c}">${esc(f.name)} · ${esc(f.t)} (${esc(f.c)})</option>`).join('');
+      if (c.method === 'degurba') c.method = 'quantile';
+    }
     $$('[data-k]', el).forEach(i => { if (c[i.dataset.k] != null) i.value = c[i.dataset.k]; });
-    $('.metricL', el).classList.toggle('hide', !(d && d.value_type === 'count'));
+    $('.metricL', el).classList.toggle('hide', !(d && d.value_type === 'count') || hx);
+    $('[data-k="order"]', el).closest('.field').classList.toggle('hide', hx || BIV.out === 'hex');
+    $('[data-k="method"] option[value="degurba"]', el).disabled = BIV.out === 'hex';
     if (d && d.value_type !== 'count' && c.metric !== 'value') { c.metric = 'value'; }
     const need = c.method === 'breaks' ? c.n - 1 : 0;
     while (c.breaks.length < need) c.breaks.push((c.breaks.at(-1) || 0) + 1);
@@ -921,7 +977,8 @@ async function pageBiv() {
     $('.brk', el).innerHTML = need ? `<span>เกณฑ์ (ค่าเท่าเกณฑ์ขึ้นชั้นบน)</span><div class="row">${c.breaks.map(b => `<input type="number" step="any" value="${b}" style="width:110px">`).join('')}</div>`
       : `<span class="tiny muted">${c.method === 'degurba' ? 'กลุ่มเมือง ≥300 ติดกัน 8 ทิศ รวม ≥5,000 · ศูนย์กลางเมือง ≥1,500 ติดกัน 4 ทิศ รวม ≥50,000' : c.n === 1 ? 'แกนนี้ไม่แบ่ง (แผนที่ตัวแปรเดียว)' : 'เกณฑ์คำนวณจากค่าสุ่มตอนรัน'}</span>`;
     $$('.brk input', el).forEach(i => i.onchange = () => { readAxis(ax); preview(ax); });
-    $('.info', el).innerHTML = d ? `${esc(VT[d.value_type])} — ${esc(VT_RULE[d.value_type])}${d.value_type_confirmed ? '' : ' <b style="color:var(--coral)">· ยังไม่ยืนยันประเภทค่า</b>'}${d.meta.nodata != null ? ` · nodata ${d.meta.nodata}${d.nodata_as != null ? ' → นับเป็น ' + d.nodata_as : ''}` : ''}` : '';
+    $('.info', el).innerHTML = hx ? `ชุดหกเหลี่ยม ${fmt(d.meta.hex.d_km, 3)} กม. · ${esc(d.meta.hex.crs_label || '')} — อีกแกนเป็น raster ได้ (จะรวมค่าลงช่องเดียวกันให้)`
+      : d ? `${esc(VT[d.value_type])} — ${esc(VT_RULE[d.value_type])}${d.value_type_confirmed ? '' : ' <b style="color:var(--coral)">· ยังไม่ยืนยันประเภทค่า</b>'}${d.meta.nodata != null ? ` · nodata ${d.meta.nodata}${d.nodata_as != null ? ' → นับเป็น ' + d.nodata_as : ''}` : ''}` : '';
   };
   const pvTimer = {};
   const preview = ax => {
@@ -929,7 +986,7 @@ async function pageBiv() {
     pvTimer[ax] = setTimeout(async () => {
       const el = $('#ax_' + ax), c = BIV[ax];
       const cv = $('canvas', el), sh = $('.shares', el);
-      if (!c.dataset_id) { sh.innerHTML = ''; cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); return; }
+      if (!c.dataset_id || isHex(dsOf(c.dataset_id))) { sh.innerHTML = c.dataset_id ? '<span class="tiny muted">ชุดหกเหลี่ยม — เกณฑ์ควอนไทล์คำนวณจากค่าของช่องตอนรัน</span>' : ''; cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); return; }
       try {
         const r = await api(ENGINE + '/api/classes-preview', { json: { dataset_id: c.dataset_id, cfg: c } });
         const cols = axisColors(ax);
@@ -972,7 +1029,22 @@ async function pageBiv() {
     $('#aoiMask').innerHTML = `<option value="">เท่าผลลัพธ์</option>` + coarse.filter(o => o.value !== tr).map(o => `<option value="${o.value}">${esc(o.label.split(' (')[0])}${o.is_source.length ? ' (= ข้อมูล #' + o.is_source.join(', #') + ')' : ''}</option>`).join('');
     $('#aoiMask').value = coarse.some(o => o.value === BIV.aoi_mask_res) ? BIV.aoi_mask_res : '';
   };
+  const setOut = o => {
+    if ([BIV.x, BIV.y].some(c => isHex(dsOf(c.dataset_id)))) o = 'hex';       // แกนเป็นชุดหกเหลี่ยม → ผลต้องเป็นหกเหลี่ยม
+    BIV.out = o;
+    $$('#outSeg button').forEach(b => b.classList.toggle('on', b.dataset.o === o));
+    $$('.rasOnly').forEach(e => e.classList.toggle('hide', o === 'hex'));
+    $$('.hexOnly').forEach(e => e.classList.toggle('hide', o !== 'hex'));
+    const ref = [BIV.x, BIV.y].map(c => dsOf(c.dataset_id)).find(isHex);
+    $('#hxSizeB').disabled = !!ref;
+    if (ref) $('#hxSizeB').value = ref.meta.hex.d_km;
+    const s = +$('#hxSizeB').value;
+    $('#hxNoteB').textContent = ref ? `ใช้กริดของ "${ref.name}" (${fmt(ref.meta.hex.d_km, 3)} กม.)` : s > 0 ? `≈ ${fmt(Math.sqrt(3) / 2 * s * s, 3)} ตร.กม./ช่อง · ประชากร (นับ) รวมเป็นต่อ ตร.กม. ของช่อง` : '';
+    ['x', 'y'].forEach(drawAxis);
+  };
   const loadRes = async () => {
+    setOut(BIV.out);
+    if (BIV.out === 'hex') return;
     const ids = [BIV.x.dataset_id, BIV.y.dataset_id].filter(Boolean);
     const sel = $('#res');
     if (ids.length < 2) { sel.innerHTML = '<option value="">เลือกชุดข้อมูลทั้งสองแกนก่อน</option>'; $('#aoiMask').innerHTML = '<option value="">เท่าผลลัพธ์</option>'; return; }
@@ -997,6 +1069,7 @@ async function pageBiv() {
   const suggestBreaks = async ax => {
     const c = BIV[ax], d = dsOf(c.dataset_id);
     if (!d || c.n < 2) return;
+    if (isHex(d)) { if (c.method === 'breaks') c.method = 'quantile'; return; }
     if (d.value_type === 'count') { c.metric = 'density'; if (c.method === 'breaks' && c.n === 3) c.breaks = [300, 1500]; if (c.method === 'breaks' && c.n === 3) return; }
     else c.metric = 'value';
     if (c.method !== 'breaks') return;
@@ -1040,6 +1113,8 @@ async function pageBiv() {
   $('#tie').value = BIV.tie; $('#cdv').value = BIV.count_down_valid; $('#aoi').value = BIV.aoi_id || ''; $('#aoiRule').value = BIV.aoi_rule;
   $('#aoi').onchange = () => { BIV.aoi_id = +$('#aoi').value || null; showAoi(); };
   $('#res').onchange = () => { BIV.target_res = $('#res').value; fillMask(); };
+  $$('#outSeg button').forEach(b => b.onclick = () => { setOut(b.dataset.o); if (BIV.out === 'raster') loadRes(); });
+  $('#hxSizeB').oninput = () => { BIV.size_km = +$('#hxSizeB').value; setOut(BIV.out); };
   $('#preset').onclick = () => {
     Object.assign(BIV.x, { n: 3, method: 'breaks', breaks: [300, 1500], metric: 'density', order: 'auto', label: 'ประชากร (คน/ตร.กม.)' });
     Object.assign(BIV.y, { n: 3, method: 'breaks', breaks: [1, 5], metric: 'value', order: 'auto', label: 'จำนวนปีที่ท่วม' });
@@ -1053,7 +1128,10 @@ async function pageBiv() {
     readAxis('x'); readAxis('y');
     Object.assign(BIV, { target_res: $('#res').value, tie: $('#tie').value, count_down_valid: $('#cdv').value, name: $('#bname').value.trim(),
       aoi_id: +$('#aoi').value || null, aoi_rule: $('#aoiRule').value, aoi_mask_res: $('#aoiMask').value });
-    const ax = c => ({ dataset_id: c.dataset_id, n: c.n, method: c.method, breaks: c.breaks, metric: c.metric, order: c.order, label: c.label || dsOf(c.dataset_id)?.name });
+    const ax = c => ({ dataset_id: c.dataset_id, n: c.n, method: c.method, breaks: c.breaks, metric: c.metric, order: c.order, label: c.label || dsOf(c.dataset_id)?.name,
+      ...(isHex(dsOf(c.dataset_id)) ? { field: c.field } : {}) });
+    if (BIV.out === 'hex') return { x: ax(BIV.x), y: ax(BIV.y), size_km: +$('#hxSizeB').value, aoi_id: BIV.aoi_id, colors: BIV.colors, palette: BIV.pal,
+      highlight: BIV.highlight, name: BIV.name || null };
     return { x: ax(BIV.x), y: ax(BIV.y), target_res: BIV.target_res, tie: BIV.tie, count_down_valid: BIV.count_down_valid,
       colors: BIV.colors, palette: BIV.pal, highlight: BIV.highlight, name: BIV.name || null, weight_dataset_id: $('#wds').value ? +$('#wds').value : null,
       aoi_id: BIV.aoi_id, aoi_rule: BIV.aoi_rule, aoi_mask_res: BIV.aoi_mask_res || null };
@@ -1061,8 +1139,9 @@ async function pageBiv() {
   $('#check').onclick = async () => {
     const p = collect();
     if (!p.x.dataset_id || !p.y.dataset_id) { $('#est').innerHTML = '<div class="note err">เลือกชุดข้อมูลทั้งสองแกน</div>'; return; }
-    const e = await api(ENGINE + '/api/estimate', { json: { kind: 'bivariate', params: p } });
+    const e = await api(ENGINE + '/api/estimate', { json: { kind: BIV.out === 'hex' ? 'hexbiv' : 'bivariate', params: p } });
     if (!e.ok) { $('#est').innerHTML = `<div class="note err">${esc(e.error)}</div>`; return; }
+    if (e.hex) { $('#est').innerHTML = `<div class="note info">${esc(e.grid.res_label)} · ประมาณ ${fmt(e.hex.n, 0)} ช่อง · ${esc(e.hex.crs)}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>` + e.warnings.map(w => `<div class="note warn">${esc(w)}</div>`).join(''); return; }
     const mode = o => o.mode === 'same' ? 'เท่าเดิม' : o.mode === 'up' ? `แตกพิกเซล ×${o.factor}` : `รวมพิกเซล ${o.factor}×${o.factor}`;
     $('#est').innerHTML = `<div class="note info">ผลลัพธ์ ${esc(e.grid.res_label)} · ${fmt(e.grid.width, 0)} × ${fmt(e.grid.height, 0)} พิกเซล${e.aoi ? ' · ' + esc(e.aoi) : ''}<br>X: ${mode(e.x)} · Y: ${mode(e.y)}</div>`
       + e.warnings.map(w => `<div class="note warn">${esc(w)}</div>`).join('');
@@ -1070,7 +1149,7 @@ async function pageBiv() {
   $('#run').onclick = () => {
     const p = collect();
     if (!p.x.dataset_id || !p.y.dataset_id) return toast('เลือกชุดข้อมูลทั้งสองแกน', true);
-    runJob('bivariate', p, () => location.hash = '#/jobs');
+    runJob(BIV.out === 'hex' ? 'hexbiv' : 'bivariate', p, () => location.hash = '#/jobs');
   };
   drawPal(false);
   loadRes();
@@ -1268,7 +1347,8 @@ async function pageAoi(qs) {
 
 // ================= งาน =================
 const KIND = { prepare: ['เตรียมข้อมูล', 'db', 'var(--muted)'], resample: ['ปรับความละเอียด', 'layers', 'var(--peach)'], bivariate: ['ไบแวเรียต', 'map', 'var(--rose)'],
-  rasterize: ['แปลงเป็นราสเตอร์', 'raster', 'var(--sky)'], vgrid: ['กริดเวกเตอร์', 'grid', 'var(--mint)'] };
+  rasterize: ['แปลงเป็นราสเตอร์', 'raster', 'var(--sky)'], vgrid: ['กริดเวกเตอร์', 'grid', 'var(--mint)'],
+  hex: ['แปลงเป็นหกเหลี่ยม', 'hex', 'var(--lav)'], hexbiv: ['ไบแวเรียตหกเหลี่ยม', 'hex', 'var(--rose)'] };
 const fmtDur = s => s == null ? '–' : s < 60 ? `${Math.max(1, Math.round(s))} วินาที` : s < 3600 ? `${Math.floor(s / 60)} นาที ${Math.round(s % 60)} วินาที` : `${Math.floor(s / 3600)} ชม. ${Math.round(s % 3600 / 60)} นาที`;
 const JOB_ST = { queued: 'รอคิว', running: 'กำลังทำ', cancelling: 'กำลังยกเลิก', done: 'เสร็จ', failed: 'ล้มเหลว', cancelled: 'ยกเลิกแล้ว' };
 const JOB_CLS = { done: 'ok', failed: 'err', cancelled: 'warn', running: 'raster', queued: '' };
