@@ -309,6 +309,14 @@ def del_ds(did):
     return jsonify(ok=True, note=f'ย้าย "{d["name"]}" ไปถังขยะแล้ว — กู้คืนได้จากถังขยะ', trash=trash.count())
 
 
+# ---------------- Data hub: ตรวจลิงก์ ----------------
+@app.route('/api/hub/check', methods=['POST'])
+def hub_check():
+    from . import linkcheck
+    urls = request.get_json(force=True).get('urls') or []
+    return jsonify(results=linkcheck.check_many(urls), max=linkcheck.MAX_URLS)
+
+
 # ---------------- ถังขยะ ----------------
 @app.route('/api/trash')
 def trash_list():

@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.8';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.9';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,6 +45,7 @@ const IC = {
   layers: P('<path d="m12 3.5 8.5 4.5-8.5 4.5-8.5-4.5z"/><path d="m3.5 12 8.5 4.5 8.5-4.5M3.5 16l8.5 4.5 8.5-4.5"/>'),
   gear: P('<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>'),
   pdf: P('<path d="M14 3.5H7a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8.5z"/><path d="M14 3.5v5h5M9 13h6M9 16.5h4"/>'),
+  globe: P('<circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17M12 3.5c2.5 2.6 3.7 5.4 3.7 8.5s-1.2 5.9-3.7 8.5c-2.5-2.6-3.7-5.4-3.7-8.5s1.2-5.9 3.7-8.5z"/>'),
   download: P('<path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 18v1.5A1.5 1.5 0 0 0 5.5 21h13a1.5 1.5 0 0 0 1.5-1.5V18"/>'),
 };
 const ic = k => `<span class="ic">${IC[k] || ''}</span>`;
@@ -92,7 +93,7 @@ async function route() {
   maps.forEach(m => m.remove()); maps = [];
   clearInterval(window._poll);
   const h = location.hash || '#/';
-  const r = ['viewer', 'report', 'biv', 'change', 'aoi', 'jobs', 'system', 'trash'].find(k => h.startsWith('#/' + k)) || 'home';
+  const r = ['viewer', 'report', 'biv', 'change', 'aoi', 'hub', 'jobs', 'system', 'trash'].find(k => h.startsWith('#/' + k)) || 'home';
   $$('#nav a, .side-trash').forEach(a => a.classList.toggle('on', a.dataset.r === r));
   const v = $('#view');
   v.innerHTML = '<p class="muted">กำลังโหลด…</p>';
@@ -103,6 +104,7 @@ async function route() {
     else if (r === 'aoi') await pageAoi(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'jobs') await pageJobs();
     else if (r === 'trash') await pageTrash();
+    else if (r === 'hub') await pageHub(h.startsWith('#/hub/') ? decodeURIComponent(h.slice(6)) : null);
     else if (r === 'viewer') await pageViewer();
     else if (r === 'report') await pageReport(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'change') await pageChange();

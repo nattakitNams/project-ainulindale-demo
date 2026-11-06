@@ -441,3 +441,42 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 #rpPage > .rpt-el.rp-over { outline: calc(var(--bw, 1px) * 1.5) dashed #ff5a6e; }
 #rpPage > .rpt-el.rp-over::before { content: '⚠ ล้น'; position: absolute; right: 0; bottom: 100%; font: 600 calc(var(--hs, 9px) * 1.05) Anuphan, sans-serif; color: #fff; background: #ff5a6e; padding: 0 .5em; border-radius: 3px 3px 0 0; z-index: 3; pointer-events: none; }
 .rp-legrow { flex-wrap: nowrap; gap: 6px; margin-bottom: 5px; } .rp-legrow input[type=text] { flex: 1; min-width: 0; padding: 4px 7px; font-size: 12px; }
+
+/* ---------- Data hub ---------- */
+.hub-filter { display: flex; flex-direction: column; gap: 12px; }
+.hub-filter input[type=search] { width: 100%; font-size: 15px; padding: 11px 14px; }
+.hub-themes { display: flex; flex-wrap: wrap; gap: 6px; }
+.hub-themes .chip { cursor: pointer; border: 1px solid var(--line); background: rgba(255, 255, 255, .03); color: var(--text-2); }
+.hub-themes .chip.on { background: rgba(195, 182, 255, .2); border-color: rgba(195, 182, 255, .4); color: var(--text); }
+.hub-themes .chip em { font-style: normal; opacity: .6; margin-left: 4px; font-size: 11px; }
+.hub-sel { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: end; }
+.hub-sel label { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--muted); }
+.hub-sel label.row { flex-direction: row; align-items: center; gap: 6px; }
+.hub-sel select { min-width: 150px; }
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.hub-card { display: flex; flex-direction: column; gap: 5px; padding: 14px 16px; border-radius: var(--r); background: rgba(255, 255, 255, .03); border: 1px solid var(--line); color: var(--text); transition: border-color .2s, background .2s; }
+.hub-card:hover { border-color: rgba(195, 182, 255, .35); background: rgba(195, 182, 255, .05); }
+.hub-top { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.hub-top b { font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.hub-meta { color: var(--text-2); }
+.hub-th { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; margin-top: 3px; }
+.hub-th span { font-size: 11px; padding: 1px 8px; border-radius: 20px; background: rgba(255, 255, 255, .05); color: var(--text-2); }
+.hub-lc { font-size: 11px; padding: 1px 8px; border-radius: 20px; color: var(--c) !important; border: 1px solid var(--c); background: transparent !important; }
+.hub-src { color: var(--lav); }
+.hub-src.s-gee { color: var(--mint); } .hub-src.s-pc { color: var(--sky); } .hub-src.s-other { color: var(--peach); }
+.hub-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-left: auto; }
+.hub-dot.ok, .hub-badge.ok { background: var(--mint); } .hub-dot.warn, .hub-badge.warn { background: var(--butter); } .hub-dot.bad, .hub-badge.bad { background: var(--coral); }
+.hub-badge { display: inline-block; font-size: 11px; font-weight: 600; color: #1c1e2c; border-radius: 20px; padding: 1px 8px; white-space: nowrap; }
+.hub-detail .card { margin-bottom: 14px; }
+.hub-desc p { margin: 0 0 10px; line-height: 1.65; } .hub-desc ul { margin: 0 0 10px 18px; padding: 0; } .hub-desc li { margin: 2px 0; }
+.hub-desc h4 { margin: 12px 0 6px; } .hub-desc a { overflow-wrap: anywhere; }
+.hub-attr { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 6px; }
+.hub-map { height: 220px; border-radius: 12px; margin-top: 10px; }
+.hub-links { display: flex; flex-direction: column; gap: 10px; }
+.hub-link { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.hub-link:last-child { border-bottom: 0; padding-bottom: 0; }
+.hub-link > div:first-child { min-width: 0; }
+.hub-url { overflow-wrap: anywhere; opacity: .7; }
+.hub-st { text-align: right; flex-shrink: 0; max-width: 45%; }
+.hub-credit { margin-top: 18px; line-height: 1.7; }
+.chip.warn { color: var(--butter); border: 1px solid rgba(246, 227, 161, .4); font-size: 11px; padding: 0 7px; border-radius: 20px; white-space: nowrap; }
