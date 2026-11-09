@@ -1,0 +1,114 @@
+
+
+
+
+
+
+
+
+The assistant can read the library, estimate jobs and search the Data hub on its own · anything that changes data (value type, jobs, study areas) runs only after you click confirm · delete/trash/tokens are never available to it
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The provider returned no text (content filter, or too many tool calls in one turn)
+
+
+
+Make a bivariate map of population 2024 × years flooded for the whole country at 1 km
+
+
+
+
+
+
+
+
+
+
+This proposal has expired or was already used — ask the assistant to propose again
+
+
+This model does not support tool calling — answers only
+
+
+Proposed below — review, then confirm to run
+
+
+the assistant checks your data and proposes jobs for you to confirm
+to set the opacity of that color only (file not changed)
+
+This color is hidden — adjusting shows it again
+
+
+
+
+
+Propose jobs — confirm every time
+Value types apply to rasters only
+
+
+
+Job kind must be one of
+
+
+Hide the whole color = left click
+will be checked again when run
+→ output dataset #
+
+Create study area "
+Created study area #
+Check failed when proposed
+
+Opacity of this color
+
+Permission changed
+
+Set value type #
+
+some requests failed
+Read only
+processing
+Set value type
+
+Open result
+Settings
+Checked
+Job not found #
+Sending…
+Recent jobs
+finished
+Failed
+
+right-click
+
+Run job
+Permission
+
+
+Job #
+Decline
+
+

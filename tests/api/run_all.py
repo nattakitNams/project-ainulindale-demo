@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-ORDER = ['test_smoke.py', 'test_hex.py', 'test_trash.py', 'test_folders.py', 'test_rasterize.py', 'test_extent.py', 'test_ai.py']
+ORDER = ['test_smoke.py', 'test_hex.py', 'test_trash.py', 'test_folders.py', 'test_rasterize.py', 'test_extent.py', 'test_ai.py', 'test_ai_tools.py']
 
 res = {}
 for f in ORDER:

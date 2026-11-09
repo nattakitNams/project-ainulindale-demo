@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """สไตล์การแสดงผล raster แบบ QGIS (เก็บใน datasets.style เป็น JSON)
 
-type = 'paletted'     ค่าเฉพาะ → สี (Paletted/Unique values)        entries: [{value, color, label, visible}]
+type = 'paletted'     ค่าเฉพาะ → สี (Paletted/Unique values)        entries: [{value, color, label, visible, opacity?}]
      = 'pseudocolor'  ค่าต่อเนื่อง + color ramp (Singleband pseudocolor) stops: [{value, color, label, visible}]
                       interp: discrete (ค่า ≤ ขอบบน) / linear (ไล่สีระหว่างจุด) / exact (เท่ากันพอดี)
                       mode: continuous / equal / quantile · classes · min · max
@@ -49,6 +49,16 @@ DENS_BINS = [10, 50, 100, 300, 600, 1500, 3000]
 def _rgb(h):
     h = h.lstrip('#')
     return np.array([int(h[i:i + 2], 16) for i in (0, 2, 4)], float)
+
+
+def ent_alpha(e):
+    """ความทึบของรายการสี 0–255: ซ่อน = 0 · opacity (0–1, ค่าเริ่ม 1) = ปรับเฉพาะสีนั้น"""
+    if not e.get('visible', True):
+        return 0
+    try:
+        return int(round(255 * min(1.0, max(0.0, float(e.get('opacity', 1))))))
+    except (TypeError, ValueError):
+        return 255
 
 
 def _hex(c):
@@ -319,7 +329,7 @@ def render(ds, style, a, valid, res, row_lat):
         vals = np.array([float(e['value']) for e in ents])
         order = np.argsort(vals)
         vals = vals[order]
-        lut = np.array([(*_rgb(ents[i]['color']).astype(int), 255 if ents[i].get('visible', True) else 0) for i in order], 'uint8')
+        lut = np.array([(*_rgb(ents[i]['color']).astype(int), ent_alpha(ents[i])) for i in order], 'uint8')
         idx = np.clip(np.searchsorted(vals, a), 0, len(vals) - 1)
         hit = ok & (vals[idx] == a)
         rgba[hit] = lut[idx[hit]]
@@ -375,7 +385,7 @@ def qml(ds, style):
         conv = float(gm.row_area_km2(res, m.get('center_lat') or 0)) if m.get('geographic') else res * res / 1e6
         note = ' (แปลงจากความหนาแน่น ที่ละติจูดกลาง)'
     if t == 'paletted':
-        ents = ''.join(f'<paletteEntry value="{e["value"]}" color="{e["color"]}" alpha="{255 if e.get("visible", True) and float(e["value"]) not in hide else 0}" '
+        ents = ''.join(f'<paletteEntry value="{e["value"]}" color="{e["color"]}" alpha="{ent_alpha(e) if float(e["value"]) not in hide else 0}" '
                        f'label={quoteattr(str(e.get("label", e["value"])))}/>' for e in style.get('entries', []))
         return head + (f'  <rasterrenderer type="paletted" band="{band}" opacity="{style.get("opacity", 1)}" alphaBand="-1" nodataColor="">\n'
                        f'   <colorPalette>{ents}</colorPalette>\n  </rasterrenderer>\n') + tail

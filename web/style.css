@@ -508,6 +508,12 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .crumb.on { color: var(--text); font-weight: 600; }
 .crumbs .sep { color: var(--muted); }
 .crumb.over, .folder.over { border-color: var(--lav); background: rgba(195, 182, 255, .14); }
+/* เมนูคลิกขวา: ความทึบเฉพาะสี */
+.op-menu { position: fixed; z-index: 2000; width: 230px; padding: 12px 14px; background: var(--elev); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow); }
+.op-menu input[type=range] { flex: 1; }
+.op-menu .op-v { min-width: 38px; text-align: right; }
+.legend .cell { position: relative; }
+.op-badge { position: absolute; right: 3px; bottom: 2px; font-size: 9.5px; font-style: normal; color: #fff; text-shadow: 0 0 3px rgba(0,0,0,.8); }
 /* ไอคอนเส้นในข้อความ (แทนอีโมจิ) */
 .chip svg, .sym th svg, .rp-lockic svg, td > svg:first-child, .ai-note svg, .ai-link svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; flex: none; }
 .ai-link svg { margin: 0 0 0 3px; }
@@ -532,6 +538,16 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .ai-msg.typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); animation: aiDot 1s infinite; }
 .ai-msg.typing i:nth-child(2) { animation-delay: .15s; } .ai-msg.typing i:nth-child(3) { animation-delay: .3s; }
 @keyframes aiDot { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.ai-msg.event { align-self: center; max-width: 95%; background: rgba(158, 232, 212, .1); color: var(--mint); font-size: 12.5px; border-radius: 10px; }
+.ai-msg.event a { color: var(--mint); text-decoration: underline; }
+.ai-used { align-self: flex-start; margin: -4px 0 0 4px; }
+.ai-prop { align-self: stretch; padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(195, 182, 255, .35); background: rgba(195, 182, 255, .07); }
+.ai-prop.done { border-color: rgba(158, 232, 212, .35); background: rgba(158, 232, 212, .06); }
+.ai-prop.rejected { opacity: .55; }
+.ai-prop.failed { border-color: rgba(255, 154, 168, .4); }
+.ai-prop pre { max-height: 160px; overflow: auto; background: var(--field); padding: 6px 8px; border-radius: 8px; font-family: var(--mono); font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
+.ai-prop details summary { cursor: pointer; color: var(--muted); margin-top: 4px; }
+.warn-t { color: var(--peach); } .ok-t { color: var(--mint); } .ok-t svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
 .ai-input { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); }
 .ai-input textarea { flex: 1; resize: none; min-height: 44px; max-height: 140px; }
 .ai-input button { align-self: flex-end; }

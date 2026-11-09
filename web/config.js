@@ -107,7 +107,7 @@ var ENGINE, ENGINE_TOKEN;
         const { state, info } = await probe();
         if (state === 'setup') {                               // ติดตั้งยังไม่เสร็จ → ตัวช่วยติดตั้ง (แอปหลักไม่เริ่ม)
           if (el) { el.remove(); el = null; }
-          await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'setup.js?v=1.0.19'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+          await new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'setup.js?v=1.0.20'; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
           return window.AinuSetup.run(info);
         }
         if (SAME && state !== 'down') return info;

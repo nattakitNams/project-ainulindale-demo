@@ -86,22 +86,79 @@ const AIDock = (() => {
       if (!t || busy) return;
       hist.push({ role: 'user', content: t }); $('#aiTxt').value = ''; busy = true; drawMsgs();
       try {
-        const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist, page: location.hash || '#/' } });
-        hist.push({ role: 'assistant', content: r.reply });
+        const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/' } });
+        hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note,
+          proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
       } catch (e) { hist.push({ role: 'error', content: e.message }); }
-      busy = false; ls.set(HKEY, hist.slice(-60)); drawMsgs();
+      busy = false; save(); drawMsgs();
     };
     $('#aiSend').onclick = send;
     $('#aiTxt').onkeydown = e => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } };
     $('#aiTxt').focus();
   }
 
+  const save = () => ls.set(HKEY, hist.slice(-60));
+
+  // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
+  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน' };
+  function propCard(p, mi, pi) {
+    const e = p.estimate || {};
+    const est = p.action === 'run_job'
+      ? (e.ok ? `<div class="tiny">${esc(e.resolution || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซล` : ''}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>`
+        + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
+        : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`) : '';
+    const detail = p.action === 'run_job' ? `<details class="tiny"><summary>ค่าที่ตั้ง</summary><pre translate="no">${esc(JSON.stringify(p.args.params, null, 1))}</pre></details>` : '';
+    const stx = { pending: '', running: '<span class="tiny muted">กำลังส่ง…</span>', done: `<span class="tiny ok-t">${IC.check}${esc(p.result || 'เรียบร้อย')}</span>`,
+      rejected: '<span class="tiny muted">ไม่ทำ</span>', failed: `<span class="tiny warn-t">${esc(p.result || 'ไม่สำเร็จ')}</span>` }[p.state];
+    return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>${est}${detail}
+      <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}ยืนยัน</button><button class="sm ghost" data-no>ไม่ทำ</button>` : stx}</div></div>`;
+  }
+
+  async function decide(mi, pi, ok) {
+    const p = hist[mi].proposals[pi];
+    if (p.state !== 'pending') return;
+    if (!ok) { p.state = 'rejected'; api(ENGINE + '/api/ai/reject', { json: { id: p.id } }).catch(() => { }); save(); drawMsgs(); return; }
+    p.state = 'running'; drawMsgs();
+    try {
+      const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id } });
+      p.state = 'done'; p.result = r.message;
+      hist.push({ role: 'event', content: r.message + (r.job_id ? ' — กำลังประมวลผล' : '') });
+      if (r.job_id) watchJob(r.job_id);
+      if (typeof jobBadge === 'function') jobBadge();
+    } catch (e) { p.state = 'failed'; p.result = e.message; hist.push({ role: 'event', content: `ไม่สำเร็จ: ${p.title} — ${e.message}` }); }
+    save(); drawMsgs();
+  }
+
+  // ติดตามงานที่รันจากข้อเสนอ → แจ้งผลในแชต (ผลนี้ส่งให้ AI ในรอบถัดไปด้วย)
+  function watchJob(id) {
+    const tick = async () => {
+      let j;
+      try { j = (await api(ENGINE + '/api/jobs')).find(x => x.id === id); } catch { return setTimeout(tick, 5000); }
+      if (!j) return;
+      if (['queued', 'running', 'cancelling'].includes(j.status)) return setTimeout(tick, 3000);
+      const did = j.result?.dataset_id;
+      hist.push({ role: 'event', content: j.status === 'done' ? `งาน #${id} เสร็จแล้ว${did ? ` → ผลลัพธ์ชุดข้อมูล #${did}` : ''}` : `งาน #${id} ${j.status === 'failed' ? 'ล้มเหลว: ' + (j.error || '') : j.status}`, link: did ? `#/ds/${did}` : null });
+      save(); drawMsgs();
+    };
+    setTimeout(tick, 2000);
+  }
+
   function drawMsgs() {
     const m = dock().querySelector('.ai-msgs');
     if (!m) return;
-    m.innerHTML = (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เช่น "ข้อมูลน้ำท่วมกับประชากรควรตั้งประเภทค่าอะไร" · "หาข้อมูลความหนาแน่นประชากรใน Data hub ให้หน่อย"</div>`)
-      + hist.map(x => `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`).join('')
+    m.innerHTML = (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">${st.mode === 'propose' ? 'เช่น "สร้างไบแวเรียตประชากร 2024 × จำนวนปีน้ำท่วม ทั้งประเทศ ความละเอียด 1 กม." — ผู้ช่วยจะตรวจข้อมูลแล้วเสนองานให้กดยืนยัน' : 'เช่น "ข้อมูลน้ำท่วมกับประชากรควรตั้งประเภทค่าอะไร" · "หาข้อมูลความหนาแน่นประชากรใน Data hub ให้หน่อย"'}</div>`)
+      + hist.map((x, mi) => x.role === 'event'
+        ? `<div class="ai-msg event">${esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
+        : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
+          + (x.used?.length ? `<div class="ai-used tiny muted">ตรวจข้อมูล: ${[...new Set(x.used.map(u => u.tool))].join(', ')}${x.used.some(u => u.error) ? ' · บางคำขอผิดพลาด' : ''}</div>` : '')
+          + (x.note ? `<div class="ai-used tiny muted">${esc(x.note)}</div>` : '')
+          + (x.proposals || []).map((p, pi) => propCard(p, mi, pi)).join('')).join('')
       + (busy ? '<div class="ai-msg assistant typing"><i></i><i></i><i></i></div>' : '');
+    m.querySelectorAll('.ai-prop').forEach(c => {
+      const mi = +c.dataset.m, pi = +c.dataset.p;
+      c.querySelector('[data-ok]')?.addEventListener('click', () => decide(mi, pi, true));
+      c.querySelector('[data-no]')?.addEventListener('click', () => decide(mi, pi, false));
+    });
     m.scrollTop = m.scrollHeight;
   }
 
@@ -112,7 +169,9 @@ const AIDock = (() => {
         <label class="switch"><input type="checkbox" id="aiOn" ${st.enabled ? 'checked' : ''}><i></i><span class="small">${st.enabled ? 'เปิดใช้งาน' : 'ปิดใช้งาน'}</span></label></div>
       <p class="small muted" style="margin-top:0">เปิดแล้วจะมีช่องแชตมุมขวาล่างทุกหน้า (ซ่อนได้) · ล็อกอินด้วย API key ในช่องแชต</p>
       ${st.connected ? `<table class="kv"><tr><td>ผู้ให้บริการ</td><td>${esc(st.provider_label)}${st.base_url ? ` <span class="mono tiny">${esc(st.base_url)}</span>` : ''}</td></tr>
-        <tr><td>รุ่น</td><td><div class="row"><select id="aiModel" translate="no"><option>${esc(st.model)}</option></select><button class="sm ghost" id="aiLoadM">โหลดรายการรุ่น</button></div></td></tr></table>
+        <tr><td>รุ่น</td><td><div class="row"><select id="aiModel" translate="no"><option>${esc(st.model)}</option></select><button class="sm ghost" id="aiLoadM">โหลดรายการรุ่น</button></div></td></tr>
+        <tr><td>สิทธิ์</td><td><select id="aiMode"><option value="propose" ${st.mode === 'propose' ? 'selected' : ''}>เสนองาน — ต้องกดยืนยันทุกครั้ง</option><option value="read" ${st.mode === 'read' ? 'selected' : ''}>อ่านอย่างเดียว</option></select>
+          <div class="tiny muted" style="margin-top:4px">ผู้ช่วยอ่านคลัง/ประเมินงาน/ค้น Data hub ได้เอง · งานที่เปลี่ยนข้อมูล (ตั้งประเภทค่า, รันงาน, สร้างพื้นที่ศึกษา) รันเมื่อคุณกดยืนยันเท่านั้น · ลบ/ถังขยะ/โทเคนไม่มีให้ผู้ช่วยใช้</div></td></tr></table>
         <button class="sm danger" id="aiOut" style="margin-top:10px">ออกจากระบบ (ลบ key)</button>`
       : `<div class="small muted">${st.enabled ? 'ยังไม่ได้เชื่อมต่อ — ใส่ key ในช่องแชตมุมขวาล่าง' : 'ยังไม่ได้เชื่อมต่อ'}</div>`}`;
     $('#aiOn').onchange = async () => {
@@ -127,6 +186,7 @@ const AIDock = (() => {
         $('#aiModel').innerHTML = r.models.map(x => `<option ${x === r.model ? 'selected' : ''}>${esc(x)}</option>`).join('');
       } catch (e) { toast(e.message, true); }
     };
+    $('#aiMode').onchange = async () => { st = await api(ENGINE + '/api/ai', { method: 'PATCH', json: { mode: $('#aiMode').value } }); toast('เปลี่ยนสิทธิ์แล้ว'); render(); };
     $('#aiModel').onchange = async () => { st = await api(ENGINE + '/api/ai', { method: 'PATCH', json: { model: $('#aiModel').value } }); toast('เปลี่ยนรุ่นแล้ว'); render(); };
     $('#aiOut').onclick = async () => {
       if (!await ui.confirm('ออกจากระบบ?', '<p>ลบ API key ที่เข้ารหัสเก็บไว้ในเครื่องนี้ (ต้องใส่ใหม่ถ้าจะใช้อีก)</p>', 'ลบ key')) return;

@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.19';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.20';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -694,6 +694,11 @@ async function symPanel(d, o = {}) {
     $('#sAdd') && ($('#sAdd').onclick = () => { const it = items(); const last = it.at(-1); it.push({ value: last ? (last.value === 'inf' ? 0 : +last.value + 1) : 0, color: '#c3b6ff', label: '', visible: true }); draw(); preview(); });
     $('#sClear') && ($('#sClear').onclick = () => { items().length = 0; draw(); preview(); });
     $$('[data-vis]', el).forEach(c => c.onchange = () => { items()[+c.dataset.vis].visible = c.checked; c.closest('tr').classList.toggle('off', !c.checked); preview(); });
+    if (sty.type === 'paletted') $$('[data-vis]', el).forEach(c => c.closest('tr').oncontextmenu = ev => {     // คลิกขวาแถว = ความทึบเฉพาะค่านั้น
+      if (ev.target.matches('input[type=text], input[type=number]')) return;
+      const e = items()[+c.dataset.vis];
+      opacityMenu(ev, e, `${e.value} · ${e.label || ''}`, () => { c.checked = true; c.closest('tr').classList.remove('off'); c.closest('tr').style.opacity = (e.opacity ?? 1) < 1 ? Math.max(.4, e.opacity) : ''; preview(); });
+    });
     $$('[data-val]', el).forEach(c => c.onchange = () => { items()[+c.dataset.val].value = vnum(c.value); preview(); });
     $$('[data-col]', el).forEach(c => c.oninput = () => { items()[+c.dataset.col].color = c.value; c.parentElement.style.background = c.value; preview(); });
     $$('[data-lbl]', el).forEach(c => c.onchange = () => { items()[+c.dataset.lbl].label = c.value; o.viewer ? preview() : setMapLegend(sty); });
@@ -961,7 +966,30 @@ function importPalette() {
   });
 }
 
-// แผนที่ไบแวเรียต: คลิกช่อง = แสดง/ซ่อนชั้นบนแผนที่ · ปุ่ม "แก้ไขพาเลท" = เลือกพาเลท / แก้สีทีละช่อง
+// เมนูคลิกขวา: ปรับความทึบเฉพาะสีเดียว (ent.opacity 0–1) · onChange(ทุกครั้งที่ลาก) · ปิดเมื่อคลิกที่อื่น/Esc
+function opacityMenu(ev, ent, title, onChange) {
+  ev.preventDefault();
+  $$('.op-menu').forEach(m => m.remove());
+  const m = document.createElement('div');
+  m.className = 'op-menu';
+  const pct = () => Math.round((ent.opacity ?? 1) * 100);
+  m.innerHTML = `<div class="small" style="margin-bottom:6px"><b translate="no">${esc(title)}</b></div>
+    <div class="tiny muted">ความทึบเฉพาะสีนี้</div>
+    <div class="row" style="gap:8px;margin-top:4px"><input type="range" min="0" max="100" step="5" value="${pct()}"><b class="small op-v">${pct()}%</b></div>
+    <div class="row" style="gap:6px;margin-top:8px">${[25, 50, 75, 100].map(v => `<button class="sm ghost" data-v="${v}">${v}%</button>`).join('')}</div>
+    <div class="tiny muted" style="margin-top:6px">${ent.visible === false ? 'สีนี้ถูกซ่อนอยู่ — ปรับแล้วจะแสดงกลับ' : 'ซ่อนทั้งสี = คลิกซ้าย'}</div>`;
+  document.body.appendChild(m);
+  const r = m.getBoundingClientRect();
+  m.style.left = Math.min(ev.clientX, innerWidth - r.width - 8) + 'px';
+  m.style.top = Math.min(ev.clientY, innerHeight - r.height - 8) + 'px';
+  const set = v => { ent.opacity = v / 100; ent.visible = true; m.querySelector('input').value = v; m.querySelector('.op-v').textContent = v + '%'; onChange(); };
+  m.querySelector('input').oninput = e => set(+e.target.value);
+  m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => set(+b.dataset.v));
+  const close = e => { if (e.type === 'keydown' ? e.key === 'Escape' : !m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', close, true); document.removeEventListener('keydown', close, true); } };
+  setTimeout(() => { document.addEventListener('mousedown', close, true); document.addEventListener('keydown', close, true); });
+}
+
+// แผนที่ไบแวเรียต: คลิกช่อง = แสดง/ซ่อนชั้นบนแผนที่ · คลิกขวา = ปรับความทึบเฉพาะสีนั้น · ปุ่ม "แก้ไขพาเลท" = เลือกพาเลท / แก้สีทีละช่อง
 async function mapPalette(d) {
   const lp = d.lineage?.params; if (!lp) return;
   await loadPals();
@@ -982,13 +1010,14 @@ async function mapPalette(d) {
     let grid = `<div class="row" style="align-items:stretch;gap:10px;flex-wrap:nowrap"><div class="axis-y">${esc(lp.y.label || 'แกน Y')} →</div><div><div class="legend ${editing ? 'editing' : ''}" style="grid-template-columns:repeat(${nx},52px)">`;
     for (let y = ny - 1; y >= 0; y--) for (let x = 0; x < nx; x++) {
       const i = y * nx + x, code = i + 1, ent = sty.entries.find(e => +e.value === code);
-      grid += `<div class="cell ${(lp.highlight || []).includes(code) ? 'hl' : ''} ${vis(code) ? '' : 'hidden'}" data-code="${code}" style="background:${cols[i]}" title="${esc(ent?.label || code)}">
-        <span>${code}</span>${editing ? `<input type="color" data-i="${i}" value="${cols[i]}">` : ''}</div>`;
+      const op = ent?.opacity ?? 1;
+      grid += `<div class="cell ${(lp.highlight || []).includes(code) ? 'hl' : ''} ${vis(code) ? '' : 'hidden'}" data-code="${code}" style="background:${cols[i]};${op < 1 && vis(code) ? `opacity:${Math.max(.25, op)}` : ''}" title="${esc(ent?.label || code)}">
+        <span>${code}</span>${op < 1 && vis(code) ? `<em class="op-badge">${Math.round(op * 100)}%</em>` : ''}${editing ? `<input type="color" data-i="${i}" value="${cols[i]}">` : ''}</div>`;
     }
     grid += `</div><div class="small" style="margin-top:6px;color:var(--text-2)">${esc(lp.x.label || 'แกน X')} →</div></div></div>`;
     el.innerHTML = `<div class="card-head"><h2><span class="dot" style="background:var(--rose);color:var(--rose)"></span>สีแผนที่</h2>
         <div class="row"><button class="sm ${editing ? 'primary' : ''}" id="pEdit">${IC.palette}${editing ? 'เสร็จ' : 'แก้ไขพาเลท'}</button><a class="btn sm ghost" href="${ENGINE}/api/datasets/${d.id}/style.qml">${IC.download}.qml</a></div></div>
-      <div class="small muted" style="margin-bottom:10px">${editing ? 'คลิกช่องเพื่อแก้สี หรือเลือกพาเลทด้านล่าง — แผนที่เปลี่ยนทันที' : 'คลิกช่องเพื่อ <b>แสดง/ซ่อน</b> ชั้นนั้นบนแผนที่ (ไม่แก้ไฟล์)'}</div>
+      <div class="small muted" style="margin-bottom:10px">${editing ? 'คลิกช่องเพื่อแก้สี หรือเลือกพาเลทด้านล่าง — แผนที่เปลี่ยนทันที' : 'คลิกช่องเพื่อ <b>แสดง/ซ่อน</b> · <b>คลิกขวา</b>เพื่อปรับความทึบเฉพาะสีนั้น (ไม่แก้ไฟล์)'}</div>
       ${grid}
       <div class="row" style="margin-top:10px"><button class="sm ghost" id="pAll">แสดงทั้งหมด</button><button class="sm ghost" id="pHl">แสดงเฉพาะเขตเน้น</button><span class="tiny muted" id="pVisN"></span></div>
       ${editing ? `<h3>พาเลท</h3><div class="pals" id="mpPals"></div>
@@ -1003,8 +1032,15 @@ async function mapPalette(d) {
       if (ent) ent.visible = !vis(code);
       draw(); await preview(); saveVis();
     });
+    let opT;
+    $$('.cell', el).forEach(c => c.oncontextmenu = ev => {
+      if (editing) return;
+      const code = +c.dataset.code, ent = sty.entries.find(e => +e.value === code);
+      if (!ent) return;
+      opacityMenu(ev, ent, `${code} · ${ent.label || ''}`, () => { clearTimeout(opT); opT = setTimeout(() => { draw(); preview(); saveVis(); }, 120); });
+    });
     const setVis = f => { sty.entries.forEach(e => e.visible = f(+e.value)); draw(); preview(); saveVis(); };
-    $('#pAll').onclick = () => setVis(() => true);
+    $('#pAll').onclick = () => { sty.entries.forEach(e => delete e.opacity); setVis(() => true); };
     $('#pHl').onclick = () => setVis(c => (lp.highlight || []).includes(c));
     $$('.cell input', el).forEach(inp => inp.oninput = () => { cols[+inp.dataset.i] = inp.value; inp.parentElement.style.background = inp.value; key = null; if (!dirty) { dirty = true; draw(); } preview(); });
     if (editing) {

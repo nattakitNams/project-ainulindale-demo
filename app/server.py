@@ -197,6 +197,14 @@ def ai_err(e):
     return jsonify(error=str(e)), 400
 
 
+def _ai_client():                                       # เครื่องมือของผู้ช่วย AI เรียก API ชุดเดียวกับหน้าเว็บ (ผ่านด่าน/validate เดิม)
+    return app.test_client()
+
+
+from . import ai_tools as _ai_tools  # noqa: E402
+_ai_tools.CLIENT = _ai_client
+
+
 # ---------- ผู้ช่วย AI (key อยู่ใน vault — ไม่ส่งกลับหน้าเว็บ) ----------
 @app.route('/api/ai')
 def ai_status():
@@ -208,6 +216,8 @@ def ai_update():
     b = request.get_json(force=True)
     if 'enabled' in b:
         ai.save(enabled=bool(b['enabled']))
+    if b.get('mode') in ('read', 'propose'):              # read = อ่านอย่างเดียว · propose = เสนองาน (ต้องยืนยันทุกครั้ง)
+        ai.save(mode=b['mode'])
     if b.get('model'):
         if not ai.status()['connected']:
             raise ai.AiError('ยังไม่ได้เชื่อมต่อ')
@@ -237,6 +247,23 @@ def ai_models():
 def ai_chat():
     b = request.get_json(force=True)
     return jsonify(ai.chat(b.get('messages'), b.get('page')))
+
+
+@app.route('/api/ai/confirm', methods=['POST'])         # ผู้ใช้กดยืนยันการ์ดข้อเสนอ → รัน (ข้อเสนอใช้ได้ครั้งเดียว)
+def ai_confirm():
+    from . import ai_tools
+    b = request.get_json(force=True)
+    try:
+        return jsonify(ai_tools.execute(str(b.get('id')), ai.cfg().get('model')))
+    except ai_tools.ToolError as e:
+        raise ApiError(str(e))
+
+
+@app.route('/api/ai/reject', methods=['POST'])
+def ai_reject():
+    from . import ai_tools
+    ai_tools.reject(str(request.get_json(force=True).get('id')))
+    return jsonify(ok=True)
 
 
 @app.route('/api/folders')
