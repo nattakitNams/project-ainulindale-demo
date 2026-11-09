@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.14';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.15';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -164,10 +164,22 @@ const head = (eyebrow, title, sub = '', actions = '') => `<div class="page-head"
 
 // ================= คลังข้อมูล =================
 async function pageHome() {
-  const list = await api(ENGINE + '/api/datasets');
+  const [all, fr] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/folders')]);
+  const FOL = fr.folders;
+  let cur = +new URLSearchParams(location.hash.split('?')[1] || '').get('f') || null;
+  if (cur && !FOL.some(f => f.id === cur)) cur = null;               // โฟลเดอร์ถูกลบไปแล้ว → ราก
+  window._libFolder = cur;
+  const inF = d => (d.folder_id || null) === cur;
+  const list = all.filter(inF);                                    // ชุดข้อมูลในโฟลเดอร์ที่เปิดอยู่ (หมวดย่อยแบบเดิม)
   const by = r => list.filter(d => d.role === r && d.kind !== 'link');
+  const byAll = r => all.filter(d => d.role === r && d.kind !== 'link');
   const lks = list.filter(d => d.kind === 'link' && !d.meta?.builtin);
   const base = list.filter(d => d.kind === 'link' && d.meta?.builtin);
+  const kids = FOL.filter(f => (f.parent_id || null) === cur);
+  const pathTo = id => { const out = []; let f = FOL.find(x => x.id === id); while (f) { out.unshift(f); f = FOL.find(x => x.id === f.parent_id); } return out; };
+  const sub = id => { const s = new Set([id]); let grew = true; while (grew) { grew = false; FOL.forEach(f => { if (s.has(f.parent_id) && !s.has(f.id)) { s.add(f.id); grew = true; } }); } return s; };
+  const countIn = id => { const s = sub(id); return all.filter(d => s.has(d.folder_id)).length; };
+  const crumbs = [{ id: null, name: 'คลังข้อมูล' }, ...pathTo(cur)];
   let bd = null; try { bd = await api(ENGINE + '/api/basedata'); } catch { }
   const bdMissing = (bd?.items || []).filter(i => !i.present);
   const jobs = await api(ENGINE + '/api/jobs');
@@ -175,10 +187,18 @@ async function pageHome() {
   const v = $('#view');
   v.innerHTML = head('Library', 'คลังข้อมูล', 'เพิ่มชุดข้อมูลแล้วแอปจำไว้ — ข้อมูลนำเข้า ผลแปลง และแผนที่ แยกเก็บคนละหมวด')
     + `<div class="stats">
-      <div class="stat" style="--c:var(--sky)"><b>${by('input').length}</b><span>ข้อมูลนำเข้า</span></div>
-      <div class="stat" style="--c:var(--peach)"><b>${by('derived').length}</b><span>ข้อมูลที่แปลงแล้ว</span></div>
-      <div class="stat" style="--c:var(--rose)"><b>${by('map').length}</b><span>แผนที่ไบแวเรียต</span></div>
+      <div class="stat" style="--c:var(--sky)"><b>${byAll('input').length}</b><span>ข้อมูลนำเข้า</span></div>
+      <div class="stat" style="--c:var(--peach)"><b>${byAll('derived').length}</b><span>ข้อมูลที่แปลงแล้ว</span></div>
+      <div class="stat" style="--c:var(--rose)"><b>${byAll('map').length}</b><span>แผนที่ไบแวเรียต</span></div>
       <div class="stat" style="--c:var(--mint)"><b>${running}</b><span>งานที่กำลังทำ/รอคิว</span></div></div>
+    <div class="lib-bar">
+      <nav class="crumbs">${crumbs.map((c, i) => `${i ? '<span class="sep">›</span>' : ''}<a href="#/${c.id ? '?f=' + c.id : ''}" class="crumb ${i === crumbs.length - 1 ? 'on' : ''}" data-drop="${c.id ?? ''}" ${c.id ? 'translate="no"' : ''}>${i ? IC.folder : IC.db}${esc(c.name)}</a>`).join('')}</nav>
+      <span class="spacer"></span><span class="tiny muted">ลากการ์ดไปวางบนโฟลเดอร์เพื่อย้าย</span>
+      <button class="sm" id="fNew">${IC.plus}โฟลเดอร์ใหม่</button></div>
+    ${kids.length ? `<div class="folder-grid">${kids.map(f => `<a class="folder" href="#/?f=${f.id}" data-drop="${f.id}" data-fid="${f.id}" draggable="true">
+      <span class="ico">${IC.folder}</span><span class="fn" translate="no">${esc(f.name)}</span><span class="tiny muted">${countIn(f.id)} ชุด</span>
+      <span class="fa"><button class="ghost sm" data-fren="${f.id}" title="แก้ชื่อโฟลเดอร์">${IC.edit}</button><button class="ghost sm" data-fmv="${f.id}" title="ย้ายโฟลเดอร์">${IC.folder}</button><button class="ghost sm danger" data-fdel="${f.id}" title="ลบโฟลเดอร์ (ของข้างในย้ายขึ้นไปโฟลเดอร์แม่)">${IC.trash}</button></span></a>`).join('')}</div>` : ''}
+    ${!list.length && !kids.length && cur ? '<div class="empty">โฟลเดอร์ว่าง — เพิ่มชุดข้อมูลด้านบน (จะเข้าโฟลเดอร์นี้) หรือลากการ์ดจากที่อื่นมาวางบนชื่อโฟลเดอร์ในแถบด้านบน</div>' : ''}
     <div class="card">
       <div class="card-head"><h2><span class="dot"></span>เพิ่มชุดข้อมูล</h2>
         <label class="switch"><input type="checkbox" id="copy"><i></i><span class="small">ก๊อปไฟล์เข้า database ของแอป</span></label></div>
@@ -199,14 +219,65 @@ async function pageHome() {
         <button id="lkGo" class="primary">${IC.link}ตรวจลิงก์</button></div>
       <div id="lkRes"></div>
     </div>
-    ${['input', 'derived', 'map'].map(r => `<div class="section-title"><span class="dot" style="background:${ROLE_C[r]};color:${ROLE_C[r]}"></span><h2>${{ input: 'ข้อมูลนำเข้า', derived: 'ข้อมูลที่แปลงแล้ว', map: 'แผนที่ไบแวเรียต' }[r]}</h2><span class="count">${by(r).length}</span></div>
-      <div class="ds-grid">${by(r).map(cardHtml).join('') || `<div class="empty">${r === 'input' ? 'ยังไม่มี — เพิ่มชุดข้อมูลด้านบน' : r === 'derived' ? 'ผลจากการปรับความละเอียด / แปลงเป็นราสเตอร์ / ทำกริด จะอยู่ที่นี่' : 'สร้างจากเมนู "สร้างไบแวเรียต"'}</div>`}</div>`).join('')}
-    <div class="section-title"><span class="dot" style="background:var(--butter);color:var(--butter)"></span><h2>ข้อมูลพื้นฐาน</h2><span class="count">${base.length}</span>
+    ${['input', 'derived', 'map'].filter(r => !cur || by(r).length).map(r => `<div class="section-title"><span class="dot" style="background:${ROLE_C[r]};color:${ROLE_C[r]}"></span><h2>${{ input: 'ข้อมูลนำเข้า', derived: 'ข้อมูลที่แปลงแล้ว', map: 'แผนที่ไบแวเรียต' }[r]}</h2><span class="count">${by(r).length}</span></div>
+      <div class="ds-grid">${by(r).map(cardHtml).join('') || `<div class="empty">${cur ? 'ไม่มีในโฟลเดอร์นี้' : r === 'input' ? 'ยังไม่มี — เพิ่มชุดข้อมูลด้านบน' : r === 'derived' ? 'ผลจากการปรับความละเอียด / แปลงเป็นราสเตอร์ / ทำกริด จะอยู่ที่นี่' : 'สร้างจากเมนู "สร้างไบแวเรียต"'}</div>`}</div>`).join('')}
+    ${cur && !base.length ? '' : `<div class="section-title"><span class="dot" style="background:var(--butter);color:var(--butter)"></span><h2>ข้อมูลพื้นฐาน</h2><span class="count">${base.length}</span>
       <span class="tiny muted">ขอบเขตการปกครองจาก GISTDA · ใช้เป็นเส้นขอบเขต พื้นที่ศึกษา และไบแวเรียตรายพื้นที่ได้ทันที</span>
-      ${bdMissing.length ? `<button class="sm ghost" id="bdRestore" style="margin-left:auto">${IC.plus}เพิ่มกลับ ${bdMissing.length} ชุด (${bdMissing.map(i => esc(i.name)).join(', ')})</button>` : ''}</div>
-    <div class="ds-grid">${base.map(cardHtml).join('') || `<div class="empty">${bd?.status?.state === 'running' ? 'กำลังเชื่อมต่อบริการ GISTDA…' : 'ยังไม่มี — ต้องต่ออินเทอร์เน็ตครั้งแรก แล้วกด "เพิ่มกลับ"'}</div>`}</div>
-    <div class="section-title"><span class="dot" style="background:var(--lav);color:var(--lav)"></span><h2>ลิงก์แผนที่</h2><span class="count">${lks.length}</span></div>
-    <div class="ds-grid">${lks.map(cardHtml).join('') || '<div class="empty">ยังไม่มี — วางลิงก์บริการแผนที่ด้านบน</div>'}</div>`;
+      ${bdMissing.length && !cur ? `<button class="sm ghost" id="bdRestore" style="margin-left:auto">${IC.plus}เพิ่มกลับ ${bdMissing.length} ชุด (${bdMissing.map(i => esc(i.name)).join(', ')})</button>` : ''}</div>
+    <div class="ds-grid">${base.map(cardHtml).join('') || `<div class="empty">${cur ? 'ไม่มีในโฟลเดอร์นี้' : bd?.status?.state === 'running' ? 'กำลังเชื่อมต่อบริการ GISTDA…' : 'ยังไม่มี — ต้องต่ออินเทอร์เน็ตครั้งแรก แล้วกด "เพิ่มกลับ"'}</div>`}</div>`}
+    ${cur && !lks.length ? '' : `<div class="section-title"><span class="dot" style="background:var(--lav);color:var(--lav)"></span><h2>ลิงก์แผนที่</h2><span class="count">${lks.length}</span></div>
+    <div class="ds-grid">${lks.map(cardHtml).join('') || `<div class="empty">${cur ? 'ไม่มีในโฟลเดอร์นี้' : 'ยังไม่มี — วางลิงก์บริการแผนที่ด้านบน'}</div>`}</div>`}`;
+  // ---- โฟลเดอร์: สร้าง / แก้ชื่อ / ลบ / ย้าย / ลากวาง ----
+  const reload = () => pageHome();
+  const folderPick = async (title, exclude = new Set()) => {
+    const opts = [{ id: '', name: 'คลังข้อมูล (ราก)' }, ...FOL.filter(f => !exclude.has(f.id)).map(f => ({ id: f.id, name: pathTo(f.id).map(x => x.name).join(' › ') }))]
+      .sort((a, b) => (a.id === '' ? -1 : b.id === '' ? 1 : a.name.localeCompare(b.name, 'th')));
+    return ui.open(title, `<select id="fPick" style="width:100%">${opts.map(o => `<option value="${o.id}" ${o.id === (cur ?? '') ? 'selected' : ''} translate="no">${esc(o.name)}</option>`).join('')}</select>`,
+      [{ label: 'ยกเลิก', cls: 'ghost', value: () => undefined }, { label: 'ย้าย', cls: 'primary', value: () => $('#fPick').value }]);
+  };
+  const moveTo = async (body, to) => {
+    try { await api(ENGINE + '/api/folders/move', { json: { ...body, to: to === '' || to == null ? null : +to } }); reload(); } catch (e) { toast(e.message, true); }
+  };
+  $('#fNew').onclick = async () => {
+    const n = await ui.prompt('โฟลเดอร์ใหม่', '', cur ? `ใน "${pathTo(cur).map(x => x.name).join(' › ')}"` : 'ที่ราก ของคลังข้อมูล'); if (!n) return;
+    try { await api(ENGINE + '/api/folders', { json: { name: n, parent_id: cur } }); reload(); } catch (e) { toast(e.message, true); }
+  };
+  $$('[data-fren]').forEach(b => b.onclick = async e => {
+    e.preventDefault(); e.stopPropagation();
+    const f = FOL.find(x => x.id == b.dataset.fren);
+    const n = await ui.prompt('แก้ชื่อโฟลเดอร์', f.name); if (!n) return;
+    try { await api(`${ENGINE}/api/folders/${f.id}`, { method: 'PATCH', json: { name: n } }); reload(); } catch (er) { toast(er.message, true); }
+  });
+  $$('[data-fdel]').forEach(b => b.onclick = async e => {
+    e.preventDefault(); e.stopPropagation();
+    const f = FOL.find(x => x.id == b.dataset.fdel), n = countIn(f.id);
+    if (!await ui.confirm('ลบโฟลเดอร์?', `<p>"${esc(f.name)}"${n ? ` — ชุดข้อมูล ${n} ชุดและโฟลเดอร์ย่อยข้างในจะย้ายขึ้นไปที่ "${esc(crumbs.at(-1).name)}"` : ''}</p><p class="small muted">ไม่มีข้อมูลหาย (โฟลเดอร์เป็นแค่การจัดหมวดในแอป ไม่ได้ย้ายไฟล์จริง)</p>`, 'ลบโฟลเดอร์')) return;
+    try { await api(`${ENGINE}/api/folders/${f.id}`, { method: 'DELETE' }); reload(); } catch (er) { toast(er.message, true); }
+  });
+  $$('[data-fmv]').forEach(b => b.onclick = async e => {
+    e.preventDefault(); e.stopPropagation();
+    const to = await folderPick('ย้ายโฟลเดอร์ไปที่…', sub(+b.dataset.fmv));
+    if (to !== undefined && to !== null) moveTo({ folder_ids: [+b.dataset.fmv] }, to);
+  });
+  $$('[data-mv]').forEach(b => b.onclick = async e => {
+    e.stopPropagation();
+    const to = await folderPick('ย้ายชุดข้อมูลไปที่…');
+    if (to !== undefined && to !== null) moveTo({ dataset_ids: [+b.dataset.mv] }, to);
+  });
+  // ลากการ์ดชุดข้อมูล / โฟลเดอร์ ไปวางบนโฟลเดอร์หรือแถบเส้นทาง
+  $$('.ds').forEach(el => { el.draggable = true; el.ondragstart = e => { e.dataTransfer.setData('text/ainu', JSON.stringify({ d: +el.dataset.id })); e.dataTransfer.effectAllowed = 'move'; }; });
+  $$('.folder').forEach(el => el.ondragstart = e => { e.dataTransfer.setData('text/ainu', JSON.stringify({ f: +el.dataset.fid })); e.dataTransfer.effectAllowed = 'move'; });
+  $$('[data-drop]').forEach(el => {
+    el.ondragover = e => { if ([...e.dataTransfer.types].includes('text/ainu')) { e.preventDefault(); el.classList.add('over'); } };
+    el.ondragleave = () => el.classList.remove('over');
+    el.ondrop = e => {
+      e.preventDefault(); el.classList.remove('over');
+      let x; try { x = JSON.parse(e.dataTransfer.getData('text/ainu')); } catch { return; }
+      const to = el.dataset.drop === '' ? null : +el.dataset.drop;
+      if (x.f && (x.f === to || (to && sub(x.f).has(to)))) return toast('ย้ายโฟลเดอร์เข้าไปในตัวเองไม่ได้', true);
+      moveTo(x.d ? { dataset_ids: [x.d] } : { folder_ids: [x.f] }, to);
+    };
+  });
   linkAdder();
   $('#bdRestore') && ($('#bdRestore').onclick = async () => {
     $('#bdRestore').disabled = true; $('#bdRestore').textContent = 'กำลังเชื่อมต่อบริการ GISTDA…';
@@ -234,20 +305,21 @@ async function pageHome() {
     $('#browse').disabled = true;
     try {
       const r = await api(ENGINE + '/api/browse', { json: {} });
-      if (r.paths.length) showRes(await api(ENGINE + '/api/datasets', { json: { paths: r.paths, copy: $('#copy').checked } }));
+      if (r.paths.length) showRes(await api(ENGINE + '/api/datasets', { json: { paths: r.paths, copy: $('#copy').checked, folder_id: cur } }));
     } catch (e) { toast(e.message, true); } finally { $('#browse').disabled = false; }
   };
   $('#addPaths').onclick = async () => {
     const ps = $('#paths').value.split(/\r?\n/).map(s => s.trim().replace(/^"|"$/g, '')).filter(Boolean);
-    if (ps.length) try { showRes(await api(ENGINE + '/api/datasets', { json: { paths: ps, copy: $('#copy').checked } })); } catch (e) { toast(e.message, true); }
+    if (ps.length) try { showRes(await api(ENGINE + '/api/datasets', { json: { paths: ps, copy: $('#copy').checked, folder_id: cur } })); } catch (e) { toast(e.message, true); }
   };
   const dz = $('#drop');
-  dz.ondragover = e => { e.preventDefault(); dz.classList.add('over'); };
+  dz.ondragover = e => { if ([...e.dataTransfer.types].includes('text/ainu')) return; e.preventDefault(); dz.classList.add('over'); };
   dz.ondragleave = () => dz.classList.remove('over');
   dz.ondrop = async e => {
     e.preventDefault(); dz.classList.remove('over');
     const fd = new FormData();
     for (const f of e.dataTransfer.files) fd.append('files', f, f.name);
+    if (cur) fd.append('folder_id', cur);
     dz.querySelector('b').textContent = 'กำลังอัปโหลด…';
     try { showRes(await api(ENGINE + '/api/upload', { method: 'POST', body: fd })); } catch (er) { toast(er.message, true); }
   };
@@ -258,8 +330,8 @@ function cardHtml(d) {
   const c = d.role === 'map' ? 'var(--rose)' : d.role === 'derived' ? 'var(--peach)' : d.kind === 'vector' ? 'var(--mint)' : 'var(--sky)';
   if (d.kind === 'link') {
     return `<div class="ds" data-id="${d.id}" style="--c:var(--lav)">
-      <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
-      <div class="t"><div class="ico">${IC.link}</div><div style="min-width:0;padding-right:54px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
+      <div class="acts"><button class="ghost sm" data-mv="${d.id}" title="ย้ายไปโฟลเดอร์…">${IC.folder}</button><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
+      <div class="t"><div class="ico">${IC.link}</div><div style="min-width:0;padding-right:84px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
       ${m.description ? `<div class="tiny muted" style="margin:-2px 0 8px">${esc(m.description)}</div>` : ''}
       <div class="chips">${m.builtin ? '<span class="chip" style="color:var(--butter);border-color:#f6e3a155">ข้อมูลพื้นฐาน</span>' : ''}<span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? '<span class="chip">🔒 โทเคน</span>' : ''}</div>
       <div class="foot"><span class="status-dot"></span>ลิงก์<span class="spacer"></span>#${d.id}</div></div>`;
@@ -268,8 +340,8 @@ function cardHtml(d) {
   const vt = d.kind === 'raster' ? (d.value_type_confirmed ? `<span class="chip">${esc(VT_SHORT[d.value_type] || d.value_type)}</span>` : `<span class="chip warn">${esc(VT_SHORT[d.value_type] || '?')} · ยังไม่ยืนยัน</span>`) : '';
   const res = d.kind === 'raster' ? esc((m.res_label || '').split(' (')[0]) : `${fmt(m.features, 0)} feature`;
   return `<div class="ds" data-id="${d.id}" style="--c:${c}">
-    <div class="acts"><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
-    <div class="t"><div class="ico">${IC[icon]}</div><div style="min-width:0;padding-right:54px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
+    <div class="acts"><button class="ghost sm" data-mv="${d.id}" title="ย้ายไปโฟลเดอร์…">${IC.folder}</button><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
+    <div class="t"><div class="ico">${IC[icon]}</div><div style="min-width:0;padding-right:84px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
     <div class="chips"><span class="chip ${d.kind}">${d.kind}</span>${vt}<span class="chip">${res}</span>${d.copied ? '<span class="chip">ก๊อปแล้ว</span>' : ''}</div>
     <div class="foot"><span class="status-dot ${d.status}"></span>${d.status === 'ok' ? 'พร้อมใช้' : d.status === 'missing' ? 'ไม่พบไฟล์' : 'ไฟล์เปลี่ยน'}<span class="spacer"></span>${bytes(m.file_bytes)} · #${d.id}</div></div>`;
 }
@@ -1512,7 +1584,7 @@ function linkAdder() {
         <div class="row" style="margin-top:10px"><button id="lkAdd" class="primary">${IC.plus}เพิ่มเข้าคลัง</button></div>`;
       $('#lkAdd').onclick = async () => {
         if ($('#lkLayer')) info.layer = isNaN(+$('#lkLayer').value) ? $('#lkLayer').value : +$('#lkLayer').value;
-        const r = await api(ENGINE + '/api/links', { json: { info, name: $('#lkName').value, secret_id: $('#lkSec').value || null } });
+        const r = await api(ENGINE + '/api/links', { json: { info, name: $('#lkName').value, secret_id: $('#lkSec').value || null, folder_id: window._libFolder || null } });
         location.hash = '#/ds/' + r.id;
       };
     } catch (e) { $('#lkRes').innerHTML = `<div class="note err" style="margin-top:12px">${esc(e.message)}</div>`; }

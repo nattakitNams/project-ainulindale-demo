@@ -52,6 +52,10 @@ CREATE TABLE IF NOT EXISTS aoi (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT, source TEXT, path TEXT, bbox TEXT, area_km2 REAL, created_at TEXT
 );
+CREATE TABLE IF NOT EXISTS folders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL, parent_id INTEGER, created_at TEXT      -- โฟลเดอร์ในคลังข้อมูล (parent_id NULL = ราก)
+);
 CREATE TABLE IF NOT EXISTS palettes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT, nx INTEGER, ny INTEGER, colors TEXT, created_at TEXT
@@ -62,7 +66,7 @@ JSON_COLS = {'meta', 'stats', 'params', 'result', 'colors', 'source', 'bbox', 's
 
 # คอลัมน์ที่เพิ่มทีหลัง (ไฟล์ catalog.db เก่าไม่มี) → ALTER TABLE ตอนเปิดแอป
 MIGRATE = {
-    'datasets': [('style', 'TEXT'), ('exclude_values', 'TEXT'), ('trashed_at', 'TEXT')],     # trashed_at: อยู่ในถังขยะ
+    'datasets': [('style', 'TEXT'), ('exclude_values', 'TEXT'), ('trashed_at', 'TEXT'), ('folder_id', 'INTEGER')],     # trashed_at: อยู่ในถังขยะ
     'aoi': [('trashed_at', 'TEXT')],
     'jobs': [('eta_s', 'REAL'), ('elapsed_s', 'REAL')],
 }

@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import aoi as aoimod
-from . import basedata, catalog, db, dsinfo, engine, export, jobs, links, ops, ops3, palettes, symbology, tiles, trash, vault
+from . import basedata, catalog, db, dsinfo, engine, export, folders, jobs, links, ops, ops3, palettes, symbology, tiles, trash, vault
 from . import gridmath as gm
 from .config import APP_NAME, APP_VERSION, DIRS, PORT, ROOT, STATIC, WORKSPACE, ensure_workspace
 
@@ -180,9 +180,45 @@ def add_ds():
             warns += [f'{Path(p).name}: {x}' for x in w]
         except catalog.CatalogError as e:
             errors.append(f'{p}: {e}')
+    folders.assign(added, b.get('folder_id'))
     for i in added:
         prepare_if_needed(i)
     return jsonify(added=added, warnings=warns, errors=errors)
+
+
+# ---------------- โฟลเดอร์ในคลังข้อมูล ----------------
+@app.errorhandler(folders.FolderError)
+def folder_err(e):
+    return jsonify(error=str(e)), 400
+
+
+@app.route('/api/folders')
+def folder_list():
+    return jsonify(folders=folders.all_())
+
+
+@app.route('/api/folders', methods=['POST'])
+def folder_create():
+    b = request.get_json(force=True)
+    fid = folders.create(b.get('name'), b.get('parent_id'))
+    return jsonify(id=fid, folder=db.get('folders', fid))
+
+
+@app.route('/api/folders/<int:fid>', methods=['PATCH'])
+def folder_patch(fid):
+    b = request.get_json(force=True)
+    return jsonify(folder=folders.update(fid, name=b.get('name'), parent_id=b['parent_id'] if 'parent_id' in b else ...))
+
+
+@app.route('/api/folders/<int:fid>', methods=['DELETE'])
+def folder_delete(fid):
+    return jsonify(ok=True, **folders.delete(fid))
+
+
+@app.route('/api/folders/move', methods=['POST'])
+def folder_move():
+    b = request.get_json(force=True)
+    return jsonify(ok=True, moved=folders.move(b.get('dataset_ids'), b.get('folder_ids'), b.get('to')))
 
 
 @app.route('/api/upload', methods=['POST'])
@@ -213,6 +249,7 @@ def upload():
             warns += w
         except catalog.CatalogError as e:
             errors.append(f'{p.name}: {e}')
+    folders.assign(added, request.form.get('folder_id'))
     for i in added:
         prepare_if_needed(i)
     return jsonify(added=added, warnings=warns, errors=errors, folder=str(dest))
@@ -543,6 +580,7 @@ def link_add():
         meta['warnings'].append(info['note'])
     did = db.insert('datasets', name=name, path=info['url'], source_path=info['url'], read_path=info['url'], copied=0, kind='link',
                     format=info['type'], meta=meta, role='input', added_at=db.now(), status='ok', fingerprint=None)
+    folders.assign([did], b.get('folder_id'))
     return jsonify(id=did)
 
 

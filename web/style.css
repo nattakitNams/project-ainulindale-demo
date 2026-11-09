@@ -498,3 +498,24 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 .lang-sw button.on { background: rgba(195, 182, 255, .22); color: var(--text); }
 .lang-float { display: none; position: fixed; top: 14px; right: 16px; z-index: 10001; background: #23263a; }
 body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inline-flex; }
+
+/* ---------- โฟลเดอร์ในคลังข้อมูล ---------- */
+.lib-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 6px; }
+.crumbs { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-size: 15px; }
+.crumb { display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 10px; color: var(--text-2); border: 1px dashed transparent; }
+.crumb svg { width: 16px; height: 16px; }
+.crumb:hover { background: rgba(255, 255, 255, .05); color: var(--text); }
+.crumb.on { color: var(--text); font-weight: 600; }
+.crumbs .sep { color: var(--muted); }
+.crumb.over, .folder.over { border-color: var(--lav); background: rgba(195, 182, 255, .14); }
+.folder-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 10px 0 4px; }
+.folder { position: relative; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: var(--r); background: rgba(246, 227, 161, .06);
+  border: 1px solid rgba(246, 227, 161, .22); color: var(--text); min-width: 0; }
+.folder:hover { background: rgba(246, 227, 161, .1); }
+.folder .ico svg { width: 22px; height: 22px; color: var(--butter); }
+.folder .fn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.folder .fa { display: none; gap: 2px; }
+.folder:hover .fa { display: flex; }
+.folder .fa ~ .tiny, .folder:hover .tiny { }
+.folder:hover > .tiny { display: none; }
+.ds[draggable="true"] { cursor: grab; }

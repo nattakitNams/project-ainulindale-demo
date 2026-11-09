@@ -1,0 +1,24 @@
+Empty folder — add datasets above (they go into this folder) or drag cards from elsewhere onto a folder name in the bar above
+No data is lost (folders only organize the app's library; files are not moved)
+A folder cannot be moved into itself or its own subfolder
+Delete folder (its contents move up to the parent folder)
+datasets and the subfolders inside will move up to
+Folder name is longer than 120 characters
+A folder cannot be moved into itself
+Drag cards onto a folder to move them
+Name the folder first
+at the root of the library
+Move dataset to…
+" already exists here
+Move folder to…
+Not in this folder
+Library (root)
+A folder named "
+Move to folder…
+Rename folder
+Move folder
+New folder
+Delete folder?
+Delete folder
+Move
+in

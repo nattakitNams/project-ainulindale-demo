@@ -304,8 +304,13 @@ def parallel_tiles(tiles, fn, nth):
 
 
 def register_output(path, name, value_type, job_id, role, read_meta=True, kind='raster'):
-    from . import catalog
-    return catalog.register_derived(path, name, value_type, job_id, role, kind)
+    from . import catalog, folders
+    did = catalog.register_derived(path, name, value_type, job_id, role, kind)
+    j = db.get('jobs', job_id) if job_id else None
+    fid = folders.input_folder(j['params']) if j else None          # ผลลัพธ์เข้าโฟลเดอร์เดียวกับข้อมูลต้นทาง
+    if fid:
+        db.update('datasets', did, folder_id=fid)
+    return did
 
 
 def setup_aoi(p, grid, ogs, log):
