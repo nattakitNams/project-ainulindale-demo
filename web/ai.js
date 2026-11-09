@@ -104,15 +104,53 @@ const AIDock = (() => {
   const isBiv = p => p.action === 'run_job' && ['bivariate', 'hexbiv'].includes(p.args?.kind);
   const METHODS = [['quantile', 'ควอนไทล์'], ['equal', 'ช่วงเท่ากัน'], ['breaks', 'กำหนดเกณฑ์เอง'], ['degurba', 'DEGURBA']];
 
-  // แก้ค่าไบแวเรียตในการ์ดก่อนยืนยัน (ชื่อแกน / จำนวนคลาส / วิธีแบ่ง / เกณฑ์ / ลำดับ) — ค่าที่ผู้ใช้แก้ส่งไปตรวจซ้ำตอนรัน
+  const VT_TH = { count: 'จำนวนนับ', density: 'ค่าต่อเนื่อง', class: 'ชั้น' };
+  const METRIC_TH = { density: 'ความหนาแน่น (ต่อ ตร.กม.)', per_pixel: 'ค่าต่อพิกเซล', value: 'ค่าตามไฟล์' };
+  const dsOf = (p, id) => (p.info?.datasets || {})[String(id)] || {};
+  const dsLabel = (p, id) => { const d = dsOf(p, id); return `#${id} ${d.name || ''}`; };
+
+  // แก้ค่าไบแวเรียตในการ์ดก่อนยืนยัน (ชื่อแกน / ค่าที่ใช้ / จำนวนคลาส / วิธีแบ่ง / เกณฑ์ / ลำดับ) — ค่าที่ผู้ใช้แก้ส่งไปตรวจซ้ำตอนรัน
   function axisEditor(p) {
     const P = p.args.params;
-    return `<div class="ai-edit">${['x', 'y'].map(ax => { const c = P[ax] || {}; return `<div class="ai-ax"><b>แกน ${ax.toUpperCase()}</b> <span class="tiny muted" translate="no">#${c.dataset_id}</span>
+    return `<div class="ai-edit">${['x', 'y'].map(ax => { const c = P[ax] || {}, d = dsOf(p, c.dataset_id), cnt = d.value_type === 'count'; return `<div class="ai-ax"><b>แกน ${ax.toUpperCase()}</b>
+      <div class="tiny muted ai-ds"><span translate="no">${esc(dsLabel(p, c.dataset_id))}</span>${d.value_type ? ' · ' + VT_TH[d.value_type] : ''}</div>
       <input data-ax="${ax}" data-k="label" value="${esc(c.label || '')}" placeholder="ชื่อแกน">
+      <label class="tiny">ค่าที่ใช้ ${cnt ? `<select data-ax="${ax}" data-k="metric">${['density', 'per_pixel'].map(k => `<option value="${k}" ${k === (c.metric || 'density') ? 'selected' : ''}>${METRIC_TH[k]}</option>`).join('')}</select>` : `<b>${METRIC_TH.value}</b>`}</label>
       <div class="row" style="gap:4px"><select data-ax="${ax}" data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == (c.n || 3) ? 'selected' : ''}>${n}</option>`).join('')}</select>
         <select data-ax="${ax}" data-k="method">${METHODS.map(([k, t]) => `<option value="${k}" ${k === (c.method || 'quantile') ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
       ${c.method === 'breaks' ? `<input data-ax="${ax}" data-k="breaks" value="${esc((c.breaks || []).join(', '))}" placeholder="เกณฑ์ เช่น 300, 1500">` : ''}
       <label class="tiny"><input type="checkbox" data-ax="${ax}" data-k="order" ${c.order === 'classify_first' ? 'checked' : ''}> จัดชั้นก่อนแล้ว majority</label></div>`; }).join('')}</div>`;
+  }
+
+  // ค่าที่ตั้งเป็นตารางอ่านง่าย (แทน JSON) — ชื่อชุดข้อมูล/พื้นที่ศึกษาจาก info ที่เซิร์ฟเวอร์แนบมา
+  const JOB_TH = { bivariate: 'ไบแวเรียต (กริด)', hexbiv: 'ไบแวเรียตหกเหลี่ยม', resample: 'ปรับความละเอียด / ตัดพื้นที่', rasterize: 'แปลงเวกเตอร์เป็นราสเตอร์',
+    hex: 'แปลงเป็นหกเหลี่ยม', vgrid: 'กริดเวกเตอร์', change: 'เปรียบเทียบ 2 ช่วงเวลา', download: 'ดาวน์โหลดจากลิงก์' };
+  const MODE_TH = { presence: 'มี / ไม่มี (1 / 0)', attribute: 'ค่าจากฟิลด์', majority: 'ค่าจากฟิลด์ที่กินพื้นที่มากสุด', fraction: 'สัดส่วนพื้นที่ (0–1)', diff: 'ผลต่าง', pct: 'ร้อยละที่เปลี่ยน', transition: 'การเปลี่ยนชั้น' };
+  function summary(p) {
+    const P = p.args.params, rows = [['งาน', JOB_TH[p.args.kind] || p.args.kind]];
+    const aoiName = id => (p.info?.aois || {})[String(id)] || `#${id}`;
+    const resName = v => (p.res_options || []).find(o => String(o.value) === String(v))?.label || `${v}`;
+    const axis = ax => {
+      const c = P[ax]; if (!c) return;
+      const d = dsOf(p, c.dataset_id), m = METHODS.find(x => x[0] === (c.method || 'quantile'))?.[1] || c.method;
+      rows.push([`แกน ${ax.toUpperCase()}`, `<span translate="no">${esc(dsLabel(p, c.dataset_id))}</span>${d.value_type ? ` <span class="muted">(${VT_TH[d.value_type]})</span>` : ''}${c.label ? `<br>ชื่อแกน: <span translate="no">${esc(c.label)}</span>` : ''}
+        <br>ค่าที่ใช้: ${METRIC_TH[d.value_type === 'count' ? (c.metric || 'density') : 'value']} · ${c.n || 3} คลาส · ${esc(m)}${c.method === 'breaks' && c.breaks?.length ? ` (${c.breaks.join(', ')})` : ''}${c.order === 'classify_first' ? ' · จัดชั้นก่อนแล้ว majority' : ''}${c.field ? ` · คอลัมน์ ${esc(c.field)}` : ''}`]);
+    };
+    axis('x'); axis('y');
+    if (P.dataset_id) rows.push(['ชุดข้อมูล', `<span translate="no">${esc(dsLabel(p, P.dataset_id))}</span>`]);
+    if (P.dataset_ids) rows.push(['ชุดข้อมูล', `<span translate="no">${P.dataset_ids.map(i => esc(dsLabel(p, i))).join('<br>')}</span>`]);
+    if (P.a_id) rows.push(['ก่อน → หลัง', `<span translate="no">${esc(dsLabel(p, P.a_id))} → ${esc(dsLabel(p, P.b_id))}</span>`]);
+    if (P.mode) rows.push(['วิธี', MODE_TH[P.mode] || P.mode]);
+    if (P.field) rows.push(['ฟิลด์', `<span translate="no">${esc(P.field)}</span>`]);
+    if (P.grid) rows.push(['กริด', P.grid === 'ref' ? `ตรงกับ <span translate="no">${esc(dsLabel(p, P.ref_dataset_id))}</span>` : `กำหนดเอง${P.crs ? ' · ' + esc(P.crs) : ''}`]);
+    if (P.target_res) rows.push(['ความละเอียด', esc(resName(P.target_res))]);
+    if (P.size_km) rows.push(['ขนาดหกเหลี่ยม', `${fmt(P.size_km, 3)} กม.`]);
+    rows.push(['พื้นที่', P.aoi_id ? `<span translate="no">${esc(aoiName(P.aoi_id))}</span>` : 'ทั้งขอบเขตข้อมูล']);
+    if (P.extent_aoi_id || P.extent_dataset_id) rows.push(['ขอบเขตผลลัพธ์', `<span translate="no">${esc(P.extent_aoi_id ? aoiName(P.extent_aoi_id) : dsLabel(p, P.extent_dataset_id))}</span>`]);
+    if (P.palette) rows.push(['พาเลท', esc(String(P.palette).replace(/^b:/, ''))]);
+    if (P.highlight?.length) rows.push(['เขตเน้น', `รหัส ${P.highlight.join(', ')}`]);
+    if (P.name) rows.push(['ชื่อผลลัพธ์', `<span translate="no">${esc(P.name)}</span>`]);
+    return `<table class="kv ai-kv">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
   }
 
   function propCard(p, mi, pi) {
@@ -127,7 +165,7 @@ const AIDock = (() => {
       : p.res_options?.length ? `<label class="ai-res tiny">ความละเอียด <select data-k="target_res">${p.res_options.map(o => `<option value="${esc(o.value)}" ${String(o.value) === String(P.target_res) ? 'selected' : ''}>${esc(o.label)} · ${fmt(o.pixels / 1e6, 1)} ล้านพิกเซล${o.same_as_source ? ' · = ข้อมูล' : ''}</option>`).join('')}</select></label>`
       : ['hex', 'hexbiv'].includes(p.args.kind) ? `<label class="ai-res tiny">ขนาดหกเหลี่ยม (กม.) <input type="number" min="0.01" step="any" data-k="size_km" value="${esc(P.size_km ?? 1)}"></label>` : '';
     const edit = resEd + (isBiv(p) && p.state === 'pending' ? axisEditor(p) : '');
-    const detail = p.action === 'run_job' ? `<details class="tiny"><summary>ค่าที่ตั้ง</summary><pre translate="no">${esc(JSON.stringify(p.args.params, null, 1))}</pre></details>` : '';
+    const detail = p.action === 'run_job' ? `<details class="tiny"><summary>ค่าที่ตั้ง</summary>${summary(p)}</details>` : '';
     const stx = { pending: '', running: '<span class="tiny muted">กำลังส่ง…</span>', done: `<span class="tiny ok-t">${IC.check}${esc(p.result || 'เรียบร้อย')}</span>`,
       rejected: '<span class="tiny muted">ไม่ทำ</span>', moved: '<span class="tiny muted">เปิดไปปรับในหน้าสร้างไบแวเรียตแล้ว</span>',
       failed: `<span class="tiny warn-t">${esc(p.result || 'ไม่สำเร็จ')}</span>` }[p.state];
@@ -149,8 +187,7 @@ const AIDock = (() => {
     else if (k === 'breaks') c.breaks = el.value.split(/[,\s]+/).map(Number).filter(v => !isNaN(v) && el.value.trim());
     else c[k] = el.value;
     if (k === 'method' && el.value === 'breaks' && !(c.breaks || []).length) c.breaks = [];
-    p.edited = true; save();
-    if (k === 'method' || k === 'n') drawMsgs();
+    p.edited = true; save(); drawMsgs();                      // วาดใหม่ทุกครั้ง: ช่องเกณฑ์ / สรุปค่าที่ตั้งตรงกับที่แก้
   }
 
   // ใส่ค่าที่ AI เสนอลงฟอร์มหน้าสร้างไบแวเรียต (BIV ใน app.js) แล้วเปิดหน้านั้น — ข้อเสนอนี้ไม่ใช้แล้ว

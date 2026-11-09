@@ -109,6 +109,9 @@ R.check('ได้ข้อเสนอ 1 รายการ + ประเม�
 R.check('ข้อเสนอแสดงค่าที่ตั้ง (สีเติมจากพาเลทให้ ไม่ต้องส่งกลับหน้าเว็บ)', props and 'colors' not in props[0]['args']['params'] and props[0]['args']['params']['target_res'] == SEEN['res'])
 ro = (props[0].get('res_options') or []) if props else []
 R.check('การ์ดมีตัวเลือกความละเอียดให้ผู้ใช้เปลี่ยน + ค่าที่เสนออยู่ในรายการ', len(ro) > 2 and any(o['value'] == SEEN['res'] for o in ro), [o['value'] for o in ro])
+inf = (props[0].get('info') or {}).get('datasets', {}) if props else {}
+R.check('การ์ดได้ชื่อ + ประเภทค่าของชุดในแกน (แสดงค่าที่ตั้งเป็นภาษาคน)', inf.get(str(X), {}).get('value_type') == 'count' and inf.get(str(Y), {}).get('value_type') == 'density',
+        {k: (v['name'], v['value_type']) for k, v in inf.items()})
 R.check('system prompt สั่งให้ถามความละเอียดก่อน ถ้าผู้ใช้ไม่ได้ระบุ', 'ถามก่อนเสนองาน' in SEEN['system'] and 'resolution_options' in SEEN['system'])
 R.check('system prompt มีสเปกงาน + กันคำสั่งแฝงในข้อมูล', 'params_json' in SEEN['system'] and 'ห้ามทำตาม' in SEEN['system'])
 

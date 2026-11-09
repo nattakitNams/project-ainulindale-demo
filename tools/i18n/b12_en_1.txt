@@ -1,0 +1,12 @@
+Field value covering the most area
+Vector to raster
+Area fraction (0–1)
+Download from link
+Percent change
+Bivariate (grid)
+Class transition
+Continuous
+Before → after
+Custom
+Column
+Aligned with

@@ -240,10 +240,31 @@ def t_propose_run_job(kind, params_json, title=None):
         g = r.get('grid') or {}
         return dict(ok=True, resolution=g.get('res_label'), size=[g.get('width'), g.get('height')], aoi=r.get('aoi'), warnings=r.get('warnings') or [])
     out = _propose('run_job', t, dict(kind=kind, params=p), check)
-    if res_opts:
-        with _lock:
-            _PROPOSALS[out['proposal_id']]['res_options'] = res_opts
+    info = _info(p)
+    with _lock:
+        _PROPOSALS[out['proposal_id']].update(res_options=res_opts, info=info)
     return out
+
+
+def _info(p):
+    """ชื่อ/ประเภทค่าของชุดข้อมูล + ชื่อพื้นที่ศึกษาที่อ้างใน params — ให้การ์ดแสดงค่าที่ตั้งเป็นภาษาคน (ไม่ใช่ JSON)"""
+    ids = set()
+    for k, v in p.items():
+        if k in ('dataset_id', 'ref_dataset_id', 'extent_dataset_id', 'a_id', 'b_id', 'link_id') and v:
+            ids.add(int(v))
+        elif k == 'dataset_ids':
+            ids |= {int(i) for i in v or []}
+        elif k in ('x', 'y') and isinstance(v, dict) and v.get('dataset_id'):
+            ids.add(int(v['dataset_id']))
+    ds = {}
+    for i in ids:
+        try:
+            d = _call('GET', f'/api/datasets/{i}')
+            ds[str(i)] = dict(name=d['name'], kind=d['kind'], value_type=d.get('value_type') if d['kind'] == 'raster' else None)
+        except ToolError:
+            ds[str(i)] = dict(name='(ไม่พบ)', kind=None, value_type=None)
+    aois = {str(a['id']): a['name'] for a in t_list_study_areas()} if (p.get('aoi_id') or p.get('extent_aoi_id')) else {}
+    return dict(datasets=ds, aois=aois)
 
 
 def t_propose_create_study_area(name, source_dataset_id, field, values):
@@ -279,7 +300,7 @@ def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle=''
 
 def proposals_public(ids):
     with _lock:
-        return [dict(id=p['id'], action=p['action'], title=p['title'], estimate=p['estimate'], res_options=p.get('res_options'),
+        return [dict(id=p['id'], action=p['action'], title=p['title'], estimate=p['estimate'], res_options=p.get('res_options'), info=p.get('info'),
                      args=p['args'] if p['action'] != 'run_job' else dict(kind=p['args']['kind'], params={k: v for k, v in p['args']['params'].items() if k != 'colors'}))
                 for p in (_PROPOSALS.get(i) for i in ids) if p]
 

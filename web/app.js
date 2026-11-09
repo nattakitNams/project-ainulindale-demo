@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.24';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.26';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -128,6 +128,7 @@ async function browseOne() { const r = await api(ENGINE + '/api/browse', { json:
 
 // ---------------- เส้นทาง ----------------
 async function route() {
+  window._routeGen = (window._routeGen || 0) + 1;       // หน้าเก่าที่ยังมีงาน async ค้าง เช็คเลขนี้ก่อนวาด/บันทึก (กันหน้าเก่าทับหน้าใหม่)
   maps.forEach(m => m.remove()); maps = [];
   clearInterval(window._poll);
   const h = location.hash || '#/';
@@ -2262,7 +2263,9 @@ const RP_F = {
 };
 
 async function pageReport(qs) {
+  const gen = window._routeGen, alive = () => gen === window._routeGen && location.hash.startsWith('#/report');
   const [all, aois] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi')]);
+  if (!alive()) return;
   const byKey = {};
   all.forEach(d => byKey[(d.kind === 'link' ? 'lk:' : 'ds:') + d.id] = d);
   aois.forEach(a => byKey['aoi:' + a.id] = a);
@@ -2323,7 +2326,7 @@ async function pageReport(qs) {
 
   // ---------- บันทึก / ประวัติ (เลิกทำ) ----------
   let saveWarned = false;
-  const save = () => { try { localStorage.setItem(RDOC, JSON.stringify(doc)); } catch { if (!saveWarned) { saveWarned = true; toast('บันทึกการจัดหน้าในเบราว์เซอร์ไม่ได้ (รูปภาพใหญ่เกินไป?)', true); } } };
+  const save = () => { if (!alive()) return; try { localStorage.setItem(RDOC, JSON.stringify(doc)); } catch { if (!saveWarned) { saveWarned = true; toast('บันทึกการจัดหน้าในเบราว์เซอร์ไม่ได้ (รูปภาพใหญ่เกินไป?)', true); } } };
   const snap = () => JSON.stringify(doc);
   let last = snap(), hist = [], fut = [], ct = null;
   const commit = () => { clearTimeout(ct); const s = snap(); if (s === last) return; hist.push(last); if (hist.length > 100) hist.shift(); fut = []; last = s; save(); undoBtns(); };
@@ -2387,7 +2390,7 @@ async function pageReport(qs) {
       const t0 = Date.now();
       try {
         const r = await api(ENGINE + '/api/report/map', { json: { map: doc.map, w: e.w, h: e.h, dpi: dpiNow(), view: e.p.auto === false ? e.p.view : null } });
-        if (reqs[id] !== my) return;
+        if (reqs[id] !== my || !alive()) return;
         data.maps[id] = r;
         const ee = byId(id); if (ee && ee.p.auto !== false) { ee.p.view = r.view; last = snap(); save(); }
         stat(`วาดแผนที่ ${((Date.now() - t0) / 1000).toFixed(1)} วินาที`);
@@ -2404,11 +2407,12 @@ async function pageReport(qs) {
     const my = reqs[id] = (reqs[id] || 0) + 1;
     try {
       const r = await api(ENGINE + '/api/report/inset', { json: { ext: m.ext, w: e.w, h: e.h, dpi: dpiNow(), basemap: e.p.basemap, zoom: e.p.zoom } });
-      if (reqs[id] === my) { data.insets[id] = r; redraw(byId(id)); }
+      if (reqs[id] === my && alive()) { data.insets[id] = r; redraw(byId(id)); }
     } catch { }
   };
   const refreshInfo = async () => {
     try { data.info = await api(ENGINE + '/api/report/info', { json: { map: doc.map } }); } catch (er) { stat(er.message, true); }
+    if (!alive()) return;
     redrawTypes('legend', 'kpi', 'chart', 'prov', 'credits');
     if (tab === 'tpl') side();
     if (sel && byId(sel)?.type === 'legend') props();
