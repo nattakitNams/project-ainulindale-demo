@@ -33,6 +33,15 @@ def field_values(ds, field, q='', limit=300):
     return vals[:limit], len(vals)
 
 
+def text_lost(vals):
+    """ข้อความในไฟล์กลายเป็น "?" จริง (โปรแกรมที่บันทึกแปลงไทยทิ้งไปแล้ว — เลือก encoding ไหนก็กู้ไม่ได้)
+    เกณฑ์: ค่าข้อความ ≥ 60% มี "??" ติดกัน และไม่มีอักษรที่ไม่ใช่ ASCII เลย"""
+    vs = [v for v in vals if isinstance(v, str) and v.strip()]
+    if len(vs) < 3 or any(any(ord(c) > 127 for c in v) for v in vs):
+        return False
+    return sum('??' in v for v in vs) >= 0.6 * len(vs)
+
+
 def extent_of(ds, field, values):
     """กรอบ (WGS84) ของ feature ที่ field อยู่ในรายการ — ใช้ซูมแผนที่ไปพื้นที่ที่เลือก"""
     import pyogrio

@@ -1300,7 +1300,7 @@ def aoi_geojson(aid):
 def field_values(did):
     d = ds_or_404(did)
     vals, total = aoimod.field_values(d, request.args['field'], request.args.get('q', ''), int(request.args.get('limit', 300)))
-    return jsonify(values=vals, total=total)
+    return jsonify(values=vals, total=total, text_lost=aoimod.text_lost(vals))
 
 
 @app.route('/api/datasets/<int:did>/relink', methods=['POST'])

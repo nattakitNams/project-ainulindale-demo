@@ -1,0 +1,42 @@
+
+
+
+in the source file itself — the program that saved it already replaced the Thai characters, so no encoding can recover them · use a code field (e.g. *_IDN) instead, use the GISTDA base boundary layers, or re-export the original as UTF-8
+
+
+
+
+
+
+
+
+
+
+
+
+The key is stored encrypted by the engine on this computer (Windows DPAPI) — not in the browser, never uploaded
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+The text in this field is
+Get an API key here
+
+
+
+
+
+

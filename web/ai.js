@@ -26,15 +26,15 @@ const AIDock = (() => {
     const open = ls.get(OKEY, true);
     d.className = open ? 'open' : '';
     if (!open) {
-      d.innerHTML = `<button class="ai-fab" title="เปิดผู้ช่วย AI">${IC.chat || '💬'}</button>`;
+      d.innerHTML = `<button class="ai-fab" title="เปิดผู้ช่วย AI">${IC.chat}</button>`;
       d.querySelector('.ai-fab').onclick = () => { ls.set(OKEY, true); render(); };
       return;
     }
     d.innerHTML = `<div class="ai-panel">
       <div class="ai-head"><b>ผู้ช่วย AI</b>${st.connected ? `<span class="chip" translate="no" title="${esc(st.provider_label)}">${esc(st.model || '')}</span>` : ''}
         <span class="spacer"></span>
-        ${st.connected ? `<button class="ghost sm" data-a="clear" title="ล้างบทสนทนา">${IC.trash}</button><button class="ghost sm" data-a="set" title="ตั้งค่า (รุ่น / ออกจากระบบ)">⚙</button>` : ''}
-        <button class="ghost sm" data-a="min" title="ซ่อน">─</button></div>
+        ${st.connected ? `<button class="ghost sm" data-a="clear" title="ล้างบทสนทนา">${IC.trash}</button><button class="ghost sm" data-a="set" title="ตั้งค่า (รุ่น / ออกจากระบบ)">${IC.gear}</button>` : ''}
+        <button class="ghost sm" data-a="min" title="ซ่อน">${IC.minus}</button></div>
       <div class="ai-body"></div></div>`;
     d.querySelector('[data-a=min]').onclick = () => { ls.set(OKEY, false); render(); };
     if (st.connected) {
@@ -54,14 +54,14 @@ const AIDock = (() => {
       <label class="field"><span>API key <span class="aiOpt tiny muted hide">(ไม่ต้องใส่ถ้าเซิร์ฟเวอร์ไม่ใช้)</span></span><input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="วาง key ที่นี่"></label>
       <div class="tiny" id="aiKeyUrl"></div>
       <button class="primary" id="aiGo" style="margin-top:10px;width:100%">เชื่อมต่อ</button>
-      <div class="tiny muted" style="margin-top:10px;line-height:1.6">🔒 key ถูกเข้ารหัสเก็บในตัวประมวลผลบนเครื่องนี้ (Windows DPAPI) — ไม่เก็บในเบราว์เซอร์ ไม่ขึ้นเว็บ<br>
+      <div class="tiny muted ai-note" style="margin-top:10px;line-height:1.6">${IC.lock}key ถูกเข้ารหัสเก็บในตัวประมวลผลบนเครื่องนี้ (Windows DPAPI) — ไม่เก็บในเบราว์เซอร์ ไม่ขึ้นเว็บ<br>
         ส่งให้ AI: ข้อความแชต + ชื่อ/ประเภทของชุดข้อมูลในคลัง (ไม่ส่งไฟล์ข้อมูล)<br>
         ใช้บัญชีแบบรายเดือน (ChatGPT Plus / Claude Pro) แทน API key ไม่ได้</div></div>`;
     const sync = () => {
       const p = st.providers.find(x => x.id === $('#aiProv').value);
       b.querySelector('.aiBase').classList.toggle('hide', p.id !== 'compat');
       b.querySelector('.aiOpt').classList.toggle('hide', !p.key_optional);
-      $('#aiKeyUrl').innerHTML = p.key_url ? `<a href="${p.key_url}" target="_blank" rel="noopener">ขอ API key ที่นี่ ↗</a>` : 'Ollama: <span class="mono">http://localhost:11434/v1</span> · OpenRouter: <span class="mono">https://openrouter.ai/api/v1</span>';
+      $('#aiKeyUrl').innerHTML = p.key_url ? `<a href="${p.key_url}" target="_blank" rel="noopener" class="ai-link">ขอ API key ที่นี่ ${IC.ext}</a>` : 'Ollama: <span class="mono">http://localhost:11434/v1</span> · OpenRouter: <span class="mono">https://openrouter.ai/api/v1</span>';
     };
     $('#aiProv').onchange = sync; sync();
     $('#aiGo').onclick = async () => {
@@ -79,7 +79,7 @@ const AIDock = (() => {
   function chatView() {
     const b = dock().querySelector('.ai-body');
     b.innerHTML = `<div class="ai-msgs"></div>
-      <div class="ai-input"><textarea id="aiTxt" rows="2" placeholder="ถามอะไรก็ได้เกี่ยวกับข้อมูลหรือการใช้แอป… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"></textarea><button class="primary" id="aiSend" title="ส่ง">➤</button></div>`;
+      <div class="ai-input"><textarea id="aiTxt" rows="2" placeholder="ถามอะไรก็ได้เกี่ยวกับข้อมูลหรือการใช้แอป… (Enter ส่ง · Shift+Enter ขึ้นบรรทัด)"></textarea><button class="primary" id="aiSend" title="ส่ง">${IC.send}</button></div>`;
     drawMsgs();
     const send = async () => {
       const t = $('#aiTxt').value.trim();

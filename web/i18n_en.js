@@ -1756,5 +1756,9 @@ window.I18N_EN = {
 "เช่น": "e.g.",
 "ส่ง": "Send",
 "เปิดใช้งาน": "On",
-"ปิดใช้งาน": "Off"
+"ปิดใช้งาน": "Off",
+"ตั้งแต่ไฟล์ต้นทาง — โปรแกรมที่บันทึกไฟล์แปลงอักษรไทยทิ้งไปแล้ว เลือกการเข้ารหัสไหนก็กู้ไม่ได้ · ใช้ฟิลด์รหัส (เช่น *_IDN) แทน, ใช้ชั้นขอบเขตพื้นฐาน GISTDA หรือส่งออกไฟล์ใหม่จากต้นฉบับเป็น UTF-8": "in the source file itself — the program that saved it already replaced the Thai characters, so no encoding can recover them · use a code field (e.g. *_IDN) instead, use the GISTDA base boundary layers, or re-export the original as UTF-8",
+"key ถูกเข้ารหัสเก็บในตัวประมวลผลบนเครื่องนี้ (Windows DPAPI) — ไม่เก็บในเบราว์เซอร์ ไม่ขึ้นเว็บ": "The key is stored encrypted by the engine on this computer (Windows DPAPI) — not in the browser, never uploaded",
+"ข้อความในฟิลด์นี้เป็น": "The text in this field is",
+"ขอ API key ที่นี่": "Get an API key here"
 };

@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.18';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.19';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,6 +28,15 @@ const ROLE_C = { input: 'var(--sky)', derived: 'var(--peach)', map: 'var(--rose)
 // ---------- ไอคอน (เส้น 1.8px) ----------
 const P = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC = {
+  chat: P('<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z"/>'),
+  lock: P('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),
+  unlock: P('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 7.6-1.7"/>'),
+  send: P('<path d="M4 12 20 4l-6 16-3-7z"/><path d="m11 13 9-9"/>'),
+  minus: P('<path d="M6 12h12"/>'),
+  ext: P('<path d="M14 4.5h5.5V10M19.5 4.5 11 13M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>'),
+  eye: P('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'),
+  eyeOff: P('<path d="M4 4l16 16M10 6a9.5 9.5 0 0 1 2-.5c6 0 9.5 6.5 9.5 6.5a16 16 0 0 1-2.6 3.4M6.5 7.5C4 9.2 2.5 12 2.5 12S6 18.5 12 18.5c1.6 0 3-.5 4.2-1.1"/>'),
+  copy: P('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5.5A1.5 1.5 0 0 0 14.5 4h-9A1.5 1.5 0 0 0 4 5.5v9A1.5 1.5 0 0 0 5.5 16H8"/>'),
   db: P('<ellipse cx="12" cy="5.5" rx="7.5" ry="3"/><path d="M4.5 5.5v13c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3v-13"/><path d="M4.5 12c0 1.7 3.4 3 7.5 3s7.5-1.3 7.5-3"/>'),
   grid: P('<rect x="3.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.5"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.5"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.5"/>'),
   target: P('<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1"/>'),
@@ -333,7 +342,7 @@ function cardHtml(d) {
       <div class="acts"><button class="ghost sm" data-mv="${d.id}" title="ย้ายไปโฟลเดอร์…">${IC.folder}</button><button class="ghost sm" data-ren="${d.id}" title="แก้ชื่อ">${IC.edit}</button><button class="ghost sm danger" data-del="${d.id}" title="ย้ายไปถังขยะ">${IC.trash}</button></div>
       <div class="t"><div class="ico">${IC.link}</div><div style="min-width:0;padding-right:84px"><div class="name">${esc(d.name)}</div><div class="path" title="${esc(d.path)}">${esc(d.path)}</div></div></div>
       ${m.description ? `<div class="tiny muted" style="margin:-2px 0 8px">${esc(m.description)}</div>` : ''}
-      <div class="chips">${m.builtin ? '<span class="chip" style="color:var(--butter);border-color:#f6e3a155">ข้อมูลพื้นฐาน</span>' : ''}<span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? '<span class="chip">🔒 โทเคน</span>' : ''}</div>
+      <div class="chips">${m.builtin ? '<span class="chip" style="color:var(--butter);border-color:#f6e3a155">ข้อมูลพื้นฐาน</span>' : ''}<span class="chip">${esc(m.type_label || d.format)}</span>${m.view ? '<span class="chip">ดูอย่างเดียว</span>' : '<span class="chip ok">ดาวน์โหลดได้</span>'}${m.secret_id ? `<span class="chip">${IC.lock}โทเคน</span>` : ''}</div>
       <div class="foot"><span class="status-dot"></span>ลิงก์<span class="spacer"></span>#${d.id}</div></div>`;
   }
   const icon = d.role === 'map' ? 'map' : d.kind === 'vector' ? 'vector' : 'raster';
@@ -637,7 +646,7 @@ async function symPanel(d, o = {}) {
           <label class="row small"><input type="checkbox" id="sInv" ${sty.invert ? 'checked' : ''}> กลับด้าน (ขาว → ดำ)</label>
           <div class="field"><button id="sMinMax" class="sm ghost" title="ตัด 2%–98% ของค่าสุ่ม (ศูนย์กองเยอะ → คิดจากพิกเซลที่มีค่า)">ใช้ช่วง 2–98%</button></div>` : ''}
       </div>
-      ${T !== 'gray' ? `<div class="sym-wrap"><table class="sym"><thead><tr><th title="แสดง/ซ่อน">👁</th><th>${T === 'pseudocolor' && sty.interp === 'discrete' ? 'ค่า ≤' : 'ค่า'}</th><th>สี</th><th>ป้ายชื่อ</th><th></th></tr></thead><tbody>
+      ${T !== 'gray' ? `<div class="sym-wrap"><table class="sym"><thead><tr><th title="แสดง/ซ่อน">${IC.eye}</th><th>${T === 'pseudocolor' && sty.interp === 'discrete' ? 'ค่า ≤' : 'ค่า'}</th><th>สี</th><th>ป้ายชื่อ</th><th></th></tr></thead><tbody>
         ${items().map((e, i) => `<tr class="${e.visible === false ? 'off' : ''}"><td><input type="checkbox" data-vis="${i}" ${e.visible === false ? '' : 'checked'}></td>
           <td><input type="text" data-val="${i}" value="${esc(vstr(e.value))}"></td>
           <td><label class="sw" style="background:${e.color}"><input type="color" data-col="${i}" value="${e.color}"></label></td>
@@ -1023,6 +1032,8 @@ const BIV = {
   aoi_id: null, aoi_rule: 'center', aoi_mask_res: '',
 };
 
+const TEXT_LOST = 'ข้อความในฟิลด์นี้เป็น "?" ตั้งแต่ไฟล์ต้นทาง — โปรแกรมที่บันทึกไฟล์แปลงอักษรไทยทิ้งไปแล้ว เลือกการเข้ารหัสไหนก็กู้ไม่ได้ · ใช้ฟิลด์รหัส (เช่น *_IDN) แทน, ใช้ชั้นขอบเขตพื้นฐาน GISTDA หรือส่งออกไฟล์ใหม่จากต้นฉบับเป็น UTF-8';
+
 // ตัวเลือกพื้นที่ศึกษาแยกหมวด: พื้นฐาน (เช่น ประเทศไทย) ขึ้นก่อน แล้วค่อยที่ผู้ใช้สร้างเอง
 function aoiOptions(aois, { val = a => a.id, text = a => `${esc(a.name)} · ${fmt(a.area_km2, 0)} ตร.กม.`, sel = null } = {}) {
   const o = a => `<option value="${val(a)}" ${sel != null && String(val(a)) === String(sel) ? 'selected' : ''}>${text(a)}</option>`;
@@ -1051,8 +1062,8 @@ function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extr
     const nk = f => FOL.some(x => x.parent_id === f.id) ? ' ›' : '';
     fs.innerHTML = `<option value="">ทุกโฟลเดอร์</option>`
       + (cur ? (par ? `<option value="${par.id}" translate="no">↑ ${esc(pathName(par.id))}</option>` : '')
-        + `<option value="${cur.id}" translate="no">📂 ${esc(pathName(cur.id))}</option>` : `<option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>`)
-      + kids.map(f => `<option value="${f.id}" translate="no">${cur ? '   ' : ''}📁 ${esc(f.name)}${nk(f)}</option>`).join('');
+        + `<option value="${cur.id}" translate="no">▾ ${esc(pathName(cur.id))}</option>` : `<option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>`)
+      + kids.map(f => `<option value="${f.id}" translate="no">${cur ? '    ' : ''}${esc(f.name)}${nk(f)}</option>`).join('');
     fs.value = fv;
   };
   drawFolders('');
@@ -1482,6 +1493,8 @@ async function pageAoi(qs) {
     const r = await api(`${base()}/field-values?field=${encodeURIComponent(field)}&q=${encodeURIComponent($('#aQ').value)}`);
     shown = r.values; renderList();
     if (r.total > r.values.length) $('#aCount').textContent += ` · แสดง ${r.values.length} จาก ${fmt(r.total, 0)} — พิมพ์ค้นหาเพื่อกรอง`;
+    $$('.lostNote').forEach(e => e.remove());
+    if (r.text_lost) $('#aCount').insertAdjacentHTML('afterend', `<div class="note warn small lostNote" style="margin:6px 0">${TEXT_LOST}</div>`);
   };
   const loadDs = async () => {
     if (!dsId) return;
@@ -1650,7 +1663,7 @@ async function addSecret() {
 }
 async function fillSecrets(sel, cur) {
   const ss = await api(ENGINE + '/api/secrets');
-  sel.innerHTML = '<option value="">ไม่ใช้โทเคน</option>' + ss.map(s => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>🔒 ${esc(s.name)}</option>`).join('');
+  sel.innerHTML = '<option value="">ไม่ใช้โทเคน</option>' + ss.map(s => `<option value="${s.id}" ${s.id === cur ? 'selected' : ''}>${esc(s.name)}</option>`).join('');
 }
 function linkAdder() {
   fillSecrets($('#lkSec'));
@@ -1683,7 +1696,7 @@ async function pageLink(d) {
   const dynLayers = m.type === 'arcgis_dynamic' && m.layers?.length
     ? `<div class="field full"><span>ชั้นที่แสดง</span><div class="checklist" id="lkOn">${m.layers.map(l => `<label><input type="checkbox" value="${l.id}" ${!m.layers_on || m.layers_on.includes(l.id) ? 'checked' : ''}><span>${l.id} · ${esc(l.name)}</span></label>`).join('')}</div></div>` : '';
   v.innerHTML = head(`ลิงก์ · ${esc(m.type_label || d.format)}`, `${esc(d.name)} <span class="edit" id="ren">${IC.edit}</span>`,
-    `<span class="chip">${m.view ? 'ดูอย่างเดียว' : 'ดาวน์โหลดได้'}</span>${m.secret_id ? ' <span class="chip">🔒 โทเคน</span>' : ''}`, `<button id="toViewer">${IC.layers}เปิดในแผนที่ซ้อนชั้น</button><a class="btn" href="#/">← คลังข้อมูล</a>`)
+    `<span class="chip">${m.view ? 'ดูอย่างเดียว' : 'ดาวน์โหลดได้'}</span>${m.secret_id ? ` <span class="chip">${IC.lock}โทเคน</span>` : ''}`, `<button id="toViewer">${IC.layers}เปิดในแผนที่ซ้อนชั้น</button><a class="btn" href="#/">← คลังข้อมูล</a>`)
     + (m.warnings || []).map(w => `<div class="note warn">${esc(w)}</div>`).join('')
     + `<div class="cols"><div>
       <div class="card"><div class="card-head"><h2><span class="dot"></span>ลิงก์</h2></div>
@@ -1869,7 +1882,7 @@ async function pageSystem() {
         ${s.dead_jobs.length ? `<div class="small">${s.dead_jobs.map(j => `<div class="mono tiny">#${j.id} ${esc(j.title)} · ${esc(j.out_dir)}</div>`).join('')}</div><button id="clrDead" class="sm danger" style="margin-top:10px">${IC.trash}ลบโฟลเดอร์ผลที่ไม่สมบูรณ์</button>` : '<div class="small muted">ไม่มี</div>'}</div>
     </div><div>
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>โทเคน (เข้ารหัส)</h2><button class="sm" id="secAdd">${IC.plus}เพิ่ม</button></div>
-        ${s.secrets.length ? `<table><tbody>${s.secrets.map(x => `<tr><td>🔒 ${esc(x.name)}</td><td class="mono tiny muted">${x.id}</td><td style="text-align:right"><button class="sm ghost danger" data-sec="${x.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">ยังไม่มี</div>'}
+        ${s.secrets.length ? `<table><tbody>${s.secrets.map(x => `<tr><td>${IC.lock}${esc(x.name)}</td><td class="mono tiny muted">${x.id}</td><td style="text-align:right"><button class="sm ghost danger" data-sec="${x.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">ยังไม่มี</div>'}
         <div class="tiny muted" style="margin-top:8px">เข้ารหัสด้วย Windows DPAPI · ใช้กับลิงก์ ArcGIS / WMS ที่ต้องยืนยันตัวตน · ไม่ถูกบันทึกใน lineage หรือ log</div></div>
       <div class="card" id="aiCard"></div>
     </div></div>`;
@@ -2341,7 +2354,7 @@ async function pageReport(qs) {
   const drawSel = () => {
     const ov = $('#rpOv'), e = byId(sel);
     ov.innerHTML = e ? `<div class="rp-sel ${e.lock ? 'lock' : ''}" style="left:${e.x}mm;top:${e.y}mm;width:${e.w}mm;height:${e.h}mm">
-      ${e.lock ? '<span class="rp-lockic">🔒</span>' : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(h => `<i data-h="${h}" class="h-${h}"></i>`).join('')}</div>` : '';
+      ${e.lock ? `<span class="rp-lockic">${IC.lock}</span>` : ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'].map(h => `<i data-h="${h}" class="h-${h}"></i>`).join('')}</div>` : '';
     ov.insertAdjacentHTML('beforeend', '<div id="rpGuides"></div>');
   };
   const guides = g => { const el = $('#rpGuides'); if (el) el.innerHTML = g.map(x => x.v != null ? `<b class="gv" style="left:${x.v}mm"></b>` : `<b class="gh" style="top:${x.h}mm"></b>`).join(''); };
@@ -2558,8 +2571,8 @@ async function pageReport(qs) {
     }
     const T_ = RPT.TYPES[e.type];
     let h = `<div class="rp-ph"><b>${RP_ICON[e.type]} ${T_.name}</b><div class="row">
-        <button class="sm ghost" data-act="dup" title="ทำสำเนา (Ctrl+D)">⧉</button><button class="sm ghost" data-act="lock" title="${e.lock ? 'ปลดล็อก' : 'ล็อกตำแหน่ง'}">${e.lock ? '🔒' : '🔓'}</button>
-        <button class="sm ghost" data-act="hide" title="ซ่อนตอนพิมพ์">${e.hidden ? '🙈' : '👁'}</button><button class="sm ghost danger" data-act="del" title="ลบ (Delete)">${IC.trash}</button></div></div>
+        <button class="sm ghost" data-act="dup" title="ทำสำเนา (Ctrl+D)">${IC.copy}</button><button class="sm ghost" data-act="lock" title="${e.lock ? 'ปลดล็อก' : 'ล็อกตำแหน่ง'}">${e.lock ? IC.lock : IC.unlock}</button>
+        <button class="sm ghost" data-act="hide" title="ซ่อนตอนพิมพ์">${e.hidden ? IC.eyeOff : IC.eye}</button><button class="sm ghost danger" data-act="del" title="ลบ (Delete)">${IC.trash}</button></div></div>
       <div class="rp-pos">${['x', 'y', 'w', 'h'].map(k => `<label><span>${{ x: 'X', y: 'Y', w: 'กว้าง', h: 'สูง' }[k]}</span><input type="number" step="0.5" id="rpPos_${k}" value="${e[k]}"></label>`).join('')}<span class="tiny muted">มม.</span></div>
       <div class="row rp-ord"><span class="tiny muted">ลำดับชั้น</span><button class="sm ghost" data-act="top" title="บนสุด">⤒</button><button class="sm ghost" data-act="up" title="ขึ้น">↑</button><button class="sm ghost" data-act="down" title="ลง">↓</button><button class="sm ghost" data-act="bottom" title="ล่างสุด">⤓</button></div>`;
     if (e.type === 'map') h += `<div class="rp-box"><div class="row" style="flex-wrap:wrap;gap:6px"><button class="sm" data-act="fit">พอดีข้อมูล</button><button class="sm ghost" data-act="zin">ซูมเข้า</button><button class="sm ghost" data-act="zout">ซูมออก</button><button class="sm ghost" data-act="pan">${panMode === e.id ? 'จบการเลื่อน' : 'เลื่อนแผนที่'}</button></div>
@@ -2729,7 +2742,7 @@ async function pageReport(qs) {
       el.innerHTML = `<h3 class="rp-h">เพิ่มองค์ประกอบ</h3><div class="rp-add">${Object.entries(RPT.TYPES).map(([k, t]) => `<button class="sm ghost" data-add="${k}"><i>${RP_ICON[k]}</i>${t.name}</button>`).join('')}</div>
         <h3 class="rp-h">ทุกองค์ประกอบในหน้า <span class="tiny muted">(บนสุดก่อน)</span></h3><div class="rp-list">` +
         s.map(e => `<div class="rp-li ${e.id === sel ? 'on' : ''} ${e.hidden ? 'off' : ''}" data-id="${e.id}"><i>${RP_ICON[e.type]}</i><span>${esc(e.type === 'text' ? RPT.fill(e.p.text, doc).slice(0, 34) || '(ข้อความว่าง)' : RPT.TYPES[e.type].name)}</span>
-          <button class="sm ghost" data-v="${e.id}" title="ซ่อน/แสดง">${e.hidden ? '🙈' : '👁'}</button><button class="sm ghost" data-l="${e.id}" title="ล็อก">${e.lock ? '🔒' : '🔓'}</button></div>`).join('') + '</div>';
+          <button class="sm ghost" data-v="${e.id}" title="ซ่อน/แสดง">${e.hidden ? IC.eyeOff : IC.eye}</button><button class="sm ghost" data-l="${e.id}" title="ล็อก">${e.lock ? IC.lock : IC.unlock}</button></div>`).join('') + '</div>';
       $$('[data-add]', el).forEach(b => b.onclick = () => addEl(b.dataset.add));
       $$('.rp-li', el).forEach(r => r.onclick = ev => {
         const e = byId(r.dataset.id);
@@ -2838,7 +2851,7 @@ async function aoiPicker() {
     try {
       const r = await api(`${base()}/field-values?field=${encodeURIComponent(field)}&q=${encodeURIComponent($('#apQ').value)}`);
       shown = r.values; render();
-      $('#apN').textContent = `${fmt(r.total, 0)} รายการ${r.total > r.values.length ? ` · แสดง ${r.values.length} — พิมพ์ค้นหาเพื่อกรอง` : ''}`;
+      $('#apN').innerHTML = `${fmt(r.total, 0)} รายการ${r.total > r.values.length ? ` · แสดง ${r.values.length} — พิมพ์ค้นหาเพื่อกรอง` : ''}${r.text_lost ? `<div class="note warn small" style="margin:6px 0 0">${TEXT_LOST}</div>` : ''}`;
     } catch (e) { $('#apN').innerHTML = `<span style="color:var(--coral)">${esc(e.message)}</span>`; }
   };
   const setSrc = async () => {
