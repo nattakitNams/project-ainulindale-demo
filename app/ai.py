@@ -81,9 +81,9 @@ def _headers(p, key):
     return {'Authorization': f'Bearer {key}', 'content-type': 'application/json'} if key else {'content-type': 'application/json'}
 
 
-def _req(method, url, p, key, **kw):
+def _req(method, url, p, key, timeout=TIMEOUT, **kw):
     try:
-        r = requests.request(method, url, headers=_headers(p, key), timeout=TIMEOUT, **kw)
+        r = requests.request(method, url, headers=_headers(p, key), timeout=timeout, **kw)
     except requests.RequestException as e:
         raise AiError(f'ติดต่อผู้ให้บริการไม่ได้ ({type(e).__name__})')
     if r.ok:
@@ -249,6 +249,38 @@ def _dump(x):
     return s if len(s) <= 15000 else s[:15000] + ' …(ตัด)'
 
 
+def _needs_responses(e):
+    s = str(e).lower()
+    return 'not a chat model' in s or 'v1/responses' in s or 'responses api' in s
+
+
+def _responses(b, p, key, model, system, msgs, specs, texts, call_tool):
+    """OpenAI Responses API (/v1/responses) — รุ่นที่ไม่รับ chat/completions · output = รายการ item (message / function_call / reasoning)
+    ส่ง item ทั้งหมดกลับเข้า input ตามลำดับ + function_call_output ต่อ call_id"""
+    tools = [dict(type='function', name=s['name'], description=s['description'], parameters=s['parameters']) for s in specs]
+    items = [dict(role=m['role'], content=m['content']) for m in msgs]
+    for _ in range(MAX_STEPS):
+        body = dict(model=model, instructions=system, input=items)
+        if tools:
+            body['tools'] = tools
+        j = _req('POST', f'{b}/responses', p, key, json=body, timeout=600)
+        out = j.get('output') or []
+        for it in out:
+            if it.get('type') == 'message':
+                texts += [c['text'] for c in it.get('content') or [] if c.get('type') == 'output_text' and c.get('text', '').strip()]
+        calls = [it for it in out if it.get('type') == 'function_call']
+        if not calls:
+            break
+        items += out
+        for fc in calls:
+            try:
+                args = json.loads(fc.get('arguments') or '{}')
+            except ValueError:
+                args = None
+            res = call_tool(fc.get('name'), args) if args is not None else dict(error='arguments ไม่ใช่ JSON')
+            items.append(dict(type='function_call_output', call_id=fc.get('call_id'), output=_dump(res)))
+
+
 def chat(messages, page=None):
     from . import ai_tools
     c = cfg()
@@ -299,6 +331,8 @@ def chat(messages, page=None):
             contents.append(dict(role='model', parts=parts))
             contents.append(dict(role='user', parts=[dict(functionResponse=dict(name=fc['name'], response=dict(result=_dump(call_tool(fc['name'], fc.get('args'))))))
                                                      for fc in calls]))
+    elif p == 'openai' and model in (c.get('responses_models') or []):
+        _responses(b, p, key, model, system, msgs, specs, texts, call_tool)
     else:
         tools = [dict(type='function', function=s) for s in specs]
         conv = [dict(role='system', content=system)] + msgs
@@ -308,10 +342,14 @@ def chat(messages, page=None):
                 body['tools'] = tools
             try:
                 j = _req('POST', f'{b}/chat/completions', p, key, json=body)
-            except AiError as e:                            # เซิร์ฟเวอร์/รุ่นที่ไม่รองรับ tools (เช่น บางรุ่นใน Ollama) → ตอบแบบข้อความอย่างเดียว
-                if step == 0 and tools and p == 'compat' and 'tool' in str(e).lower():
+            except AiError as e:
+                if step == 0 and tools and p == 'compat' and 'tool' in str(e).lower():   # รุ่นที่ไม่รองรับ tools (บางรุ่นใน Ollama) → ตอบข้อความอย่างเดียว
                     tools, note = [], 'รุ่นนี้ไม่รองรับการเรียกเครื่องมือ — ตอบได้อย่างเดียว'
                     continue
+                if step == 0 and p == 'openai' and _needs_responses(e):   # รุ่นที่ใช้ได้เฉพาะ Responses API (เช่น *-pro) → สลับ + จำไว้
+                    save(responses_models=sorted(set(cfg().get('responses_models') or []) | {model}))
+                    _responses(b, p, key, model, system, msgs, specs, texts, call_tool)
+                    break
                 raise
             ch = j.get('choices') or []
             msg = (ch[0].get('message') or {}) if ch else {}
