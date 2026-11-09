@@ -207,9 +207,31 @@ def t_propose_set_value_type(dataset_id, value_type):
                     lambda: dict(ok=True, current=d.get('value_type'), confirmed=bool(d.get('value_type_confirmed'))))
 
 
+def _res_ids(kind, p):
+    """ชุดข้อมูลที่กำหนดตัวเลือกความละเอียดของงานนี้ (งานที่ใช้ target_res จากรายการ)"""
+    if kind == 'bivariate':
+        return [(p.get(a) or {}).get('dataset_id') for a in ('x', 'y')]
+    if kind == 'resample':
+        return [p.get('dataset_id')]
+    if kind == 'change':
+        return [p.get('a_id'), p.get('b_id')]
+    if kind == 'vgrid':
+        return list(p.get('dataset_ids') or [])
+    if kind == 'rasterize' and p.get('grid') == 'ref':
+        return [p.get('ref_dataset_id')]
+    return []
+
+
 def t_propose_run_job(kind, params_json, title=None):
     p = _params(kind, params_json)
     t = title or (p.get('name') and f'{kind}: {p["name"]}') or kind
+    ids = [i for i in _res_ids(kind, p) if i]
+    res_opts = None
+    if ids:                                                 # การ์ดให้ผู้ใช้เปลี่ยนความละเอียดเองได้ก่อนยืนยัน
+        try:
+            res_opts = t_resolution_options(ids)
+        except Exception:
+            res_opts = None
 
     def check():
         r = _call('POST', '/api/estimate', dict(kind=kind, params=p))
@@ -217,7 +239,11 @@ def t_propose_run_job(kind, params_json, title=None):
             return dict(ok=False, error=r.get('error'))
         g = r.get('grid') or {}
         return dict(ok=True, resolution=g.get('res_label'), size=[g.get('width'), g.get('height')], aoi=r.get('aoi'), warnings=r.get('warnings') or [])
-    return _propose('run_job', t, dict(kind=kind, params=p), check)
+    out = _propose('run_job', t, dict(kind=kind, params=p), check)
+    if res_opts:
+        with _lock:
+            _PROPOSALS[out['proposal_id']]['res_options'] = res_opts
+    return out
 
 
 def t_propose_create_study_area(name, source_dataset_id, field, values):
@@ -253,7 +279,7 @@ def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle=''
 
 def proposals_public(ids):
     with _lock:
-        return [dict(id=p['id'], action=p['action'], title=p['title'], estimate=p['estimate'],
+        return [dict(id=p['id'], action=p['action'], title=p['title'], estimate=p['estimate'], res_options=p.get('res_options'),
                      args=p['args'] if p['action'] != 'run_job' else dict(kind=p['args']['kind'], params={k: v for k, v in p['args']['params'].items() if k != 'colors'}))
                 for p in (_PROPOSALS.get(i) for i in ids) if p]
 

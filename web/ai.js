@@ -122,7 +122,11 @@ const AIDock = (() => {
         + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
         : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`)
       : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>` : '';
-    const edit = isBiv(p) && p.state === 'pending' ? axisEditor(p) : '';
+    const P = p.args?.params || {};
+    const resEd = p.state !== 'pending' || p.action !== 'run_job' ? ''
+      : p.res_options?.length ? `<label class="ai-res tiny">ความละเอียด <select data-k="target_res">${p.res_options.map(o => `<option value="${esc(o.value)}" ${String(o.value) === String(P.target_res) ? 'selected' : ''}>${esc(o.label)} · ${fmt(o.pixels / 1e6, 1)} ล้านพิกเซล${o.same_as_source ? ' · = ข้อมูล' : ''}</option>`).join('')}</select></label>`
+      : ['hex', 'hexbiv'].includes(p.args.kind) ? `<label class="ai-res tiny">ขนาดหกเหลี่ยม (กม.) <input type="number" min="0.01" step="any" data-k="size_km" value="${esc(P.size_km ?? 1)}"></label>` : '';
+    const edit = resEd + (isBiv(p) && p.state === 'pending' ? axisEditor(p) : '');
     const detail = p.action === 'run_job' ? `<details class="tiny"><summary>ค่าที่ตั้ง</summary><pre translate="no">${esc(JSON.stringify(p.args.params, null, 1))}</pre></details>` : '';
     const stx = { pending: '', running: '<span class="tiny muted">กำลังส่ง…</span>', done: `<span class="tiny ok-t">${IC.check}${esc(p.result || 'เรียบร้อย')}</span>`,
       rejected: '<span class="tiny muted">ไม่ทำ</span>', moved: '<span class="tiny muted">เปิดไปปรับในหน้าสร้างไบแวเรียตแล้ว</span>',
@@ -134,7 +138,12 @@ const AIDock = (() => {
   }
 
   function onEdit(p, el) {
-    const P = p.args.params, c = P[el.dataset.ax] = P[el.dataset.ax] || {}, k = el.dataset.k;
+    const k = el.dataset.k;
+    if (!el.dataset.ax) {                                   // ค่าระดับงาน: ความละเอียด / ขนาดหกเหลี่ยม
+      p.args.params[k] = k === 'size_km' ? +el.value : el.value;
+      p.edited = true; save(); drawMsgs(); return;
+    }
+    const P = p.args.params, c = P[el.dataset.ax] = P[el.dataset.ax] || {};
     if (k === 'n') c.n = +el.value;
     else if (k === 'order') c.order = el.checked ? 'classify_first' : 'auto';
     else if (k === 'breaks') c.breaks = el.value.split(/[,\s]+/).map(Number).filter(v => !isNaN(v) && el.value.trim());
@@ -206,7 +215,7 @@ const AIDock = (() => {
       c.querySelector('[data-ok]')?.addEventListener('click', () => decide(mi, pi, true));
       c.querySelector('[data-no]')?.addEventListener('click', () => decide(mi, pi, false));
       c.querySelector('[data-form]')?.addEventListener('click', () => decide(mi, pi, false, true));
-      c.querySelectorAll('.ai-edit [data-k]').forEach(el => el.addEventListener('change', () => onEdit(hist[mi].proposals[pi], el)));
+      c.querySelectorAll('.ai-edit [data-k], .ai-res [data-k]').forEach(el => el.addEventListener('change', () => onEdit(hist[mi].proposals[pi], el)));
     });
     m.scrollTop = m.scrollHeight;
   }

@@ -15,6 +15,7 @@ window.I18N_EN = {
 "ปรับสัญลักษณ์": "Symbology",
 "ทำรายงาน": "Make report",
 "รายงาน \"": "Report \"",
+"ขนาดหกเหลี่ยม (กม.)": "Hexagon size (km)",
 "GB ก่อนบีบอัด) — อาจใช้เวลาหลายสิบนาทีและพื้นที่ดิสก์มาก ขั้นสร้าง overview ตอนท้ายหยุดกลางทางไม่ได้ (ยกเลิก = บังคับหยุด) · ถ้าต้องการแค่ไขว้ ไม่ต้องแปลงก่อน — หน้าไบแวเรียตแตกพิกเซลให้ระหว่างคำนวณเอง": "GB before compression) — may take tens of minutes and a lot of disk space. The final overview step cannot be stopped midway (cancel = force stop) · If you only need to cross the data, no need to convert first — the bivariate page splits pixels during calculation",
 "ขอบเขตและชื่อที่แสดงบนแผนที่นี้ไม่ได้แสดงการรับรองอย่างเป็นทางการ · The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance.": "The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance.",
 "The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance. · ขอบเขตและชื่อบนแผนที่นี้ไม่ได้แสดงการรับรองอย่างเป็นทางการ": "The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance.",
