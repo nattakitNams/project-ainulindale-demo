@@ -1,0 +1,74 @@
+
+
+
+
+
+
+
+🔒 The key is stored encrypted by the engine on this computer (Windows DPAPI) — not in the browser, never uploaded
+
+Enter the server address, e.g. http://localhost:11434/v1 (Ollama) or https://openrouter.ai/api/v1
+
+
+
+Ask anything about your data or the app… (Enter to send · Shift+Enter for a new line)
+When on, a chat panel appears at the bottom right of every page (can be hidden) · sign in with an API key in the chat panel
+Sent to the AI: chat messages + names/types of datasets in your library (data files are never sent)
+
+
+
+Delete the encrypted API key stored on this computer (you will need to enter it again to use the assistant)
+Subscription accounts (ChatGPT Plus / Claude Pro) cannot be used instead of an API key
+Account quota or rate limit exceeded — wait a moment or check your credit balance
+
+OpenAI-compatible (Ollama / OpenRouter / organization server)
+
+
+The provider did not reply with JSON — check the server address
+
+The provider returned no text (it may have been blocked by a content filter)
+Not connected — enter a key in the chat panel at the bottom right
+Find population density data in the Data hub
+Connect an AI provider with your API key
+Which value types should flood and population data use
+Invalid key, or no access to this model
+The AI assistant is off (turn it on in "System")
+Connected, but no chat models were found
+
+
+(leave empty if the server does not need one)
+
+Settings (model / sign out)
+Cannot reach the provider (
+
+Unknown provider
+Get an API key here ↗
+Sign out (delete key)
+Server address
+Not connected
+
+
+
+Provider replied
+Model changed
+Checking key…
+Paste key here
+Open AI assistant
+Load model list
+Connected
+Provider
+No message
+Clear conversation
+Sign out?
+Enter an API key
+AI assistant
+
+Delete key
+Hide
+Model
+e.g.
+Send
+
+
+On
+Off

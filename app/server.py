@@ -13,7 +13,7 @@ from flask import Flask, Response, jsonify, request, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import aoi as aoimod
-from . import basedata, catalog, db, dsinfo, engine, export, folders, jobs, links, ops, ops3, palettes, symbology, tiles, trash, vault
+from . import ai, basedata, catalog, db, dsinfo, engine, export, folders, jobs, links, ops, ops3, palettes, symbology, tiles, trash, vault
 from . import gridmath as gm
 from .config import APP_NAME, APP_VERSION, DIRS, PORT, ROOT, STATIC, WORKSPACE, ensure_workspace
 
@@ -190,6 +190,53 @@ def add_ds():
 @app.errorhandler(folders.FolderError)
 def folder_err(e):
     return jsonify(error=str(e)), 400
+
+
+@app.errorhandler(ai.AiError)
+def ai_err(e):
+    return jsonify(error=str(e)), 400
+
+
+# ---------- ผู้ช่วย AI (key อยู่ใน vault — ไม่ส่งกลับหน้าเว็บ) ----------
+@app.route('/api/ai')
+def ai_status():
+    return jsonify(ai.status())
+
+
+@app.route('/api/ai', methods=['PATCH'])
+def ai_update():
+    b = request.get_json(force=True)
+    if 'enabled' in b:
+        ai.save(enabled=bool(b['enabled']))
+    if b.get('model'):
+        if not ai.status()['connected']:
+            raise ai.AiError('ยังไม่ได้เชื่อมต่อ')
+        ai.save(model=str(b['model'])[:200])
+    return jsonify(ai.status())
+
+
+@app.route('/api/ai/login', methods=['POST'])
+def ai_login():
+    b = request.get_json(force=True)
+    ids = ai.login(b.get('provider'), b.get('api_key'), b.get('base_url'))
+    return jsonify(dict(ai.status(), models=ids))
+
+
+@app.route('/api/ai/logout', methods=['POST'])
+def ai_logout():
+    ai.logout()
+    return jsonify(ai.status())
+
+
+@app.route('/api/ai/models', methods=['POST'])       # POST: GET ที่ไม่มี Origin ผ่านด่านได้ — ไม่ให้ใครกระตุ้นให้ใช้ key
+def ai_models():
+    return jsonify(models=ai.models(), model=ai.cfg().get('model'))
+
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    b = request.get_json(force=True)
+    return jsonify(ai.chat(b.get('messages'), b.get('page')))
 
 
 @app.route('/api/folders')

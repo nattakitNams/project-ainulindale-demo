@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.17';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.18';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1871,9 +1871,9 @@ async function pageSystem() {
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>โทเคน (เข้ารหัส)</h2><button class="sm" id="secAdd">${IC.plus}เพิ่ม</button></div>
         ${s.secrets.length ? `<table><tbody>${s.secrets.map(x => `<tr><td>🔒 ${esc(x.name)}</td><td class="mono tiny muted">${x.id}</td><td style="text-align:right"><button class="sm ghost danger" data-sec="${x.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">ยังไม่มี</div>'}
         <div class="tiny muted" style="margin-top:8px">เข้ารหัสด้วย Windows DPAPI · ใช้กับลิงก์ ArcGIS / WMS ที่ต้องยืนยันตัวตน · ไม่ถูกบันทึกใน lineage หรือ log</div></div>
-      <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>ติดตั้งเป็นโปรแกรม (3.9)</h2></div>
-        <p class="small muted" style="margin:0">ตอนนี้เปิดด้วย <span class="mono">run.bat</span> (ต้องมี Python + ไลบรารีในเครื่อง) · การห่อเป็นโปรแกรมติดตั้ง (ไม่ต้องลง Python) ต้องติดตั้งเครื่องมือเพิ่ม — ดู DEVLOG</p></div>
+      <div class="card" id="aiCard"></div>
     </div></div>`;
+  if (window.AIDock) AIDock.settingsCard($('#aiCard'));
   const clr = async (what, ask) => {
     if (ask && !await ui.confirm('ยืนยัน', `<p>${ask}</p>`, 'ดำเนินการ')) return;
     const r = await api(ENGINE + '/api/system/clear', { json: { what } }); toast(`เรียบร้อย${r.freed ? ' · คืนพื้นที่ ' + bytes(r.freed) : ''}`); route();
@@ -2899,4 +2899,5 @@ function versionBanner() {
   ainuEngine.badge(STATE);
   jobBadge(); setInterval(jobBadge, 3000);
   route();
+  if (window.AIDock) AIDock.init();                         // ผู้ช่วย AI (โชว์เฉพาะเมื่อเปิดใช้ในหน้า "ระบบ")
 })();

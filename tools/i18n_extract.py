@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TH = re.compile(r'[฀-๿]')
-WEB = ['web/app.js', 'web/hub.js', 'web/report.js', 'web/config.js', 'web/setup.js', 'web/index.html']
+WEB = ['web/app.js', 'web/ai.js', 'web/hub.js', 'web/report.js', 'web/config.js', 'web/setup.js', 'web/index.html']
 PY = sorted((ROOT / 'app').glob('*.py'))
 FRAG = re.compile(r"[^<>`'\"{}$\n|\\]*[฀-๿][^<>`'\"{}$\n|\\]*")
 

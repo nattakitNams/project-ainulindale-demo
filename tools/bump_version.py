@@ -14,7 +14,7 @@ RULES = [
     ('web/app.js', r"(const UI_VERSION = ')[\d.]+(')"),
     ('web/index.html', r'(<meta name="ainu-version" content=")[\d.]+(")'),
     ('web/index.html', r'(href="(?:style|report)\.css\?v=)[\d.]+(")'),
-    ('web/index.html', r'(src="(?:config|palette|report|app|hub|i18n|i18n_en)\.js\?v=)[\d.]+(")'),
+    ('web/index.html', r'(src="(?:config|palette|report|app|ai|hub|i18n|i18n_en)\.js\?v=)[\d.]+(")'),
     ('web/config.js', r"('setup\.js\?v=)[\d.]+(')"),
 ]
 
