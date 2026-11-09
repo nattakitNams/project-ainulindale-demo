@@ -1,0 +1,5 @@
+The assistant asks about anything unclear, designs the analysis around your purpose, then proposes jobs for you to confirm
+The assistant recommends the analysis and settings for your purpose
+Start by saying what the map is for and who will use it — e.g.
+Purpose
+"Find areas where many people live and floods recur, so management can prioritise assistance nationwide"

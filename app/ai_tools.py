@@ -222,8 +222,10 @@ def _res_ids(kind, p):
     return []
 
 
-def t_propose_run_job(kind, params_json, title=None):
+def t_propose_run_job(kind, params_json, title=None, purpose=None):
     p = _params(kind, params_json)
+    if purpose:                                             # วัตถุประสงค์ → ลง lineage ของผลลัพธ์ (รายงานดึงไปใช้ได้)
+        p['purpose'] = str(purpose)[:500]
     t = title or (p.get('name') and f'{kind}: {p["name"]}') or kind
     ids = [i for i in _res_ids(kind, p) if i]
     res_opts = None
@@ -278,7 +280,7 @@ REPORT_TEMPLATES = {'gov_l': 'ราชการ A4 แนวนอน', 'gov_p'
                     'journal': 'ภาพประกอบบทความวิชาการ', 'poster_a3': 'โปสเตอร์ A3 แนวตั้ง', 'dashboard': 'Dashboard / อินโฟกราฟิก A4'}
 
 
-def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle='', org='', author='', note='', caption='', map_no='', extent_aoi_id=None):
+def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle='', org='', author='', note='', caption='', map_no='', extent_aoi_id=None, purpose=''):
     """รายงานจัดหน้าอยู่ในเบราว์เซอร์ (ตัวออกแบบรายงาน) → ยืนยันแล้วหน้าเว็บเปิดตัวออกแบบพร้อมค่าที่ตั้งนี้ ผู้ใช้กดส่งออก PDF เอง"""
     if template not in REPORT_TEMPLATES:
         raise ToolError(f'template ต้องเป็นหนึ่งใน {", ".join(REPORT_TEMPLATES)}')
@@ -292,7 +294,9 @@ def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle=''
         t_ids = [a['id'] for a in t_list_study_areas()]
         if int(extent_aoi_id) not in t_ids:
             raise ToolError(f'ไม่พบพื้นที่ศึกษา #{extent_aoi_id}')
-    spec = dict(dataset_ids=[int(i) for i in dataset_ids], template=template, extent_aoi_id=int(extent_aoi_id) if extent_aoi_id else None,
+    if purpose and not note:                                # วัตถุประสงค์ขึ้นเป็นหมายเหตุของรายงาน (แก้ได้ในตัวออกแบบ)
+        note = f'วัตถุประสงค์: {purpose}'
+    spec = dict(dataset_ids=[int(i) for i in dataset_ids], template=template, extent_aoi_id=int(extent_aoi_id) if extent_aoi_id else None, purpose=str(purpose)[:500] or None,
                 meta={k: str(v)[:300] for k, v in dict(title=title, subtitle=subtitle, org=org, author=author, note=note, caption=caption, map_no=map_no).items() if v})
     return _propose('create_report', f'รายงาน "{title or names[0]}" · {REPORT_TEMPLATES[template]} · ' + ', '.join(names[:4]), spec,
                     lambda: dict(ok=True, template=REPORT_TEMPLATES[template], layers=names))
@@ -353,11 +357,11 @@ TOOLS = [
     ('propose_set_value_type', 'action', t_propose_set_value_type, 'เสนอยืนยัน/เปลี่ยนประเภทค่าของราสเตอร์ (ผู้ใช้ต้องกดยืนยัน)',
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',
-     dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S, title=S), ['kind', 'params_json']),
+     dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S, title=S, purpose=S), ['kind', 'params_json', 'purpose']),
     ('propose_create_report', 'action', t_propose_create_report,
      'เสนอทำรายงานแผนที่ (เปิดตัวออกแบบรายงานพร้อมเทมเพลต/ชั้นข้อมูล/ข้อความ ผู้ใช้กดยืนยันแล้วส่งออก PDF เอง) — dataset_ids ปกติคือแผนที่ไบแวเรียตที่ทำเสร็จแล้ว',
      dict(dataset_ids=dict(type='array', items=I), template=dict(type='string', enum=list(REPORT_TEMPLATES)), title=S, subtitle=S, org=S, author=S,
-          note=S, caption=S, map_no=S, extent_aoi_id=I), ['dataset_ids', 'title']),
+          note=S, caption=S, map_no=S, extent_aoi_id=I, purpose=S), ['dataset_ids', 'title', 'purpose']),
     ('propose_create_study_area', 'action', t_propose_create_study_area, 'เสนอสร้างพื้นที่ศึกษาจากชั้นขอบเขต (เลือกค่าของฟิลด์ เช่น ชื่อจังหวัด)',
      dict(name=S, source_dataset_id=I, field=S, values=dict(type='array', items=S)), ['name', 'source_dataset_id', 'field', 'values']),
 ]

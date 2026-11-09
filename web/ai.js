@@ -128,6 +128,7 @@ const AIDock = (() => {
   const MODE_TH = { presence: 'มี / ไม่มี (1 / 0)', attribute: 'ค่าจากฟิลด์', majority: 'ค่าจากฟิลด์ที่กินพื้นที่มากสุด', fraction: 'สัดส่วนพื้นที่ (0–1)', diff: 'ผลต่าง', pct: 'ร้อยละที่เปลี่ยน', transition: 'การเปลี่ยนชั้น' };
   function summary(p) {
     const P = p.args.params, rows = [['งาน', JOB_TH[p.args.kind] || p.args.kind]];
+    if (P.purpose) rows.push(['วัตถุประสงค์', `<span translate="no">${esc(P.purpose)}</span>`]);
     const aoiName = id => (p.info?.aois || {})[String(id)] || `#${id}`;
     const resName = v => (p.res_options || []).find(o => String(o.value) === String(v))?.label || `${v}`;
     const axis = ax => {
@@ -169,7 +170,9 @@ const AIDock = (() => {
     const stx = { pending: '', running: '<span class="tiny muted">กำลังส่ง…</span>', done: `<span class="tiny ok-t">${IC.check}${esc(p.result || 'เรียบร้อย')}</span>`,
       rejected: '<span class="tiny muted">ไม่ทำ</span>', moved: '<span class="tiny muted">เปิดไปปรับในหน้าสร้างไบแวเรียตแล้ว</span>',
       failed: `<span class="tiny warn-t">${esc(p.result || 'ไม่สำเร็จ')}</span>` }[p.state];
-    return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>${est}${edit}${detail}
+    const purpose = p.args?.params?.purpose || p.args?.purpose;
+    return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>
+      ${purpose ? `<div class="ai-purpose tiny">${IC.target}<span>วัตถุประสงค์: <span translate="no">${esc(purpose)}</span></span></div>` : ''}${est}${edit}${detail}
       <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}${p.action === 'create_report' ? 'เปิดตัวออกแบบรายงาน' : 'ยืนยัน'}</button>`
         + (isBiv(p) ? `<button class="sm ghost" data-form title="ใส่ค่าทั้งหมดลงฟอร์มหน้าสร้างไบแวเรียต แล้วปรับ/รันเอง">ปรับในหน้าสร้างไบแวเรียต</button>` : '')
         + '<button class="sm ghost" data-no>ไม่ทำ</button>' : stx}</div></div>`;
@@ -239,7 +242,7 @@ const AIDock = (() => {
   function drawMsgs() {
     const m = dock().querySelector('.ai-msgs');
     if (!m) return;
-    m.innerHTML = (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">${st.mode === 'propose' ? 'เช่น "สร้างไบแวเรียตประชากร 2024 × จำนวนปีน้ำท่วม ทั้งประเทศ ความละเอียด 1 กม." — ผู้ช่วยจะตรวจข้อมูลแล้วเสนองานให้กดยืนยัน' : 'เช่น "ข้อมูลน้ำท่วมกับประชากรควรตั้งประเภทค่าอะไร" · "หาข้อมูลความหนาแน่นประชากรใน Data hub ให้หน่อย"'}</div>`)
+    m.innerHTML = (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เริ่มจากบอกว่าจะทำแผนที่ไปเพื่ออะไร ใครดู — เช่น "อยากรู้ว่าพื้นที่ไหนคนอยู่หนาแน่นและน้ำท่วมซ้ำบ่อย เพื่อเสนอผู้บริหารจัดลำดับพื้นที่ช่วยเหลือทั้งประเทศ"<br>${st.mode === 'propose' ? 'ผู้ช่วยจะถามสิ่งที่ยังไม่ชัด ออกแบบการวิเคราะห์ตามวัตถุประสงค์ แล้วเสนองานให้กดยืนยัน' : 'ผู้ช่วยจะแนะนำการวิเคราะห์และการตั้งค่าตามวัตถุประสงค์'}</div>`)
       + hist.map((x, mi) => x.role === 'event'
         ? `<div class="ai-msg event">${esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
         : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
