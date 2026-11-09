@@ -1,0 +1,32 @@
+
+Output extent = the bounding box of the selected study area — inside the study area, pixels outside the vector shapes get 0 · outside the study area = no data (set in the
+Output extent = the bounding box of this vector — to cross it with nationwide data (e.g. population), choose the study area
+
+
+
+
+
+
+
+
+None yet — built from the GISTDA province boundary layer (needs internet)
+
+
+or that raster, otherwise the map only covers the overlapping part
+
+
+Rasters in the library — cover the full extent of the dataset
+
+
+Union of the 77 province boundaries (GISTDA 2016)
+Building base study areas…
+
+Build base study areas
+My study areas
+Base study areas
+
+study area #
+Could not build
+
+
+

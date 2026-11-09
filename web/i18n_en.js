@@ -1698,5 +1698,17 @@ window.I18N_EN = {
 "\" แค่": "\" only",
 "1 กม.": "1 km",
 "10 ม.": "10 m",
-"30 ม.": "30 m"
+"30 ม.": "30 m",
+"ขอบเขตผลลัพธ์ = กรอบของพื้นที่ศึกษาที่เลือก — ในพื้นที่ศึกษานอกรูปเวกเตอร์ได้ 0 · นอกพื้นที่ศึกษา = ไม่มีข้อมูล (ตั้งในช่อง": "Output extent = the bounding box of the selected study area — inside the study area, pixels outside the vector shapes get 0 · outside the study area = no data (set in the",
+"ขอบเขตผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือกพื้นที่ศึกษา": "Output extent = the bounding box of this vector — to cross it with nationwide data (e.g. population), choose the study area",
+"ยังไม่มี — สร้างจากชั้นขอบเขตจังหวัด GISTDA (ต้องต่ออินเทอร์เน็ต)": "None yet — built from the GISTDA province boundary layer (needs internet)",
+"หรือ raster ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน": "or that raster, otherwise the map only covers the overlapping part",
+"raster ในคลัง — ครอบทั้งผืนเท่ากับชุดนี้": "Rasters in the library — cover the full extent of the dataset",
+"รวมขอบเขต 77 จังหวัด (GISTDA 2559)": "Union of the 77 province boundaries (GISTDA 2016)",
+"กำลังสร้างพื้นที่ศึกษาพื้นฐาน…": "Building base study areas…",
+"สร้างพื้นที่ศึกษาพื้นฐาน": "Build base study areas",
+"พื้นที่ศึกษาที่สร้างเอง": "My study areas",
+"พื้นที่ศึกษาพื้นฐาน": "Base study areas",
+"พื้นที่ศึกษา #": "study area #",
+"สร้างไม่ได้": "Could not build"
 };

@@ -1199,7 +1199,11 @@ def cancel_job(jid):
 # ---------------- พื้นที่ศึกษา ----------------
 @app.route('/api/aoi')
 def aoi_list():
-    return jsonify(db.query('SELECT * FROM aoi WHERE trashed_at IS NULL ORDER BY id DESC'))
+    rows = db.query('SELECT * FROM aoi WHERE trashed_at IS NULL ORDER BY id DESC')
+    for a in rows:                                        # พื้นที่ศึกษาพื้นฐาน (เช่น ประเทศไทย) ขึ้นก่อน
+        a['builtin'] = isinstance(a.get('source'), dict) and a['source'].get('type') == 'base'
+    rows.sort(key=lambda a: not a['builtin'])
+    return jsonify(rows)
 
 
 @app.route('/api/aoi', methods=['POST'])

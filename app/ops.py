@@ -610,7 +610,8 @@ def rasterize_grid(p, vds):
     """กริดผลลัพธ์ของการแปลง vector → raster (พื้นที่ศึกษาตัดต่อทีหลัง)
     grid='ref'  → แลตทิซ + CRS ของ raster อ้างอิง (พิกเซลตรงกัน ใช้ไบแวเรียตต่อได้ แม้ vector อยู่นอกขอบเขตของ raster นั้น)
     grid='own'  → CRS ที่เลือก (ค่าเริ่มต้น = ของ vector) + ความละเอียดที่พิมพ์ · แลตทิซยึด (0, 0)
-    ขอบเขต: extent_dataset_id = raster ในคลัง → ครอบทั้งผืนของชุดนั้น (เช่น ทั้งประเทศ: นอกรูป vector = 0 ไม่ใช่ "ไม่มีข้อมูล")
+    ขอบเขต: extent_aoi_id = กรอบของพื้นที่ศึกษา (เช่น ประเทศไทย)
+            extent_dataset_id = raster ในคลัง → ครอบทั้งผืนของชุดนั้น (เช่น ทั้งประเทศ: นอกรูป vector = 0 ไม่ใช่ "ไม่มีข้อมูล")
             ไม่ระบุ → กรอบของ vector (ไบแวเรียตกับชุดที่ใหญ่กว่าจะได้แค่ส่วนที่ทับกัน)"""
     from rasterio.crs import CRS
     from rasterio.warp import transform_bounds
@@ -634,7 +635,13 @@ def rasterize_grid(p, vds):
         raise EngineError('ใส่ความละเอียดเป็นตัวเลข')
     if res <= 0:
         raise EngineError('ความละเอียดต้องมากกว่า 0')
-    if p.get('extent_dataset_id'):
+    if p.get('extent_aoi_id'):                         # กรอบของพื้นที่ศึกษา (เช่น ประเทศไทย)
+        from . import aoi as aoimod
+        try:
+            b, bcrs = aoimod.get(int(p['extent_aoi_id']))['bbox'], CRS.from_epsg(4326)
+        except aoimod.AoiError as e:
+            raise EngineError(str(e))
+    elif p.get('extent_dataset_id'):
         ext = db.get('datasets', int(p['extent_dataset_id']))
         if ext is None or ext['kind'] != 'raster' or not ext['meta'].get('bounds'):
             raise EngineError('ขอบเขตผลลัพธ์ต้องเป็น raster ในคลัง')
@@ -660,7 +667,7 @@ def op_rasterize(job, P, log):
         raise EngineError('โหมดนี้ต้องเลือกฟิลด์')
     grid, gmode = rasterize_grid(p, vds)
     masker, mf, aoi_info = setup_aoi(p, grid, [], log)
-    log(f'กริด {gmode}: {grid.describe()["res_label"]} · {grid.out_shape[1]:,} × {grid.out_shape[0]:,} พิกเซล · ขอบเขตตาม {"raster #" + str(p["extent_dataset_id"]) if p.get("extent_dataset_id") else "vector"}{" + พื้นที่ศึกษา" if aoi_info else ""}')
+    log(f'กริด {gmode}: {grid.describe()["res_label"]} · {grid.out_shape[1]:,} × {grid.out_shape[0]:,} พิกเซล · ขอบเขตตาม {"พื้นที่ศึกษา #" + str(p["extent_aoi_id"]) if p.get("extent_aoi_id") else "raster #" + str(p["extent_dataset_id"]) if p.get("extent_dataset_id") else "vector"}{" + พื้นที่ศึกษา" if aoi_info else ""}')
     log(f'อ่าน vector "{vds["name"]}"…')
     use_index = field == '__index__'                  # ค่า = ลำดับ feature ในไฟล์ (1, 2, 3, …)
     from .dsinfo import read_vector

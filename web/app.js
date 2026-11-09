@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.16';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.17';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -375,7 +375,7 @@ async function pageDataset(id) {
     d.format === 'shp' ? ['การเข้ารหัสข้อความ', `<div class="row"><select id="encSel">${Object.entries(d.encodings || {}).map(([k, v]) => `<option value="${k}" ${(m.encoding_manual ? m.encoding : '') === k ? 'selected' : ''}>${esc(v)}${!k && m.encoding_auto ? ' → ' + esc(m.encoding_auto) : ''}</option>`).join('')}</select></div>
       <div class="tiny muted">ภาษาไทยเพี้ยน (เช่น Í.à©ÅÔÁ) → เลือก TIS-620 · ถ้าเป็น "?????" แปลว่าเสียมาจากไฟล์ต้นทาง เลือกอะไรก็กู้ไม่ได้</div>`] : null];
   const rasters = all.filter(x => x.kind === 'raster');
-  const aoiOpts = `<option value="">ทั้งขอบเขตข้อมูล</option>` + aois.map(a => `<option value="${a.id}">${esc(a.name)} · ${fmt(a.area_km2, 0)} ตร.กม.</option>`).join('');
+  const aoiOpts = `<option value="">ทั้งขอบเขตข้อมูล</option>` + aoiOptions(aois);
   v.innerHTML = head(`${ROLE[d.role]} · ${d.kind}`, `${esc(d.name)} <span class="edit" id="ren" title="แก้ชื่อ">${IC.edit}</span>`,
     `<span class="chip ${d.kind}">${d.kind}</span> ${d.role !== 'input' ? `<span class="chip ${d.role}">${ROLE[d.role]}</span>` : ''} ${isR ? `<span class="chip">${esc((m.res_label || '').split(' (')[0])}</span>` : ''}`,
     `<button id="toViewer">${IC.layers}เปิดในแผนที่ซ้อนชั้น</button><a class="btn" href="#/report?ds=${d.id}">${IC.pdf}ออกแบบรายงาน</a><a class="btn" href="#/">← คลังข้อมูล</a>`)
@@ -429,7 +429,7 @@ async function pageDataset(id) {
           <label class="field rzRef"><span>ความละเอียด</span><select id="rzRes"></select></label>
           <label class="field rzOwn"><span>ระบบพิกัด</span><select id="rzCrs"><option value="">ของไฟล์นี้ (${esc((m.crs_name || '').split(' · ')[0])})</option><option value="EPSG:32647">UTM โซน 47N (EPSG:32647)</option><option value="EPSG:32648">UTM โซน 48N (EPSG:32648)</option><option value="EPSG:4326">WGS 84 องศา (EPSG:4326)</option></select></label>
           <label class="field rzOwn"><span>ความละเอียด <b id="rzUnit"></b></span><select id="rzResSel"></select><input type="number" id="rzResOwn" class="hide" min="0" step="any" value="30" placeholder="พิมพ์ความละเอียด" style="margin-top:6px"></label>
-          <div class="field full"><span>ขอบเขตผลลัพธ์</span><select id="rzExt"><option value="">กรอบของชุดนี้ (bbox ของเวกเตอร์)</option>${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ครอบทั้งผืนเท่ากับชุดนี้</option>`).join('')}</select></div>
+          <div class="field full"><span>ขอบเขตผลลัพธ์</span><select id="rzExt"></select></div>
           <label class="field"><span>วิธีแปลง</span><select id="rzMode"><option value="presence">มี / ไม่มี (1 / 0)</option><option value="attribute">ค่าจากฟิลด์</option><option value="majority">ค่าจากฟิลด์ — ที่กินพื้นที่มากสุดในพิกเซล</option><option value="fraction">สัดส่วนพื้นที่ที่ทับ (0–1)</option></select></label>
           <label class="field rzF"><span>ฟิลด์ที่ใช้เป็นค่า</span><select id="rzField"><option value="">— เลือกฟิลด์ —</option>${m.fields.map(f => { const num = /int|float|double|real/i.test(f.type); return `<option value="${esc(f.name)}" data-num="${num ? 1 : 0}">${esc(f.name)} · ${num ? 'ตัวเลข' : 'ข้อความ'}</option>`; }).join('')}<option value="__index__">ลำดับ feature (1, 2, 3…)</option></select></label>
           <label class="field"><span>พิกเซลไหนนับ</span><select id="rzRule"><option value="center">จุดกึ่งกลางพิกเซลอยู่ในรูป</option><option value="touch">แตะรูปนิดเดียวก็นับ (all touched)</option></select></label>
@@ -527,7 +527,12 @@ async function pageDataset(id) {
     };
     // ขอบเขต: จับกริดกับ raster → ค่าเริ่มต้นครอบทั้งผืนเท่าชุดนั้น (นอกรูป = 0 ไบแวเรียตได้ทั้งพื้นที่) จนกว่าผู้ใช้เลือกเอง
     const rzExtDefault = () => { if (!rzExtTouched) $('#rzExt').value = rzGrid === 'ref' ? $('#rzRef').value : ''; };
-    $('#rzExt').onchange = () => { rzExtTouched = true; rzSync(); };
+    $('#rzExt').onchange = () => {
+      rzExtTouched = true;
+      const a = $('#rzExt').value.startsWith('aoi:') ? $('#rzExt').value.slice(4) : null;
+      if (a && !$('#rzAoi').value) $('#rzAoi').value = a;          // ขอบเขต = พื้นที่ศึกษา → ตัดตามรูปนั้นด้วย (นอกเขต เช่น ทะเล = ไม่มีข้อมูล)
+      rzSync();
+    };
     const rzSync = () => {
       $$('#rzGrid button').forEach(b => b.classList.toggle('on', b.dataset.g === rzGrid));
       $$('.rzRef').forEach(e => e.classList.toggle('hide', rzGrid !== 'ref'));
@@ -542,9 +547,11 @@ async function pageDataset(id) {
         attribute: `พิกเซลได้ค่าของ ${fld}${txt ? ' — <b>ข้อความ</b> จะแปลงเป็นรหัส 1, 2, 3… พร้อมไฟล์ตารางรหัส (_codes.csv)' : ''} · รูปที่ซ้อนกัน ตัวหลังทับตัวก่อน`,
         majority: `พิกเซลได้ค่าของ ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
         fraction: 'สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ',
-      })[md] + '<br><span class="tiny">' + ($('#rzExt').value
+      })[md] + '<br><span class="tiny">' + ($('#rzExt').value.startsWith('aoi:')
+        ? 'ขอบเขตผลลัพธ์ = กรอบของพื้นที่ศึกษาที่เลือก — ในพื้นที่ศึกษานอกรูปเวกเตอร์ได้ 0 · นอกพื้นที่ศึกษา = ไม่มีข้อมูล (ตั้งในช่อง "พื้นที่ศึกษา")'
+        : $('#rzExt').value
         ? 'ขอบเขตผลลัพธ์ = ทั้งผืนของ raster ที่เลือก — นอกรูปเวกเตอร์ได้ 0 (ไบแวเรียตกับชุดนั้นได้ครบทั้งพื้นที่)'
-        : 'ขอบเขตผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือก "ครอบทั้งผืนเท่ากับ" ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน') + '</span>';
+        : 'ขอบเขตผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือกพื้นที่ศึกษา "ประเทศไทย" หรือ raster ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน') + '</span>';
     };
     $$('#rzGrid button').forEach(b => b.onclick = () => { if (b.disabled) return; rzGrid = b.dataset.g; if (rzGrid === 'ref' && !$('#rzRes').options.length) loadRz(); rzExtDefault(); rzSync(); });
     $('#rzRef').onchange = () => { loadRz(); rzExtDefault(); rzSync(); };
@@ -553,7 +560,9 @@ async function pageDataset(id) {
     $('#rzField').onchange = () => { if ($('#rzField').value && $('#rzMode').value === 'presence') $('#rzMode').value = 'attribute'; rzSync(); };
     const rasOpt = tail => x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${tail(x)}</option>`;
     dsPicker($('#rzRef'), rasters, fr.folders || [], rasOpt(x => esc((x.meta.res_label || '').split(' (')[0])), null);
-    dsPicker($('#rzExt'), rasters, fr.folders || [], rasOpt(() => 'ครอบทั้งผืนเท่ากับชุดนี้'), 'กรอบของชุดนี้ (bbox ของเวกเตอร์)');
+    // ขอบเขตผลลัพธ์: กรอบเวกเตอร์ · หมวดพื้นที่ศึกษา (พื้นฐานขึ้นก่อน) · หมวด raster ในคลัง
+    dsPicker($('#rzExt'), rasters, fr.folders || [], rasOpt(x => esc((x.meta.res_label || '').split(' (')[0])), 'กรอบของชุดนี้ (bbox ของเวกเตอร์)',
+      aoiOptions(aois, { val: a => 'aoi:' + a.id }), 'raster ในคลัง — ครอบทั้งผืนเท่ากับชุดนี้');
     rzFillRes();
     rzSync();
     if ($('#hxRun')) hexCardBind(d);
@@ -562,7 +571,8 @@ async function pageDataset(id) {
       if ((md === 'attribute' || md === 'majority') && !$('#rzField').value) return toast('เลือกฟิลด์ที่จะใช้เป็นค่าก่อน', true);
       const g = rzGrid === 'ref' ? { grid: 'ref', ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value } : { grid: 'own', crs: $('#rzCrs').value || null, target_res: $('#rzResOwn').value };
       if (!(+g.target_res > 0) && !String(g.target_res).includes('/')) return toast('ใส่ความละเอียด', true);
-      runJob('rasterize', { dataset_id: id, ...g, extent_dataset_id: +$('#rzExt').value || null, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
+      const ev = $('#rzExt').value, ext = ev.startsWith('aoi:') ? { extent_aoi_id: +ev.slice(4) } : { extent_dataset_id: +ev || null };
+      runJob('rasterize', { dataset_id: id, ...g, ...ext, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
     };
   }
   initMap(d);
@@ -1013,26 +1023,51 @@ const BIV = {
   aoi_id: null, aoi_rule: 'center', aoi_mask_res: '',
 };
 
+// ตัวเลือกพื้นที่ศึกษาแยกหมวด: พื้นฐาน (เช่น ประเทศไทย) ขึ้นก่อน แล้วค่อยที่ผู้ใช้สร้างเอง
+function aoiOptions(aois, { val = a => a.id, text = a => `${esc(a.name)} · ${fmt(a.area_km2, 0)} ตร.กม.`, sel = null } = {}) {
+  const o = a => `<option value="${val(a)}" ${sel != null && String(val(a)) === String(sel) ? 'selected' : ''}>${text(a)}</option>`;
+  const b = aois.filter(a => a.builtin), u = aois.filter(a => !a.builtin);
+  return (b.length ? `<optgroup label="พื้นที่ศึกษาพื้นฐาน">${b.map(o).join('')}</optgroup>` : '')
+    + (u.length ? `<optgroup label="พื้นที่ศึกษาที่สร้างเอง" data-user="1">${u.map(o).join('')}</optgroup>` : '');
+}
+
 // ตัวเลือกชุดข้อมูลแบบค้นหาชื่อ + กรองโฟลเดอร์ (รวมโฟลเดอร์ย่อย) — กรองตัวเลือกใน <select> เดิม ค่าที่เลือกอยู่ไม่หาย
-//   blank = ข้อความตัวเลือกค่าว่าง (null = ไม่มีตัวเลือกว่าง)
-function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —') {
+//   blank = ข้อความตัวเลือกค่าว่าง (null = ไม่มีตัวเลือกว่าง) · extra = ตัวเลือกคงที่ (HTML) ต่อจากค่าว่าง · group = หัวหมวดของชุดข้อมูล
+function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extra = '', group = null) {
   const pathName = id => { const o = []; let f = FOL.find(x => x.id === id); while (f) { o.unshift(f.name); f = FOL.find(x => x.id === f.parent_id); } return o.join(' / '); };
   const sub = id => { const s = new Set([id]); let grew = true; while (grew) { grew = false; FOL.forEach(f => { if (s.has(f.parent_id) && !s.has(f.id)) { s.add(f.id); grew = true; } }); } return s; };
   const box = document.createElement('div');
   box.className = 'dsp';
-  box.innerHTML = (FOL.length ? `<select class="dsp-f" title="โฟลเดอร์"><option value="">ทุกโฟลเดอร์</option><option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>${FOL.map(f => [f.id, pathName(f.id)]).sort((a, b) => a[1].localeCompare(b[1], 'th')).map(([i, p]) => `<option value="${i}" translate="no">📁 ${esc(p)}</option>`).join('')}</select>` : '')
+  box.innerHTML = (FOL.length ? '<select class="dsp-f" title="โฟลเดอร์"></select>' : '')
     + '<input type="search" class="dsp-q" placeholder="ค้นหาชื่อชุดข้อมูล หรือ #id">';
   sel.before(box);
   const q = box.querySelector('.dsp-q'), fs = box.querySelector('.dsp-f');
+  // โฟลเดอร์แบบเปิดทีละชั้น: เห็นเฉพาะโฟลเดอร์ชั้นบน → เลือกแล้วค่อยเห็นโฟลเดอร์ย่อยของมัน (กรองรวมโฟลเดอร์ย่อยทั้งหมด)
+  const byName = (a, b) => a.name.localeCompare(b.name, 'th');
+  const drawFolders = fv => {
+    if (!fs) return;
+    const id = fv && fv !== 'root' ? +fv : null, cur = FOL.find(f => f.id === id), par = cur ? FOL.find(f => f.id === cur.parent_id) : null;
+    const kids = FOL.filter(f => (f.parent_id || null) === id).sort(byName);
+    const nk = f => FOL.some(x => x.parent_id === f.id) ? ' ›' : '';
+    fs.innerHTML = `<option value="">ทุกโฟลเดอร์</option>`
+      + (cur ? (par ? `<option value="${par.id}" translate="no">↑ ${esc(pathName(par.id))}</option>` : '')
+        + `<option value="${cur.id}" translate="no">📂 ${esc(pathName(cur.id))}</option>` : `<option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>`)
+      + kids.map(f => `<option value="${f.id}" translate="no">${cur ? '   ' : ''}📁 ${esc(f.name)}${nk(f)}</option>`).join('');
+    fs.value = fv;
+  };
+  drawFolders('');
   const apply = () => {
     const t = q.value.trim().toLowerCase(), fv = fs ? fs.value : '', cur = sel.value;
+    drawFolders(fv);
     const inF = fv === '' ? null : fv === 'root' ? new Set([null]) : sub(+fv);
     const show = list.filter(d => String(d.id) === cur || ((!inF || inF.has(d.folder_id || null)) && (!t || d.name.toLowerCase().includes(t) || ('#' + d.id).includes(t))));
-    sel.innerHTML = (blank != null ? `<option value="">${blank}</option>` : '') + show.map(optFn).join('') + (show.length > (cur ? 1 : 0) ? '' : '<option disabled>ไม่พบชุดข้อมูลที่ตรงเงื่อนไข</option>');
+    const body = show.map(optFn).join('') + (show.length > (show.some(d => String(d.id) === cur) ? 1 : 0) ? '' : '<option disabled>ไม่พบชุดข้อมูลที่ตรงเงื่อนไข</option>');
+    sel.innerHTML = (blank != null ? `<option value="">${blank}</option>` : '') + extra + (group ? `<optgroup label="${group}">${body}</optgroup>` : body);
     sel.value = cur;
   };
   q.oninput = apply;
   if (fs) fs.onchange = apply;
+  if (!sel.options.length) apply();               // <select> ว่าง → สร้างตัวเลือกครั้งแรก
 }
 
 async function pageBiv() {
@@ -1076,7 +1111,7 @@ async function pageBiv() {
       <div class="cols2">
         <div class="grid-form" style="align-content:start">
           <label class="field full hexOnly"><span>ขนาดหกเหลี่ยม (กม. ระหว่างศูนย์กลาง)</span><input type="number" id="hxSizeB" min="0.01" step="any" value="${BIV.size_km}"><span class="tiny muted" id="hxNoteB"></span></label>
-          <label class="field full"><span>พื้นที่ศึกษา</span><select id="aoi"><option value="">ทั้งขอบเขตข้อมูล (ประเทศไทย)</option>${aois.map(a => `<option value="${a.id}">${esc(a.name)} · ${fmt(a.area_km2, 0)} ตร.กม.</option>`).join('')}</select></label>
+          <label class="field full"><span>พื้นที่ศึกษา</span><select id="aoi"><option value="">ทั้งขอบเขตข้อมูล</option>${aoiOptions(aois)}</select></label>
           <label class="field rasOnly"><span>กติกาตัดพื้นที่</span><select id="aoiRule"><option value="center">ศูนย์กลางพิกเซล</option><option value="touch">แตะ</option></select></label>
           <label class="field rasOnly"><span>ตัดพื้นที่อิงพิกเซลขนาด</span><select id="aoiMask"></select></label>
           <label class="field full rasOnly"><span>ความละเอียดผลลัพธ์</span><select id="res"></select><span class="tiny muted" id="resNote"></span></label>
@@ -1354,8 +1389,13 @@ async function pageAoi(qs) {
         <div class="row" style="margin-top:14px"><input type="text" id="aName" placeholder="ชื่อพื้นที่ศึกษา เช่น สิงห์บุรี" style="flex:1"><button id="aSave" class="primary">${IC.check}บันทึก</button></div>
       </div>
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>พื้นที่ที่บันทึกไว้</h2><span class="chip">${aois.length}</span></div>
-        ${aois.length ? `<table><tbody>${aois.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b translate="no">${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'drawn' ? 'วาดเอง' : a.source?.type === 'coords' ? `พิมพ์พิกัด · ${a.source.points} จุด · ${esc(a.source.crs)}` : `<span translate="no">${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}</span>`}</div></td>
-          <td class="small">${fmt(a.area_km2, 1)} ตร.กม.</td><td style="text-align:right"><button class="sm ghost danger" data-del="${a.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">ยังไม่มี</div>'}
+        ${[['พื้นที่ศึกษาพื้นฐาน', aois.filter(a => a.builtin), 'var(--butter)'], ['พื้นที่ศึกษาที่สร้างเอง', aois.filter(a => !a.builtin), 'var(--mint)']].map(([t, xs, c]) => `
+          <h3 class="aoi-sec" style="--c:${c}">${t} <span class="chip">${xs.length}</span></h3>
+          ${xs.length ? `<table><tbody>${xs.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b translate="no">${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'base' ? esc(a.source.description || '') : a.source?.type === 'drawn' ? 'วาดเอง' : a.source?.type === 'coords' ? `พิมพ์พิกัด · ${a.source.points} จุด · ${esc(a.source.crs)}` : `<span translate="no">${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}</span>`}</div></td>
+          <td class="small">${fmt(a.area_km2, 1)} ตร.กม.</td><td style="text-align:right"><button class="sm ghost danger" data-del="${a.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>`
+          : c === 'var(--butter)'
+            ? `<div class="empty small">ยังไม่มี — สร้างจากชั้นขอบเขตจังหวัด GISTDA (ต้องต่ออินเทอร์เน็ต) <button class="sm" id="aBase">${IC.refresh}สร้างพื้นที่ศึกษาพื้นฐาน</button></div>`
+            : '<div class="empty">ยังไม่มี</div>'}`).join('')}
       </div></div>
       <div class="card sticky"><div class="mapbar"><div class="seg" id="bm"><button data-k="gh">ดาวเทียม</button><button data-k="osm">แผนที่</button><button data-k="none">ไม่มี</button></div><span class="tiny muted" id="mapNote"></span></div>
         <div id="map" class="mapbox"></div></div></div>`;
@@ -1371,6 +1411,11 @@ async function pageAoi(qs) {
     if (k === 'draw') mp.addControl(drawCtl); else mp.removeControl(drawCtl);
   };
   $$('#mode button').forEach(b => b.onclick = () => setMode(b.dataset.k));
+  if ($('#aBase')) $('#aBase').onclick = async () => {
+    $('#aBase').disabled = true; toast('กำลังสร้างพื้นที่ศึกษาพื้นฐาน…');
+    try { const r = await api(ENGINE + '/api/basedata', { json: {} }); if (r.status.failed.length) toast('สร้างไม่ได้: ' + r.status.failed.join(' · '), true); } catch (e) { toast(e.message, true); }
+    route();
+  };
   // พิมพ์พิกัด → เซิร์ฟเวอร์อ่าน/ตรวจ/แปลงเป็น WGS 84 → แสดงบนแผนที่ (บันทึกจริงเซิร์ฟเวอร์ตรวจซ้ำ)
   let cLayer = null, cOk = null, cT = null, cReq = 0;
   const parseCoords = () => {
@@ -1650,7 +1695,7 @@ async function pageLink(d) {
       ${!m.view ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>ดาวน์โหลดเข้า database</h2></div>
         <p class="small muted" style="margin-top:0">ข้อมูลจากลิงก์ต้องดาวน์โหลดก่อนใช้คำนวณ · บันทึก URL และวันที่ไว้ใน source.json (ไม่บันทึกโทเคน)</p>
         <div class="grid-form">
-          <label class="field"><span>ตัดตามพื้นที่ศึกษา</span><select id="dlAoi"><option value="">ทั้งหมด</option>${aois.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
+          <label class="field"><span>ตัดตามพื้นที่ศึกษา</span><select id="dlAoi"><option value="">ทั้งหมด</option>${aoiOptions(aois)}</select></label>
           <label class="field"><span>ชื่อชุดข้อมูล</span><input type="text" id="dlName" placeholder="${esc(d.name)}"></label>
           ${m.type === 'arcgis_feature' ? '<label class="field full"><span>เงื่อนไข (where)</span><input type="text" id="dlWhere" placeholder="1=1"></label>' : ''}
         </div><button id="dlGo" class="mint" style="margin-top:10px">${IC.download}ดาวน์โหลด</button></div>` : ''}
@@ -1789,7 +1834,7 @@ async function pageChange() {
       <label class="field"><span>หลัง</span><select id="cB">${opt}</select></label>
       <label class="field full"><span>วิธี</span><select id="cMode"><option value="diff">ผลต่าง (หลัง − ก่อน)</option><option value="pct">ร้อยละการเปลี่ยนแปลง</option><option value="ratio">อัตราส่วน (หลัง ÷ ก่อน)</option><option value="transition">การเปลี่ยนชั้น (ชั้น → ชั้น)</option></select></label>
       <label class="field"><span>ความละเอียด</span><select id="cRes"></select></label>
-      <label class="field"><span>พื้นที่ศึกษา</span><select id="cAoi"><option value="">ทั้งขอบเขต</option>${aois.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>พื้นที่ศึกษา</span><select id="cAoi"><option value="">ทั้งขอบเขต</option>${aoiOptions(aois)}</select></label>
       <label class="field full"><span>ชื่อผลลัพธ์</span><input type="text" id="cName" placeholder="เช่น pop_2015_2024"></label></div>
       <div class="tiny muted" style="margin:10px 0">ค่าของแต่ละชุดปรับลงกริดเดียวกันตามประเภทค่าก่อนเทียบ (count รวม · density เฉลี่ย · class majority)</div>
       <button id="cRun" class="primary">${IC.play}เปรียบเทียบ</button></div>`;
@@ -2095,7 +2140,8 @@ async function pageViewer() {
     const row = (key, name, sub) => `<label><input type="checkbox" value="${esc(key)}" ${have.has(key) ? 'checked disabled' : ''}><span>${esc(name)} <span class="tiny muted">${esc(sub)}</span></span></label>`;
     const html = groups.filter(g => g[1].length).map(([t, ds]) => `<div class="tiny muted" style="margin:8px 0 2px">${t}</div>` +
       ds.map(d => row((d.kind === 'link' ? 'lk:' : 'ds:') + d.id, d.name, d.kind === 'link' ? d.meta.type_label : d.kind === 'raster' ? (d.meta.res_label || '').split(' (')[0] : `${fmt(d.meta.features, 0)} feature`)).join('')).join('')
-      + (aois.length ? `<div class="tiny muted" style="margin:8px 0 2px">พื้นที่ศึกษา</div>` + aois.map(a => row('aoi:' + a.id, a.name, `${fmt(a.area_km2, 0)} ตร.กม.`)).join('') : '');
+      + [['พื้นที่ศึกษาพื้นฐาน', aois.filter(a => a.builtin)], ['พื้นที่ศึกษาที่สร้างเอง', aois.filter(a => !a.builtin)]].map(([t, xs]) => xs.length
+        ? `<div class="tiny muted" style="margin:8px 0 2px">${t}</div>` + xs.map(a => row('aoi:' + a.id, a.name, `${fmt(a.area_km2, 0)} ตร.กม.`)).join('') : '').join('');
     const pick = await ui.open('เพิ่มชั้นข้อมูล', `<div class="checklist" style="max-height:52vh">${html}</div>`,
       [{ label: 'ยกเลิก', cls: 'ghost', value: () => null }, { label: 'เพิ่ม', cls: 'primary', value: () => $$('#mBody input:checked:not(:disabled)').map(i => i.value) }]);
     if (!pick || !pick.length) return;
@@ -2621,7 +2667,7 @@ async function pageReport(qs) {
           <label class="field full"><select id="rpBd"><option value="">ไม่แสดง</option>${polySrc.map(s => { const k = s.aoi ? 'aoi:' + s.id : (s.kind === 'link' ? 'lk:' : 'ds:') + s.id; return `<option value="${k}" ${k === m.boundary.key ? 'selected' : ''}>${s.aoi ? '◎ ' + esc(s.name) : srcLabel(s)}</option>`; }).join('')}</select></label>
           <label class="field"><span>ป้ายชื่อจากฟิลด์</span><select id="rpLf"></select></label>
           <div class="field"><span>สี / หนา</span><div class="row" style="flex-wrap:nowrap"><input type="color" id="rpBc" value="${m.boundary.color}"><input type="range" id="rpBw" min="0.1" max="3" step="0.1" value="${m.boundary.width}" style="flex:1"></div></div></div>
-        <h3 class="rp-h">กรอบแผนที่เริ่มต้น</h3><label class="field full"><select id="rpExt"><option value="data">ครอบชั้นข้อมูลทั้งหมด</option>${aois.map(a => `<option value="aoi:${a.id}" ${m.extent.type === 'aoi' && m.extent.aoi_id == a.id ? 'selected' : ''}>พื้นที่ศึกษา: ${esc(a.name)}</option>`).join('')}</select></label>
+        <h3 class="rp-h">กรอบแผนที่เริ่มต้น</h3><label class="field full"><select id="rpExt"><option value="data">ครอบชั้นข้อมูลทั้งหมด</option>${aoiOptions(aois, { val: a => 'aoi:' + a.id, text: a => esc(a.name), sel: m.extent.type === 'aoi' ? 'aoi:' + m.extent.aoi_id : null })}</select></label>
         <div class="tiny muted" style="margin-top:6px">เลื่อน/ซูมละเอียด: ดับเบิลคลิกแผนที่บนหน้า</div>`;
       const mapChanged = (resetView) => { if (resetView) resetViews(); commit(); refreshAll(); };
       const fillLf = () => {
@@ -2758,7 +2804,11 @@ function enhanceAoiSelects() {
       if (!a) return;
       for (const id2 of AOI_SELECTS) {                    // ใส่ตัวเลือกใหม่ให้ทุกช่องในหน้า
         const s2 = document.getElementById(id2);
-        if (s2) { const n = document.createElement('option'); n.value = a.id; n.textContent = `${a.name} · ${fmt(a.area_km2, 0)} ตร.กม.`; s2.insertBefore(n, s2.querySelector('option[value="__pick"]')); }
+        if (s2) {                                         // ลงหมวด "ที่สร้างเอง" (ไม่มี → สร้างหมวด)
+          let g = [...s2.querySelectorAll('optgroup')].find(x => x.dataset.user);
+          if (!g) { g = document.createElement('optgroup'); g.label = 'พื้นที่ศึกษาที่สร้างเอง'; g.dataset.user = 1; s2.insertBefore(g, s2.querySelector('option[value="__pick"]')); }
+          const n = document.createElement('option'); n.value = a.id; n.textContent = `${a.name} · ${fmt(a.area_km2, 0)} ตร.กม.`; g.prepend(n);
+        }
       }
       s.value = String(a.id); last = s.value;
       s.dispatchEvent(new Event('change', { bubbles: true }));

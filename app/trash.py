@@ -132,6 +132,7 @@ def purge_aoi(a):
         freed = p.stat().st_size
         p.unlink()
     db.delete('aoi', a['id'])
+    basedata.aoi_removed(a)                     # พื้นที่ศึกษาพื้นฐาน (เช่น ประเทศไทย) → ไม่สร้างกลับเอง
     return dict(freed=freed)
 
 

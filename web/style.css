@@ -508,6 +508,8 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .crumb.on { color: var(--text); font-weight: 600; }
 .crumbs .sep { color: var(--muted); }
 .crumb.over, .folder.over { border-color: var(--lav); background: rgba(195, 182, 255, .14); }
+.aoi-sec { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 14px 0 6px; color: var(--c); }
+.aoi-sec:first-of-type { margin-top: 2px; }
 .dsp { display: flex; gap: 6px; flex-wrap: wrap; }
 .dsp .dsp-f { flex: 1 1 160px; min-width: 0; }
 .dsp .dsp-q { flex: 2 1 180px; min-width: 0; }

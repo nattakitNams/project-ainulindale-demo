@@ -86,4 +86,22 @@ R.check('ไบแวเรียตกับ raster ทั้งผืน → �
 # 3) กริดกำหนดเอง + ขอบเขตจาก raster ต่าง CRS ก็ได้ (แปลงกรอบให้)
 e3 = api('/api/estimate', dict(kind='rasterize', params=dict(dataset_id=vid, grid='own', crs='EPSG:32647', target_res='100', mode='presence', extent_dataset_id=wp['id'])))
 R.check('กริดเอง (UTM) + ขอบเขตจาก raster องศา', e3.get('ok') and e3['grid']['width'] > 100, f"{e3.get('grid', {}).get('width')}×{e3.get('grid', {}).get('height')}")
+
+# 4) พื้นที่ศึกษาพื้นฐาน "ประเทศไทย" (สร้างจากชั้นจังหวัด GISTDA ตอนเปิดแอป — ต้องต่อเน็ต) ขึ้นก่อนในรายการ + ใช้เป็นขอบเขตผลลัพธ์
+aois = api('/api/aoi')
+th = [a for a in aois if a.get('builtin') and a['source'].get('base') == 'thailand']
+if not th:
+    print('ข้าม: ยังไม่มีพื้นที่ศึกษาพื้นฐาน "ประเทศไทย" (ออฟไลน์?)')
+else:
+    th = th[0]
+    R.check('ประเทศไทยเป็นพื้นที่ศึกษาพื้นฐาน อยู่บนสุด · พื้นที่สมเหตุสมผล', aois[0]['id'] == th['id'] and 500_000 < th['area_km2'] < 530_000,
+            f"{th['area_km2']:,.0f} ตร.กม. · bbox {[round(x, 2) for x in th['bbox']]}")
+    r5 = run('rasterize', dict(dataset_id=vid, grid='own', crs='EPSG:4326', target_res='30', mode='presence',
+                               extent_aoi_id=th['id'], aoi_id=th['id']))
+    with rasterio.open(r5['output']) as f:
+        a, nd, bb = f.read(1, masked=True), f.nodata, f.bounds
+    full = bb.left <= th['bbox'][0] + .01 and bb.right >= th['bbox'][2] - .01 and bb.bottom <= th['bbox'][1] + .01 and bb.top >= th['bbox'][3] - .01
+    R.check('ขอบเขต = ประเทศไทย → ครอบทั้งประเทศ · ในประเทศนอกรูป = 0 · ทะเล/เพื่อนบ้าน = ไม่มีข้อมูล',
+            full and (a == 1).sum() > 0 and (a == 0).sum() > (a == 1).sum() * 50 and a.mask.sum() > 0,
+            f'{a.shape[1]}×{a.shape[0]} · 1={int((a == 1).sum()):,} · 0={int((a == 0).sum()):,} · nodata={int(a.mask.sum()):,}')
 sys.exit(R.done())

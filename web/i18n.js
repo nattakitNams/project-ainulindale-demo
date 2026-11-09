@@ -34,7 +34,7 @@ const I18N = (() => {
     if (reShort && TH.test(s)) s = s.replace(reShort, m => dict[m]);
     return s;
   };
-  const ATTRS = ['placeholder', 'title', 'aria-label', 'data-tip'];
+  const ATTRS = ['placeholder', 'title', 'aria-label', 'data-tip', 'label'];      // label = หัวหมวด <optgroup>
   function skip(el) { return el && el.closest && el.closest(SKIP); }
   function attrs(el) {
     for (const a of ATTRS) {
