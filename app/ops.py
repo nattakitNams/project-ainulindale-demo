@@ -601,20 +601,53 @@ CAT_COLS = ['#8dd3c7', '#ffffb3', '#bebada', '#fb8072', '#80b1d3', '#fdb462', '#
             '#ccebc5', '#ffed6f', '#a6cee3', '#1f78b4', '#b2df8a', '#33a02c', '#fb9a99', '#e31a1c', '#fdbf6f', '#ff7f00']
 
 
+def rasterize_grid(p, vds):
+    """กริดผลลัพธ์ของการแปลง vector → raster: ขอบเขต = ของ vector (พื้นที่ศึกษาตัดต่อทีหลัง)
+    grid='ref'  → แลตทิซ + CRS ของ raster อ้างอิง (พิกเซลตรงกัน ใช้ไบแวเรียตต่อได้ แม้ vector อยู่นอกขอบเขตของ raster นั้น)
+    grid='own'  → CRS ที่เลือก (ค่าเริ่มต้น = ของ vector) + ความละเอียดที่พิมพ์ · แลตทิซยึด (0, 0)"""
+    from rasterio.crs import CRS
+    from rasterio.warp import transform_bounds
+    vm = vds['meta']
+    if not vm.get('crs'):
+        raise EngineError('vector ไม่มี CRS (.prj)')
+    vcrs = CRS.from_wkt(vm['crs'])
+    mode = p.get('grid') or ('ref' if p.get('ref_dataset_id') else 'own')
+    if mode == 'ref':
+        ref = db.get('datasets', int(p['ref_dataset_id'])) if p.get('ref_dataset_id') else None
+        if ref is None or ref['kind'] != 'raster':
+            raise EngineError('กริดอ้างอิงต้องเป็น raster')
+        rm = ref['meta']
+        crs, geo, origin = CRS.from_wkt(rm['crs']), bool(rm.get('geographic')), (rm['transform'][2], rm['transform'][5])
+    else:
+        crs = CRS.from_user_input(p['crs']) if p.get('crs') else vcrs
+        geo, origin = bool(crs.is_geographic), (0.0, 0.0)
+    try:
+        res = Fraction(str(p['target_res']))
+    except (ValueError, KeyError, ZeroDivisionError):
+        raise EngineError('ใส่ความละเอียดเป็นตัวเลข')
+    if res <= 0:
+        raise EngineError('ความละเอียดต้องมากกว่า 0')
+    b = vm.get('bounds')
+    if not b:
+        raise EngineError('vector ไม่มีขอบเขต')
+    bb = b if crs == vcrs else transform_bounds(vcrs, crs, *b, densify_pts=21)
+    return engine.lattice_grid(bb, crs, res, geo, origin), mode
+
+
 def op_rasterize(job, P, log):
     import pyogrio
     from rasterio.features import rasterize
     p = job['params']
-    vds, ref = db.get('datasets', p['dataset_id']), db.get('datasets', p['ref_dataset_id'])
+    vds = db.get('datasets', p['dataset_id'])
     if vds is None or vds['kind'] != 'vector':
         raise EngineError('ต้องเลือกชุดข้อมูล vector')
     mode, field = p.get('mode', 'presence'), p.get('field') or None
     rule, ss = p.get('rule', 'center'), int(p.get('supersample', 10))
     if mode in ('attribute', 'majority') and not field:
         raise EngineError('โหมดนี้ต้องเลือกฟิลด์')
-    src = Source(ref)
-    grid = engine.make_grid([src], Fraction(p['target_res']))
+    grid, gmode = rasterize_grid(p, vds)
     masker, mf, aoi_info = setup_aoi(p, grid, [], log)
+    log(f'กริด {gmode}: {grid.describe()["res_label"]} · {grid.out_shape[1]:,} × {grid.out_shape[0]:,} พิกเซล · ขอบเขตตาม vector{" + พื้นที่ศึกษา" if aoi_info else ""}')
     log(f'อ่าน vector "{vds["name"]}"…')
     use_index = field == '__index__'                  # ค่า = ลำดับ feature ในไฟล์ (1, 2, 3, …)
     from .dsinfo import read_vector
@@ -723,7 +756,10 @@ def op_rasterize(job, P, log):
     params = dict(p, value_type=vt, dtype=odt, nodata=onod, background=bg,
                   overlap='feature ที่มาทีหลังทับ feature ก่อนหน้า' if mode in ('presence', 'attribute') else None,
                   codes=codes)
-    export.write_lineage(out_dir, 'rasterize', [export.lineage_input(vds), export.lineage_input(ref)], params, [outp],
+    ref = db.get('datasets', int(p['ref_dataset_id'])) if gmode == 'ref' else None
+    params['grid'] = gmode
+    params['grid_crs'] = str(grid.crs)
+    export.write_lineage(out_dir, 'rasterize', [export.lineage_input(vds)] + ([export.lineage_input(ref)] if ref else []), params, [outp],
                          dict(grid=grid.describe(), aoi=aoi_info, features=len(gdf)))
     new_id = register_output(outp, p.get('name') or f"{vds['name']} → raster ({mode})", vt, job['id'], 'derived')
     return dict(output=str(outp), dataset_id=new_id, summary=dict(features=len(gdf), grid=grid.describe()))

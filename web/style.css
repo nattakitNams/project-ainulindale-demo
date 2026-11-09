@@ -490,3 +490,9 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 .hub-prog i { display: block; height: 100%; background: linear-gradient(90deg, var(--lav), var(--mint)); transition: width .3s; }
 .hub-org input { min-width: 260px; }
 .hub-src.s-ckan { color: var(--butter); }
+/* ---------- สองภาษา ---------- */
+.side-lang { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 4px 12px; }
+.side-lang + .side-trash { margin-top: 0; }
+.lang-sw { display: inline-flex; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
+.lang-sw button { background: transparent; border: 0; border-radius: 0; padding: 3px 10px; font-size: 11.5px; font-weight: 600; color: var(--muted); box-shadow: none; min-height: 0; }
+.lang-sw button.on { background: rgba(195, 182, 255, .22); color: var(--text); }

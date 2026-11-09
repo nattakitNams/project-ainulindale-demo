@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.12';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.13';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -352,14 +352,17 @@ async function pageDataset(id) {
         ${d.role !== 'map' ? hexCard(d, all, aoiOpts) : ''}` : `
         <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>แปลงเป็นราสเตอร์</h2></div>
         <div class="grid-form">
-          <label class="field full"><span>กริดอ้างอิง (raster)</span><select id="rzRef">${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${esc((x.meta.res_label || '').split(' (')[0])}</option>`).join('')}</select></label>
-          <label class="field"><span>ความละเอียด</span><select id="rzRes"></select></label>
-          <label class="field"><span>วิธี</span><select id="rzMode"><option value="presence">มี / ไม่มี (1/0)</option><option value="attribute">ค่าจากฟิลด์</option><option value="fraction">สัดส่วนพื้นที่ที่ทับ (0–1)</option><option value="majority">ฟิลด์ที่กินพื้นที่มากสุด</option></select></label>
-          <label class="field"><span>ฟิลด์</span><select id="rzField"><option value="">—</option><option value="__index__">ลำดับ feature (1, 2, 3…)</option>${m.fields.map(f => `<option>${esc(f.name)}</option>`).join('')}</select></label>
-          <label class="field"><span>กติกา</span><select id="rzRule"><option value="center">ศูนย์กลางพิกเซล</option><option value="touch">แตะ (all touched)</option></select></label>
+          <div class="field full"><span>กริดผลลัพธ์</span><div class="seg" id="rzGrid"><button data-g="own">กำหนดเอง (พิกัด + ความละเอียด)</button><button data-g="ref" ${rasters.length ? '' : 'disabled title="ยังไม่มี raster ในคลัง"'}>จับกริดกับ raster ในคลัง</button></div></div>
+          <label class="field full rzRef"><span>raster อ้างอิง — พิกเซลจะตรงกับชุดนี้ (ใช้ไบแวเรียตต่อได้ทันที)</span><select id="rzRef">${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${esc((x.meta.res_label || '').split(' (')[0])}</option>`).join('')}</select></label>
+          <label class="field rzRef"><span>ความละเอียด</span><select id="rzRes"></select></label>
+          <label class="field rzOwn"><span>ระบบพิกัด</span><select id="rzCrs"><option value="">ของไฟล์นี้ (${esc((m.crs_name || '').split(' · ')[0])})</option><option value="EPSG:32647">UTM โซน 47N (EPSG:32647)</option><option value="EPSG:32648">UTM โซน 48N (EPSG:32648)</option><option value="EPSG:4326">WGS 84 องศา (EPSG:4326)</option></select></label>
+          <label class="field rzOwn"><span>ความละเอียด <b id="rzUnit"></b></span><input type="number" id="rzResOwn" min="0" step="any" value="30"></label>
+          <label class="field"><span>วิธีแปลง</span><select id="rzMode"><option value="presence">มี / ไม่มี (1 / 0)</option><option value="attribute">ค่าจากฟิลด์</option><option value="majority">ค่าจากฟิลด์ — ที่กินพื้นที่มากสุดในพิกเซล</option><option value="fraction">สัดส่วนพื้นที่ที่ทับ (0–1)</option></select></label>
+          <label class="field rzF"><span>ฟิลด์ที่ใช้เป็นค่า</span><select id="rzField"><option value="">— เลือกฟิลด์ —</option>${m.fields.map(f => { const num = /int|float|double|real/i.test(f.type); return `<option value="${esc(f.name)}" data-num="${num ? 1 : 0}">${esc(f.name)} · ${num ? 'ตัวเลข' : 'ข้อความ'}</option>`; }).join('')}<option value="__index__">ลำดับ feature (1, 2, 3…)</option></select></label>
+          <label class="field"><span>พิกเซลไหนนับ</span><select id="rzRule"><option value="center">จุดกึ่งกลางพิกเซลอยู่ในรูป</option><option value="touch">แตะรูปนิดเดียวก็นับ (all touched)</option></select></label>
           <label class="field full"><span>พื้นที่ศึกษา</span><select id="rzAoi">${aoiOpts}</select></label>
         </div>
-        <div class="tiny muted" style="margin:8px 0">สัดส่วน/majority คำนวณจากการแตกพิกเซลละเอียดขึ้น 10 เท่า · feature ที่ซ้อนกัน ตัวหลังทับตัวก่อน</div>
+        <div class="note info small" id="rzHelp" style="margin:8px 0"></div>
         <button id="rzRun" class="primary">${IC.raster}แปลง</button>
         ${isHex(d) ? '<div class="tiny muted" style="margin-top:8px">ชุดหกเหลี่ยม → ราสเตอร์: เลือก "ค่าจากฟิลด์" แล้วเลือกคอลัมน์ค่า</div>' : ''}</div>
         ${isHex(d) ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>หกเหลี่ยม</h2></div>
@@ -431,9 +434,40 @@ async function pageDataset(id) {
         $('#rzRes').value = r.options.find(o => o.is_source.length)?.value;
       } catch (e) { toast(e.message, true); }
     };
-    if (rasters.length) { $('#rzRef').onchange = loadRz; loadRz(); } else $('#rzRun').disabled = true;
+    // กริด: กำหนดเอง (ไม่ต้องมี raster) หรือจับกับ raster ในคลัง · ขอบเขตผลลัพธ์ = ของ vector นี้ (หรือพื้นที่ศึกษา) เสมอ
+    let rzGrid = 'own';
+    const rzSync = () => {
+      $$('#rzGrid button').forEach(b => b.classList.toggle('on', b.dataset.g === rzGrid));
+      $$('.rzRef').forEach(e => e.classList.toggle('hide', rzGrid !== 'ref'));
+      $$('.rzOwn').forEach(e => e.classList.toggle('hide', rzGrid !== 'own'));
+      const geo = $('#rzCrs').value === 'EPSG:4326' || (!$('#rzCrs').value && m.geographic);
+      $('#rzUnit').textContent = geo ? '(ฟิลิปดา ″ · 1″ ≈ 30 ม.)' : '(เมตร)';
+      const md = $('#rzMode').value, fo = $('#rzField').selectedOptions[0];
+      $('.rzF').classList.toggle('hide', md === 'presence' || md === 'fraction');
+      const fld = fo && fo.value ? (fo.value === '__index__' ? 'ลำดับ feature' : `ฟิลด์ "${fo.value}"`) : 'ฟิลด์ที่เลือก';
+      const txt = fo && fo.value && fo.value !== '__index__' && fo.dataset.num === '0';
+      $('#rzHelp').innerHTML = ({
+        presence: 'พิกเซลที่ทับรูป = 1 ไม่ทับ = 0 (เช่น มีอาคาร / ไม่มีอาคาร)',
+        attribute: `พิกเซลได้ค่าของ${fld}${txt ? ' — <b>ข้อความ</b> จะแปลงเป็นรหัส 1, 2, 3… พร้อมไฟล์ตารางรหัส (_codes.csv)' : ''} · รูปที่ซ้อนกัน ตัวหลังทับตัวก่อน`,
+        majority: `พิกเซลได้ค่าของ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
+        fraction: 'สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ',
+      })[md] + '<br><span class="tiny">ขอบเขตผลลัพธ์ = ขอบเขตของชุดนี้ (หรือพื้นที่ศึกษาที่เลือก)</span>';
+    };
+    $$('#rzGrid button').forEach(b => b.onclick = () => { if (b.disabled) return; rzGrid = b.dataset.g; if (rzGrid === 'ref' && !$('#rzRes').options.length) loadRz(); rzSync(); });
+    $('#rzRef').onchange = loadRz;
+    $('#rzCrs').onchange = () => { $('#rzResOwn').value = $('#rzCrs').value === 'EPSG:4326' ? 1 : 30; rzSync(); };
+    $('#rzMode').onchange = rzSync;
+    $('#rzField').onchange = () => { if ($('#rzField').value && $('#rzMode').value === 'presence') $('#rzMode').value = 'attribute'; rzSync(); };
+    if (m.geographic) $('#rzResOwn').value = 1;
+    rzSync();
     if ($('#hxRun')) hexCardBind(d);
-    $('#rzRun').onclick = () => runJob('rasterize', { dataset_id: id, ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value, mode: $('#rzMode').value, field: $('#rzField').value || null, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
+    $('#rzRun').onclick = () => {
+      const md = $('#rzMode').value;
+      if ((md === 'attribute' || md === 'majority') && !$('#rzField').value) return toast('เลือกฟิลด์ที่จะใช้เป็นค่าก่อน', true);
+      const g = rzGrid === 'ref' ? { grid: 'ref', ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value } : { grid: 'own', crs: $('#rzCrs').value || null, target_res: $('#rzResOwn').value };
+      if (!(+g.target_res > 0) && !String(g.target_res).includes('/')) return toast('ใส่ความละเอียด', true);
+      runJob('rasterize', { dataset_id: id, ...g, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
+    };
   }
   initMap(d);
   if ($('#symPanel')) symPanel(d);
@@ -722,7 +756,9 @@ function initMap(d) {
       try {
         const r = await fetch(`${ENGINE}/api/datasets/${d.id}/features?bbox=${q}&z=${mp.getZoom()}${hasColor ? '&fields=color,code' : ''}`);
         const gj = await r.json(); layer.clearLayers(); layer.addData(gj);
-        $('#mapNote').textContent = r.headers.get('X-Truncated') === '1' ? `แสดง ${r.headers.get('X-Count')} feature แรก — ซูมเข้าเพื่อดูครบ` : `${r.headers.get('X-Count')} feature ในกรอบ`;
+        const hid = +r.headers.get('X-Hidden') || 0;
+        $('#mapNote').textContent = (r.headers.get('X-Truncated') === '1' ? `แสดง ${r.headers.get('X-Count')} รูปแรก — ซูมเข้าเพื่อดูครบ` : `${r.headers.get('X-Count')} รูปในกรอบ`)
+          + (hid ? ` · อีก ${fmt(hid, 0)} รูปเล็กกว่าพิกเซลที่ระดับนี้ — ซูมเข้าเพื่อดู` : '');
       } catch (e) { $('#mapNote').textContent = 'โหลด feature ไม่ได้: ' + e.message; }
     };
     mp.on('moveend', load); load();

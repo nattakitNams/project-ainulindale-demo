@@ -132,8 +132,8 @@ function hubFilter() {
 function hubCard(it) {
   const L = HUB_LC[it.lc];
   return `<a class="hub-card" href="#/hub/${encodeURIComponent(it.k)}">
-    <div class="hub-top"><b>${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}</div>
-    <div class="small muted">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))}${it.og || it.pr ? ' · ' : ''}<span class="hub-src s-${it.s}">${esc(it.p)}</span></div>
+    <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}</div>
+    <div class="small muted"><span translate="no">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))}</span>${it.og || it.pr ? ' · ' : ''}<span class="hub-src s-${it.s}" translate="no">${esc(it.p)}</span></div>
     <div class="hub-meta tiny">${[it.ty === 'platform' ? 'แพลตฟอร์ม' : HUB.idx.meta.types[it.ty], hubYears(it) || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
     <div class="hub-th">${it.th.slice(0, 3).map(k => `<span>${esc(hubTheme(k)?.th || k)}</span>`).join('')}
       <span class="hub-lc" style="--c:${L[1]}" title="${esc(it.l || 'ไม่ระบุ')} — ${L[2]}">${L[0]}</span>${hubDot(it.u)}</div></a>`;
@@ -241,8 +241,8 @@ async function hubDetail(it) {
   const orgs = (it.og || []).length ? it.og : (it.pr ? [it.pr] : []);
   const facts = [
     ['รหัสชุดข้อมูล', it.id ? `<code>${esc(it.id)}</code>` : ''],
-    ['แหล่ง', esc(it.p)],
-    ['หน่วยงาน', orgs.map(o => `<a class="chip" href="#/hub" data-goorg="${esc(o)}">${esc(o)}</a>`).join(' ')],
+    ['แหล่ง', `<span translate="no">${esc(it.p)}</span>`],
+    ['หน่วยงาน', orgs.map(o => `<a class="chip" href="#/hub" data-goorg="${esc(o)}" translate="no">${esc(o)}</a>`).join(' ')],
     ['ชนิดข้อมูล', esc([it.ty === 'platform' ? 'แพลตฟอร์ม' : HUB.idx.meta.types[it.ty], it.tr].filter(Boolean).join(' · '))],
     ['ช่วงเวลา', esc(hubYears(it))],
     ['อัปเดตล่าสุด', esc(it.up || '')],
@@ -251,13 +251,13 @@ async function hubDetail(it) {
     ['ครอบคลุม', esc(HUB_COVER[it.cv] || '') + (it.bb ? ` <span class="tiny muted mono">[${it.bb.map(n => fmt(n, 2)).join(', ')}]</span>` : '')],
     ['เงื่อนไขการใช้', `<span class="hub-lc" style="--c:${LC[1]}">${LC[0]}</span> ${esc(it.l || 'ไม่ระบุในรายชื่อ — ดูที่ต้นทาง')} <span class="tiny muted">· ${LC[2]}</span>`],
     ['หมวด', it.th.map(k => `<a class="chip" href="#/hub" data-goth="${k}">${esc(hubTheme(k)?.th || k)}</a>`).join(' ')],
-    ['คำสำคัญ (จากต้นทาง)', esc((x.keywords || []).join(', '))],
+    ['คำสำคัญ (จากต้นทาง)', `<span translate="no">${esc((x.keywords || []).join(', '))}</span>`],
     it.n ? ['หมายเหตุ', esc(it.n)] : null,
   ].filter(f => f && f[1]);
-  const linkRow = (t, u, sub) => `<div class="hub-link"><div><a href="${esc(u)}" target="_blank" rel="noopener noreferrer">${esc(t)}</a>
+  const linkRow = (t, u, sub, raw) => `<div class="hub-link"><div><a href="${esc(u)}" target="_blank" rel="noopener noreferrer"${raw ? ' translate="no"' : ''}>${esc(t)}</a>
     ${sub ? `<div class="tiny muted">${esc(sub)}</div>` : ''}<div class="tiny mono muted hub-url">${esc(u)}</div></div><div class="hub-st">${hubStatus(u)}</div></div>`;
   v.innerHTML = `<p style="margin:0 0 10px"><a href="#/hub">← Data hub</a></p>`
-    + head(esc(it.p) + (it.dp ? ' · <span style="color:var(--butter)">เลิกใช้แล้ว</span>' : ''), esc(it.t), esc(it.sd || ''),
+    + head(`<span translate="no">${esc(it.p)}</span>` + (it.dp ? ' · <span style="color:var(--butter)">เลิกใช้แล้ว</span>' : ''), `<span translate="no">${esc(it.t)}</span>`, `<span translate="no">${esc(it.sd || '')}</span>`,
       `<a class="btn primary" href="${esc(it.u)}" target="_blank" rel="noopener noreferrer">${IC.download}ไปหน้าดาวน์โหลด</a>`)
     + `<div class="cols2 hub-detail">
       <div>
@@ -267,7 +267,7 @@ async function hubDetail(it) {
           ${d.text ? `<div class="tiny muted hub-attr">ที่มา: <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">${esc(d.source)}</a> · ${esc(d.license_note || '')} · แอปไม่ได้เขียนหรือแก้ข้อความนี้</div>` : ''}
         </div>
         ${res.length ? `<div class="card"><div class="card-head"><h2>ไฟล์ / บริการในชุดนี้ <span class="muted small">${fmt(it.nr || res.length, 0)} รายการ${it.nr > res.length ? ` (แสดง ${res.length})` : ''}</span></h2></div>
-          <div class="hub-links">${res.map(r => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '))).join('')}</div></div>` : ''}
+          <div class="hub-links">${res.map(r => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '), true)).join('')}</div></div>` : ''}
         ${x.citation ? `<div class="card"><div class="card-head"><h2>การอ้างอิง (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.citation, 'md')}</div></div>` : ''}
         ${x.terms ? `<div class="card"><div class="card-head"><h2>เงื่อนไขการใช้ (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.terms, 'md')}</div></div>` : ''}
       </div>

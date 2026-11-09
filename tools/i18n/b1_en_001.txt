@@ -1,0 +1,200 @@
+GB before compression) — may take tens of minutes and a lot of disk space. The final overview step cannot be stopped midway (cancel = force stop) · If you only need to cross the data, no need to convert first — the bivariate page splits pixels during calculation
+
+The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance.
+The boundaries and names shown and the designations used on this map do not imply official endorsement or acceptance.
+🔒 Data files are not uploaded to the internet — this page talks to your computer directly · Only basemap images, fonts and map services you add yourself go over the internet
+contains only "?" — Thai characters were already broken in the source file (when created/exported); the app cannot recover them · Use a code field (e.g. *_IDN) instead, or ask for a new original saved as UTF-8
+Deleted items go here first — they can be restored · Deleting in the trash = permanent (files the app keeps in the workspace are really deleted; your original files outside the workspace are not touched)
+Basemap images (Esri / OpenStreetMap / Google — the provider sees the area you view), fonts (Google Fonts), map services you add as links yourself
+Sarabun is the official-document font based on TH Sarabun New (the standard font for Thai government documents by Cabinet resolution), with proportions scaled to use the same pt size as common fonts
+• Arrow keys = move 0.5 mm (Shift = 5 mm) · Delete = delete · Ctrl+D = duplicate · Ctrl+Z / Ctrl+Y = undo/redo · Ctrl+mouse wheel = zoom page
+pixels — each pixel value is computed from overlapping source pixels weighted by area (count keeps the total · density averages · class takes the dominant one)
+Changes apply immediately to this layer in the layer viewer only (and reports pulled from this page) · The dataset style is not changed · Opacity uses the layer slider
+(requires Python + libraries on this computer) · Packaging as an installer (no Python needed) requires extra tools — see DEVLOG
+Finer/same: classify at the source then repeat · Coarser: count sums first, density averages first, class classifies first then majority
+Province / district / subdistrict from any boundary layer in the library, or draw your own polygon — used to clip results and compute statistics for that area only
+Axis order is ambiguous (both orders are valid coordinates) — using longitude, latitude · If the shape lands in the wrong place, choose "lat, lon"
+Large numbers → guessed as UTM zone 47N (eastern Thailand beyond 102° longitude may be zone 48N) — check the location on the map
+Encrypted with Windows DPAPI · Used for ArcGIS / WMS links that require authentication · Not recorded in lineage or logs
+This web page is only the screen — calculations use your computer's CPU / RAM / files through a small engine running locally
+Preview directly from the service (current view only) — click a feature to see values · Download into the database before using it in calculations
+(e.g. GISTDA ArcGIS FeatureServer: L05_Province / L05_Amphoe / L05_Tambon) in the library first
+
+Close the Ainulindale window → extract the zip over the old folder (data in the workspace is kept) → open Ainulindale.bat
+Large title with color band · full-width map · 3 columns below: legend / location / key figures
+Each dataset is put on the same grid according to its value type before comparing (count sum · density mean · class majority)
+Always copied into the database (the browser does not reveal the real path) · For a shapefile drag .shp .shx .dbf .prj together
+Square cells + values (GeoPackage) for visualization — empty/zero cells are dropped · up to 2 million cells
+Has sublayers — can be downloaded as data if it is a Feature Layer (use the link .../MapServer/<layer number>)
+Blue header bar · full-page map · legend and locator map floating over the map · disclaimer text
+Data from links must be downloaded before calculations · URL and date are recorded in source.json (tokens are not recorded)
+datasets matching the current filters (no filter = all) — name, organization, source, link, license, link status, etc.
+DEGURBA: this share is based on the density threshold only; adjacency/total population conditions are not yet included
+pixels exceeds memory · Choose a coarser resolution (for degree-based data, resolution is in arc-seconds ″)
+links through the engine on your computer (reads headers only, no file download) — takes several minutes, can be stopped midway
+Fraction/majority computed by splitting pixels 10× finer · For overlapping features, later ones cover earlier ones
+🔒 The token is stored only in this browser · sent to the engine on your computer, never through the website's server
+Use the tool at the top-left of the map to draw a polygon or rectangle (you can draw several; they are merged into one area)
+Double-line frame · right info panel (title, legend, scale, locator map) like government agency maps
+See how much the highlight figures change when thresholds/resolution change (statistics only, no map)
+Values computed at each dataset's source resolution (no pixel splitting) · a pixel belongs to the cell its center falls in
+No boundary layer yet — add a boundary file or link (e.g. GISTDA L05_Province) in the library first
+Stored encrypted by Windows (DPAPI) — can only be decrypted by this account on this computer · not written to lineage / logs
+DEGURBA computes the whole country in memory; works only at coarse resolution (≤ 30 million pixels, e.g. 1 km)
+Bivariate maps, resampled files, cache and job logs are stored here · your source data files
+
+Administrative boundaries from GISTDA · ready to use as boundaries, study areas and zonal bivariate
+Urban cluster ≥300 with 8-neighbour contiguity, total ≥5,000 · Urban centre ≥1,500 with 4-neighbour contiguity, total ≥50,000
+Journal page width (174×140 mm) · coordinate grid · legend in frame · caption below the figure
+DEGURBA must compute the whole grid in memory — works only at coarse resolution (e.g. 1 km)
+Preview copies removed; the app rebuilds them when a dataset page is opened (large files may take several minutes)
+
+• Click to select · drag to move · drag corner handles to resize (Shift = keep ratio, Alt = no snapping to guides)
+billion pixels) — empty tiles are skipped, but the final overview step takes time proportional to image size
+Cross 2 datasets → an nX × nY color grid · output is GeoTIFF + QML + legend + statistics + lineage
+Map pan mode: drag to pan · mouse wheel to zoom · Esc or double-click to finish
+File moved/renamed? Point to the new file (relink) — settings and history are kept
+
+The resolution used to clip the study area must be equal to or coarser than the output, and an integer multiple
+Zone layer must be a polygon vector or a boundary link (Feature layer / WFS / GeoJSON)
+Choose a starting layout, then adjust every part · Changing template keeps your layers and text
+Can be restored from the trash · results already created are not affected (lineage keeps the sources)
+Title on top · large map in the middle · info bar at bottom (legend / location / scale)
+Night-time light brightness (a per-area value, not a count) — pixels are aggregated by mean
+km²/pixel) — most cells get a value from a single pixel or none; use larger cells
+• Double-click text to edit · double-click the map to pan/zoom the map inside the frame
+The resolution used to clip the study area must be equal to or coarser than the output, an integer multiple
+Use a REST template · TileMatrixSet must be GoogleMapsCompatible / EPSG:3857
+": hexagons are smaller than 4 pixels of the data — many cells will be empty; use larger cells
+Cancelling… if the job is in a step that cannot stop midway, it will be force-stopped in 15 seconds
+Data covers a very large extent (continental/global) — choose a study area before making hexagons
+The engine has not started — close the Ainulindale window and open Ainulindale.bat again
+This page must talk to the engine on your computer (127.0.0.1); it does not go to any other network
+Target resolution equals the original (choose a study area if you only want to clip)
+VRT references many other files — V1 does not copy VRTs into the database; it references the path instead
+cells have no pixel center inside (data edge / nodata / cell smaller than a pixel) → empty
+The engine accepts commands only from this computer (127.0.0.1) and paired web pages
+count = sum · continuous = area-weighted mean · class = the value covering the most area
+top = drawn on top · rasters use the Symbology style (or the one adjusted in the layer viewer)
+is outside the app folder — when the app is removed, results in this folder are not deleted (delete them yourself)
+e.g. population 2015 → 2024 · flood layers from two periods — gives a difference map + summary table
+Class transition requires class data with few values (before classes × after classes ≤ 250)
+Paste a link, e.g. https://…/arcgis/rest/services/…/MapServer  or  https://…/
+Datasets you add are remembered — inputs, derived files and maps are kept in separate groups
+fixed (self-intersections usually come from swapped point order; check the shape on the map before saving)
+White cards on grey · map on the left · key figures + chart + legend on the right
+Search: name, organization, keywords e.g. wildfire, population, flood, NDVI, Sentinel
+This server version has no restart button — close the run.bat window and open it again
+Delete result folders of failed/cancelled jobs (incomplete files) — cannot be undone
+This web page controls the engine running on your computer — your data does not leave it
+
+Text overflows the frame — enlarge the box or reduce the font size (the overflowing part will not be printed)
+Value per pixel by value type (count sum / density mean / class majority)
+Stop the process immediately; unfinished output files will be incomplete (can be deleted on the
+
+
+Value per cell by value type: count sum · density mean · class majority
+File name indicates an index (NDVI etc.) = continuous values — pixels aggregated by mean
+) — files get much larger but match the precision of the source vector
+VRTs reference other files and cannot be dragged in — use "Choose file" or paste the path instead
+Downloads the whole file — if it is large, choose a study area to clip only that part
+Requires your own API key — the app hides the key that came with the source link (
+Normally clicking a cell = edit color · turn on highlight mode then click cells to count separately
+Also check file/service links inside each dataset (open data portals — takes much longer)
+items — the app does not store the files; open the details then download at the source
+e.g. a drive with plenty of free space (10 m nationwide results take several GB)
+Sum of pixels whose centers fall in the cell (+ per km² = ÷ cell area)
+Results of resampling / rasterizing / grid making are stored here
+List per the current filters: name, organization, link, link status, etc.
+Files only (not folders) — for a shapefile choose the .shp file
+Microsoft Edge or Google Chrome not found on this computer (used to print PDF)
+Make hexagons, then use them for hexagon bivariate or convert back to raster
+To prevent other websites from controlling your computer, pairing is required: close and reopen
+Not a full COG (no tiles/overviews) — clipping by area will be slow
+The VRT has Colab paths but the "My Drive" folder was not found on this computer
+
+Click a cell to edit its color, or pick a palette below — the map updates immediately
+Click an area on the map to see its x_value / y_value
+The zone layer is a link — polygons are fetched from the service at run time (internet required)
+Decimal + file name about population → probably a count per pixel
+System folders are not allowed (Windows / Program Files / ProgramData)
+→ the app reads it as TIS-620 (can be changed under "Text encoding")
+The value with the most pixels in the cell (ties → higher value) + % of that value
+Already in use by another program (engine already running?) — open the web page instead
+values in one tile (> 256) — probably not class data; check the value type
+This link type is an image (view only); it cannot be downloaded as data
+Choosing a palette = switch to pseudocolor using the same Min/Max
+polygon = % area covered · line = length km · point = count
+The original file is outside the workspace — not deleted, only removed from the registry
+Sarabun — official-document font (same as TH Sarabun used in Thai government documents)
+km — cells should be several times wider than pixels (default ≈ 3×)
+Clip 2%–98% of sampled values (lots of zeros → computed from pixels with values)
+Large file without overviews — zooming out is slow until data preparation finishes
+Long jobs run in a separate process one at a time — you can close this page, jobs keep running
+Top of the list = on top of the map · drag to reorder
+If the engine is running but you still see this page: this page's address (
+Decimal → probably continuous values (density/elevation/index)
+Finer = repeat value · Coarser = majority
+No study area selected — using the overlap of all data
+(several shapes: separate with a blank line · accepts WKT / GeoJSON / 100°30
+Equal-area hexagons + values of each dataset (GeoPackage)
+Uses all the same settings; output goes to a new folder (does not overwrite)
+) — continuous/decimal data should use Singleband pseudocolor instead
+1 row per file/service (e.g. GISTDA datasets with several services)
+
+cells is too large — choose a study area or a coarser resolution
+Every file checked against locked hashes — modified files will fail to install
+Not paired with the engine on this computer yet (invalid token)
+Running but this page cannot connect? Use the local fallback page
+will disappear from the list — restore it from the trash (bottom of the left bar)
+Integer → probably class/category data or a count of occurrences
+flood classes · land cover · years flooded · province codes
+parameter sets (statistics only, no maps) — takes about
+Could not save the layout in the browser (images too large?)
+Finer = repeat value · Coarser = area-weighted mean
+Not allowed — add it to engine.json → allowed_origins
+PNG/JPG/SVG — shrunk to at most 1200 px, stored in the layout
+This filter affects only the map · to exclude values from calculations, use
+After saving, a .qml is written next to the file so QGIS shows the colors automatically
+Some sites reject the checker (403) or require login (401) →
+Garbled Thai (e.g. Í.à©ÅÔÁ) → choose TIS-620 · if it shows
+Aggregate pixels → mean (area-weighted) · split pixels → same value
+Delete all preview copies? The app rebuilds them one at a time when opened
+DEGURBA works only with "count" data
+The original file is not modified — download the .qml with the button above
+" cannot be used for hex (supports local raster / vector)
+(layers and text are kept · press Ctrl+Z to undo)
+
+cells — may be slow to open in QGIS (empty/zero cells are dropped)
+cells — choose a smaller study area or a coarser resolution
+km²/cell · population (count) summed to per km² of the cell
+Only integer multiples of both datasets are offered (exact parent-child grids)
+Hexagon dataset — quantile breaks are computed from cell values at run time
+pip installation failed — check the internet connection
+Data (download into the database to analyze)
+This type is data (must be downloaded first), not image tiles
+Type an organization name, e.g. GISTDA, กรมพัฒนาที่ดิน, NASA
+Create a study area (province / district / subdistrict / draw)
+Rename only in the report (enter - to hide the heading)
+" is not a value that can be converted to a fraction — not supported in V1
+% of hexagon area covered (overlapping shapes merged first)
+Class transition works only when both datasets are "class" type
+First line of text (e.g. a disclaimer)
+" has no sample values yet — wait for data preparation to finish
+Density (per km²) — comparable at any resolution
+Area-weighted mean of pixels whose centers fall in the cell
+This link is view-only; it cannot be downloaded as data
+The other axis can be a raster (its values are aggregated into the same cells)
+The site rejects the checker (opening in a browser may work)
+The VRT has Colab paths → using the copy with fixed paths
+
+These texts appear in every box that uses the placeholder, e.g.
+Must be a full path, e.g. D:\Ainulindale\workspace
+Share of weight (e.g. people) where value ≥ threshold (%)
+Weight share requires a weight dataset (e.g. population)
+The browser is blocking this page from talking to your computer
+No administrator rights requested · registry is not modified
+Local network access
+cells — choose a study area or a coarser resolution
+No sample values yet — wait for data preparation to finish
+seconds — it was in a step that cannot stop midway)

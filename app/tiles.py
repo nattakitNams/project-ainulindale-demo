@@ -285,7 +285,11 @@ def _bbox_to_crs(bbox, crs_wkt):
 
 
 def features(ds, bbox, z, limit=4000, fields=None):
-    import pyogrio
+    """GeoJSON สำหรับแผนที่ในหน้าเว็บ (เฉพาะกรอบที่มอง) → (geojson, ถูกตัดไหม, จำนวน, จำนวนรูปเล็กกว่าพิกเซลที่ซ่อน)
+
+    feature เดียวที่มีหลายหมื่นส่วน (เช่น อาคารทั้งจังหวัดรวมเป็นก้อนเดียว) → แตกเป็นส่วนย่อยก่อน
+    ไม่งั้น simplify แบบรักษา topology ข้ามทุกส่วนช้ามาก (เคยใช้ 7 นาทีต่อการเลื่อนแผนที่ 1 ครั้ง)"""
+    import shapely
     m = ds['meta']
     bb = _bbox_to_crs(bbox, m.get('crs'))
     from .dsinfo import read_vector
@@ -295,12 +299,28 @@ def features(ds, bbox, z, limit=4000, fields=None):
     if df.crs is not None and df.crs.to_epsg() != 4326:
         df = df.to_crs(4326)
     tol = 360 / (256 * 2 ** z) * 0.7
-    df['geometry'] = df.geometry.simplify(tol, preserve_topology=True)
+    geoms = df.geometry.values
+    if len(df) and shapely.get_num_geometries(geoms).max() > 50:
+        df = df.explode(index_parts=False, ignore_index=True)
+        geoms = df.geometry.values
+    hidden = 0
+    if len(df):
+        view = shapely.box(*bbox)
+        inside = shapely.intersects(geoms, view)
+        gt = shapely.get_type_id(geoms)                       # 3/6 = polygon · 1/5 = line
+        tiny = ((gt == 3) | (gt == 6)) & (shapely.area(geoms) < (tol * 0.5) ** 2) | ((gt == 1) | (gt == 5)) & (shapely.length(geoms) < tol * 0.5)
+        hidden = int((inside & tiny).sum())                  # เล็กกว่าครึ่งพิกเซลที่ระดับซูมนี้ → มองไม่เห็นอยู่แล้ว
+        df = df[inside & ~tiny]
+        if len(df) > limit:
+            trunc, df = True, df.iloc[:limit]
+        g2 = shapely.simplify(df.geometry.values, tol, preserve_topology=False)   # ใช้แสดงผลอย่างเดียว — เร็ว
+        df = df.set_geometry(g2)
+        df = df[~shapely.is_empty(g2)]
     keep = [c for c in (fields or []) if c in df.columns] or [c for c in df.columns if c != 'geometry'][:3]
     df = df[keep + ['geometry']]
     for c in keep:
         df[c] = df[c].astype(str)
-    return df.to_json(drop_id=True), trunc, len(df)
+    return df.to_json(drop_id=True), trunc, len(df), hidden
 
 
 def point_vector(ds, lon, lat, z):

@@ -76,6 +76,19 @@ class Grid:
                     res_exact=gm.frac_str(self.res_frac), res_label=gm.res_label(self.res_frac, self.geographic))
 
 
+def lattice_grid(bounds, crs, res_frac, geographic, origin=(0.0, 0.0)):
+    """กริดที่ครอบกรอบ bounds (ใน crs) บนแลตทิซที่ยึดจุด origin — ใช้แปลง vector เป็นราสเตอร์
+    ขอบเขต = ของ vector (ไม่ใช่ของ raster อ้างอิง) · origin = มุมกริดของ raster อ้างอิง → พิกเซลตรงกันทุกเม็ด ไบแวเรียตต่อได้"""
+    res_frac = Fraction(res_frac)
+    r = float(res_frac) / 3600 if geographic else float(res_frac)
+    ox, oy = origin
+    x0b, y0b, x1b, y1b = bounds
+    c0, c1 = math.floor((x0b - ox) / r + 1e-9), math.ceil((x1b - ox) / r - 1e-9)
+    r0, r1 = math.floor((oy - y1b) / r + 1e-9), math.ceil((oy - y0b) / r - 1e-9)
+    W, H = max(1, c1 - c0), max(1, r1 - r0)
+    return Grid(ox + c0 * r, oy - r0 * r, r, r, W, H, crs, geographic, res_frac)
+
+
 # ---------- ชุดข้อมูลต้นทาง ----------
 class Source:
     """ds = แถวจาก catalog (dict) หรือ dict ที่มี path/meta/value_type/nodata_as/band"""

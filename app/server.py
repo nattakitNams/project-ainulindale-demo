@@ -81,7 +81,7 @@ def _cors(r):
         r.headers.add('Vary', 'Origin')
         r.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-Ainu-Token'
         r.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, PATCH, DELETE, OPTIONS'
-        r.headers['Access-Control-Expose-Headers'] = 'X-Truncated, X-Count, Content-Disposition'
+        r.headers['Access-Control-Expose-Headers'] = 'X-Truncated, X-Count, X-Hidden, Content-Disposition'
         r.headers['Access-Control-Max-Age'] = '600'
         if request.headers.get('Access-Control-Request-Private-Network'):
             r.headers['Access-Control-Allow-Private-Network'] = 'true'    # Chrome/Edge: เว็บสาธารณะ → localhost
@@ -404,8 +404,8 @@ def feats(did):
     bbox = [float(v) for v in request.args['bbox'].split(',')]
     z = int(request.args.get('z', 8))
     flds = [f for f in request.args.get('fields', '').split(',') if f]
-    gj, trunc, n = tiles.features(d, bbox, z, int(request.args.get('limit', 4000)), flds)
-    return Response(gj, mimetype='application/geo+json', headers={'X-Truncated': str(int(trunc)), 'X-Count': str(n)})
+    gj, trunc, n, hidden = tiles.features(d, bbox, z, int(request.args.get('limit', 4000)), flds)
+    return Response(gj, mimetype='application/geo+json', headers={'X-Truncated': str(int(trunc)), 'X-Count': str(n), 'X-Hidden': str(hidden)})
 
 
 @app.route('/api/datasets/<int:did>/colors', methods=['POST'])
@@ -1000,19 +1000,15 @@ def validate_job(kind, p):
         v = ds_or_404(int(p['dataset_id']))
         if v['kind'] != 'vector':
             raise ApiError('ต้องเป็นชุดข้อมูล vector')
-        ref = ds_or_404(int(p['ref_dataset_id']))
-        if ref['kind'] != 'raster':
-            raise ApiError('กริดอ้างอิงต้องเป็น raster')
-        s = engine.Source(dict(ref, value_type=ref.get('value_type') or 'class'))
-        g = engine.make_grid([s], Fraction(p['target_res']))
+        g, gmode = ops.rasterize_grid(p, v)
         aoi_name = _apply_aoi(p, g, [])
-        s.close()
+        ref = ds_or_404(int(p['ref_dataset_id'])) if gmode == 'ref' else None
         if p.get('mode') in ('attribute', 'majority') and not p.get('field'):
             raise ApiError('เลือกฟิลด์ก่อน')
         H, W = g.out_shape
         if p.get('mode') in ('fraction', 'majority'):
             warns.append(f'โหมดนี้ rasterize ละเอียดขึ้น {p.get("supersample", 10)} เท่าแล้วย่อ — ช้ากว่าแบบปกติ')
-        if Fraction(p['target_res']) < Fraction(ref['meta']['res_exact']):
+        if ref and Fraction(str(p['target_res'])) < Fraction(ref['meta']['res_exact']):
             warns.append(f'ความละเอียดละเอียดกว่ากริดอ้างอิง ({ref["meta"]["res_label"].split(" (")[0]}) — ไฟล์ใหญ่ขึ้นมากแต่ได้รายละเอียดเท่าความแม่นยำของ vector ต้นทาง')
         if H * W > 2e9:
             warns.append(f'ผลลัพธ์ใหญ่มาก ({H * W / 1e9:,.0f} พันล้านพิกเซล) — ไทล์ว่างถูกข้ามให้ แต่ขั้นสร้าง overview ตอนท้ายใช้เวลานานตามขนาดภาพ')
