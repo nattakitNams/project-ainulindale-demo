@@ -227,6 +227,30 @@ def t_propose_create_study_area(name, source_dataset_id, field, values):
     return _propose('create_aoi', f'สร้างพื้นที่ศึกษา "{name}" จาก {d["name"]} ({field} = {", ".join(map(str, values[:5]))}{"…" if len(values) > 5 else ""})', body)
 
 
+REPORT_TEMPLATES = {'gov_l': 'ราชการ A4 แนวนอน', 'gov_p': 'ราชการ A4 แนวตั้ง', 'ocha': 'สากลงานมนุษยธรรม (OCHA)',
+                    'journal': 'ภาพประกอบบทความวิชาการ', 'poster_a3': 'โปสเตอร์ A3 แนวตั้ง', 'dashboard': 'Dashboard / อินโฟกราฟิก A4'}
+
+
+def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle='', org='', author='', note='', caption='', map_no='', extent_aoi_id=None):
+    """รายงานจัดหน้าอยู่ในเบราว์เซอร์ (ตัวออกแบบรายงาน) → ยืนยันแล้วหน้าเว็บเปิดตัวออกแบบพร้อมค่าที่ตั้งนี้ ผู้ใช้กดส่งออก PDF เอง"""
+    if template not in REPORT_TEMPLATES:
+        raise ToolError(f'template ต้องเป็นหนึ่งใน {", ".join(REPORT_TEMPLATES)}')
+    names = []
+    for i in dataset_ids or []:
+        d = _call('GET', f'/api/datasets/{int(i)}')
+        names.append(f'#{d["id"]} {d["name"]}')
+    if not names:
+        raise ToolError('เลือกชุดข้อมูลอย่างน้อย 1 ชุด (ปกติคือแผนที่ไบแวเรียตที่สร้างแล้ว)')
+    if extent_aoi_id:
+        t_ids = [a['id'] for a in t_list_study_areas()]
+        if int(extent_aoi_id) not in t_ids:
+            raise ToolError(f'ไม่พบพื้นที่ศึกษา #{extent_aoi_id}')
+    spec = dict(dataset_ids=[int(i) for i in dataset_ids], template=template, extent_aoi_id=int(extent_aoi_id) if extent_aoi_id else None,
+                meta={k: str(v)[:300] for k, v in dict(title=title, subtitle=subtitle, org=org, author=author, note=note, caption=caption, map_no=map_no).items() if v})
+    return _propose('create_report', f'รายงาน "{title or names[0]}" · {REPORT_TEMPLATES[template]} · ' + ', '.join(names[:4]), spec,
+                    lambda: dict(ok=True, template=REPORT_TEMPLATES[template], layers=names))
+
+
 def proposals_public(ids):
     with _lock:
         return [dict(id=p['id'], action=p['action'], title=p['title'], estimate=p['estimate'],
@@ -234,13 +258,18 @@ def proposals_public(ids):
                 for p in (_PROPOSALS.get(i) for i in ids) if p]
 
 
-def execute(pid, model=None):
-    """ผู้ใช้กดยืนยัน → รันข้อเสนอ (ครั้งเดียว)"""
+def execute(pid, model=None, params=None):
+    """ผู้ใช้กดยืนยัน → รันข้อเสนอ (ครั้งเดียว) · params = ค่าที่ผู้ใช้แก้ในการ์ดเอง (เฉพาะงาน) — ตรวจซ้ำด้วย validate_job ตอนสร้างงาน"""
     with _lock:
         p = _PROPOSALS.pop(pid, None)
     if not p:
         raise ToolError('ข้อเสนอนี้หมดอายุหรือถูกใช้ไปแล้ว — ให้ผู้ช่วยเสนอใหม่')
     a = p['args']
+    if p['action'] == 'create_report':
+        return dict(ok=True, report=a, message='เปิดตัวออกแบบรายงานพร้อมค่าที่ตั้งแล้ว — ตรวจแล้วกด "ส่งออก" เพื่อได้ PDF')
+    if p['action'] == 'run_job' and isinstance(params, dict):
+        a = dict(a, params=_params(a['kind'], params))
+        p['user_edited'] = True
     if p['action'] == 'set_value_type':
         _call('PATCH', f'/api/datasets/{a["dataset_id"]}', dict(value_type=a['value_type'], value_type_confirmed=True))
         return dict(ok=True, message=f'ตั้งประเภทค่า #{a["dataset_id"]} เป็น {a["value_type"]} แล้ว')
@@ -248,7 +277,7 @@ def execute(pid, model=None):
         r = _call('POST', '/api/aoi', a)
         aid = r.get('id') or (r.get('aoi') or {}).get('id')
         return dict(ok=True, aoi_id=aid, message=f'สร้างพื้นที่ศึกษา #{aid} "{a["name"]}" แล้ว')
-    params = dict(a['params'], requested_by=dict(by='ai_assistant', model=model, confirmed_at=db.now()))
+    params = dict(a['params'], requested_by=dict(by='ai_assistant', model=model, confirmed_at=db.now(), edited_by_user=bool(p.get('user_edited'))))
     r = _call('POST', '/api/jobs', dict(kind=a['kind'], params=params))
     return dict(ok=True, job_id=r['job'], message=f'เริ่มงาน #{r["job"]} แล้ว')
 
@@ -278,6 +307,10 @@ TOOLS = [
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',
      dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S, title=S), ['kind', 'params_json']),
+    ('propose_create_report', 'action', t_propose_create_report,
+     'เสนอทำรายงานแผนที่ (เปิดตัวออกแบบรายงานพร้อมเทมเพลต/ชั้นข้อมูล/ข้อความ ผู้ใช้กดยืนยันแล้วส่งออก PDF เอง) — dataset_ids ปกติคือแผนที่ไบแวเรียตที่ทำเสร็จแล้ว',
+     dict(dataset_ids=dict(type='array', items=I), template=dict(type='string', enum=list(REPORT_TEMPLATES)), title=S, subtitle=S, org=S, author=S,
+          note=S, caption=S, map_no=S, extent_aoi_id=I), ['dataset_ids', 'title']),
     ('propose_create_study_area', 'action', t_propose_create_study_area, 'เสนอสร้างพื้นที่ศึกษาจากชั้นขอบเขต (เลือกค่าของฟิลด์ เช่น ชื่อจังหวัด)',
      dict(name=S, source_dataset_id=I, field=S, values=dict(type='array', items=S)), ['name', 'source_dataset_id', 'field', 'values']),
 ]

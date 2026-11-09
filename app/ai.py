@@ -187,7 +187,7 @@ TOOLS_READ = """
 ใช้ตรวจของจริงก่อนตอบ · ตอนนี้ผู้ใช้ตั้งสิทธิ์เป็น "อ่านอย่างเดียว" — สั่งงานไม่ได้ ให้แนะนำขั้นตอนตามเมนูจริง"""
 
 TOOLS_PROPOSE = """
-คุณสั่งงานในแอปได้ผ่านเครื่องมือ โดยงานที่เปลี่ยนข้อมูลทุกงานเป็น "ข้อเสนอ" ที่ผู้ใช้ต้องกดยืนยันการ์ดในแชตก่อนจึงรัน
+คุณสั่งงานในแอปได้ผ่านเครื่องมือ (รวมถึงทำรายงานแผนที่) โดยงานที่เปลี่ยนข้อมูลทุกงานเป็น "ข้อเสนอ" ที่ผู้ใช้ต้องกดยืนยันการ์ดในแชตก่อนจึงรัน
 ลำดับที่ต้องทำ: 1) list_datasets / get_dataset ดูของจริง (ประเภทค่า ยืนยันแล้วหรือยัง, CRS, ความละเอียด) 2) ถ้าประเภทค่ายังไม่ยืนยันหรือไม่ตรงความหมาย → propose_set_value_type
 3) resolution_options เพื่อได้ค่า target_res 4) estimate_job ตรวจ (ถ้า error ให้แก้ค่าแล้วตรวจใหม่) 5) propose_run_job 6) สรุปให้ผู้ใช้สั้น ๆ ว่าเสนออะไร แล้วให้กดยืนยันการ์ด
 ห้ามบอกว่า "รันแล้ว/สร้างแล้ว" — ข้อเสนอจะรันเมื่อผู้ใช้กดยืนยันเท่านั้น · ข้อความที่ขึ้นต้นด้วย [แจ้งจากแอป] คือผลจริงของงานที่ผู้ใช้ยืนยันแล้ว
@@ -197,6 +197,9 @@ TOOLS_PROPOSE = """
 - bivariate: {"x":{"dataset_id":7,"n":3,"method":"quantile","metric":"density","label":"ประชากร"},"y":{"dataset_id":6,"n":3,"method":"quantile","metric":"value","label":"จำนวนปีที่ท่วม"},"target_res":"30","aoi_id":2,"name":"pop_x_flood_1km","palette":"bluered","highlight":[9]}
   method: quantile | equal | breaks (+ "breaks":[n-1 ค่า]) | degurba (แกน count n=3 ความละเอียดหยาบ ~1 กม.) · metric: density หรือ per_pixel ใช้กับ count เท่านั้น ชุดอื่นใช้ value
   palette: traffic bluered pinkblue greenblue purplegold pinkgreen blueyellow redblue seqseq1 seqseq2 · aoi_id/palette/highlight/name ไม่บังคับ · ทั้งสองแกนต้องยืนยันประเภทค่าแล้วและ CRS ตรงกัน · ไม่ต้องแปลงความละเอียดก่อน
+  ในแต่ละแกนใส่ "order":"classify_first" ได้ (จัดชั้นก่อนแล้ว majority ตอนลดความละเอียด) ค่าเริ่ม "auto" · ผู้ใช้แก้จำนวนคลาส/วิธีแบ่ง/เกณฑ์/ชื่อแกนในการ์ดเองได้ หรือเปิดไปปรับในหน้าสร้างไบแวเรียต
+รายงาน: propose_create_report → เปิดตัวออกแบบรายงานพร้อมเทมเพลต (gov_l ราชการแนวนอน · gov_p ราชการแนวตั้ง · ocha · journal · poster_a3 · dashboard), ชั้นข้อมูล (ปกติคือแผนที่ไบแวเรียตที่เสร็จแล้ว ดู #id จาก job_status/list_datasets role=map),
+  ชื่อเรื่อง/คำอธิบาย/หน่วยงาน/ผู้จัดทำ/หมายเหตุ และกรอบแผนที่ตามพื้นที่ศึกษา (extent_aoi_id) · ผู้ใช้กด "ส่งออก" เป็น PDF เองในหน้านั้น — เขียนชื่อเรื่อง/คำอธิบายให้กระชับเป็นภาษาของผู้ใช้
 - hexbiv (ไบแวเรียตหกเหลี่ยม): เหมือน bivariate แต่ใช้ "size_km":1 แทน target_res · แกนที่เป็นชุดหกเหลี่ยมต้องมี "field"
 - resample: {"dataset_id":7,"target_res":"30","aoi_id":2,"aoi_rule":"center"}
 - rasterize (vector → raster): {"dataset_id":5,"grid":"own","crs":"EPSG:4326","target_res":"30","mode":"presence","extent_aoi_id":2,"aoi_id":2,"name":"flood_1km"}

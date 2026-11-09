@@ -254,7 +254,7 @@ def ai_confirm():
     from . import ai_tools
     b = request.get_json(force=True)
     try:
-        return jsonify(ai_tools.execute(str(b.get('id')), ai.cfg().get('model')))
+        return jsonify(ai_tools.execute(str(b.get('id')), ai.cfg().get('model'), b.get('params')))
     except ai_tools.ToolError as e:
         raise ApiError(str(e))
 
@@ -491,8 +491,9 @@ def tile(did, z, x, y):
     st = _previews.get(tok)
     if st is not None:                       # ใช้อยู่ → ย้ายไปท้าย (ไม่โดนไล่ออกก่อน; ชั้นในแผนที่ซ้อนชั้นใช้ token ค้างไว้)
         _previews[tok] = _previews.pop(tok)
+    clip = request.args.get('clip')
     try:
-        data, cache = tiles.render(d, z, x, y, cols, st)
+        data, cache = tiles.render(d, z, x, y, cols, st, int(clip) if clip and clip.isdigit() else None)
     except Exception as e:
         print(f'[ไทล์] #{did} {z}/{x}/{y}:', e)
         return Response(tiles.EMPTY, mimetype='image/png', headers={'Cache-Control': 'no-store'})

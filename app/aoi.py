@@ -147,23 +147,84 @@ def geom_in(aid, crs):
     return g.geometry.union_all()
 
 
+def _fast_mask(geom, prep, box, out_shape, transform, all_touched):
+    """mask รูปบนไทล์ — ไทล์อยู่ในรูปทั้งไทล์ / นอกรูปทั้งไทล์ ไม่ต้อง rasterize · ไทล์คาบเส้นขอบ → ตัดรูปเหลือเฉพาะในไทล์ก่อน
+    (รูปประเทศไทยทั้งประเทศ rasterize ทุกไทล์ช้ามาก — วัดได้ 38 วิ → ดูผลใน DEVLOG)"""
+    from rasterio.features import geometry_mask
+    if prep.contains(box):
+        return np.ones(out_shape, bool)
+    if not prep.intersects(box):
+        return np.zeros(out_shape, bool)
+    g = geom.intersection(box.buffer(box.length * 0.01))
+    if g.is_empty:
+        return np.zeros(out_shape, bool)
+    return geometry_mask([g], out_shape=out_shape, transform=transform, all_touched=all_touched, invert=True)
+
+
+class _ThreadPrep:
+    """prepared geometry แยกต่อเธรด — prepared ของ GEOS ใช้ร่วมกันหลายเธรดไม่ได้ (ตัวประมวลผลล่ม 0xC0000005)"""
+
+    def __init__(self, geom):
+        import threading
+        self.geom, self.local = geom, threading.local()
+
+    def get(self):
+        from shapely import prepared
+        p = getattr(self.local, 'p', None)
+        if p is None:
+            import shapely
+            p = self.local.p = prepared.prep(shapely.from_wkb(shapely.to_wkb(self.geom)))   # สำเนาของเธรดนี้
+        return p
+
+
 class Masker:
     """mask ของพื้นที่ศึกษาบนกริดเป้าหมาย ; f = คิดที่พิกเซลใหญ่กว่า f เท่าแล้วแตกลง (เช่น อิงศูนย์กลางพิกเซลแม่ 100 ม.)"""
 
     def __init__(self, geom, grid, rule='center', f=1):
-        from shapely import prepared  # noqa: F401
         self.geom, self.grid, self.rule, self.f = geom, grid, rule, int(f)
+        self.prep = _ThreadPrep(geom)
 
     def __call__(self, r0, c0, h, w):
-        from rasterio.features import geometry_mask
+        import shapely
         f = self.f
         assert r0 % f == 0 and c0 % f == 0
         hh, ww = math.ceil(h / f), math.ceil(w / f)
-        m = geometry_mask([self.geom], out_shape=(hh, ww), transform=self.grid.tile_transform(r0, c0, f),
-                          all_touched=self.rule == 'touch', invert=True)
+        t = self.grid.tile_transform(r0, c0, f)
+        box = shapely.box(t.c, t.f + hh * t.e, t.c + ww * t.a, t.f)
+        p = self.prep.get()
+        m = _fast_mask(p.context, p, box, (hh, ww), t, self.rule == 'touch')
         if f > 1:
             m = np.repeat(np.repeat(m, f, 0), f, 1)[:h, :w]
         return m
+
+
+# ---------- ตัดการแสดงผลไทล์ตามพื้นที่ศึกษา (แสดงผลเท่านั้น ไม่แตะไฟล์) ----------
+_tile_geom = {}
+
+
+def tile_mask(aid, z, x, y, shape):
+    """None = ไทล์อยู่ในพื้นที่ทั้งไทล์ · False = นอกทั้งไทล์ · ndarray(bool) = ในพื้นที่"""
+    import shapely
+    from rasterio.transform import from_bounds
+    from shapely import prepared
+    a = get(aid)
+    k = (aid, a.get('created_at'), a.get('path'))
+    if k not in _tile_geom:                                 # ไทล์ถูกขอพร้อมกันหลายเธรด → prepared แยกต่อเธรด
+        if len(_tile_geom) > 20:
+            _tile_geom.clear()
+        _tile_geom[k] = _ThreadPrep(geom_in(aid, 'EPSG:3857'))
+    prep = _tile_geom[k].get()
+    g = prep.context
+    R = 20037508.342789244
+    n = 2 ** z
+    x0, x1 = -R + 2 * R * x / n, -R + 2 * R * (x + 1) / n
+    y1, y0 = R - 2 * R * y / n, R - 2 * R * (y + 1) / n
+    box = shapely.box(x0, y0, x1, y1)
+    if prep.contains(box):
+        return None
+    if not prep.intersects(box):
+        return False
+    return _fast_mask(g, prep, box, shape, from_bounds(x0, y0, x1, y1, shape[1], shape[0]), False)
 
 
 # ---------- พิมพ์พิกัดโพลิกอนเอง ----------

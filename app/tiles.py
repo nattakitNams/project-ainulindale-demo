@@ -199,17 +199,24 @@ def style_of(ds):
     return _defaults[k]
 
 
-def render(ds, z, x, y, cols=None, style=None):
+def render(ds, z, x, y, cols=None, style=None, clip=None):
+    """clip = id พื้นที่ศึกษา → แสดงเฉพาะในรูปนั้น (ตัดการแสดงผลเท่านั้น ไฟล์ไม่เปลี่ยน)"""
     import json
     from . import symbology
     path, band, res = choose_path(ds, z)
     if cols is None:
         style = style or style_of(ds)
     sk = json.dumps(style, sort_keys=True) if style else None
-    key = (ds['id'], ds.get('fingerprint'), ds.get('preview_key'), ds.get('value_type'), path, z, x, y, tuple(cols) if cols else None, sk)
+    key = (ds['id'], ds.get('fingerprint'), ds.get('preview_key'), ds.get('value_type'), path, z, x, y, tuple(cols) if cols else None, sk, clip)
     hit = tc_get(key)
     if hit is not None:
         return hit, True
+    cm = None
+    if clip:
+        from . import aoi as aoimod
+        cm = aoimod.tile_mask(int(clip), z, x, y, (256, 256))
+        if cm is False:
+            return EMPTY, True
     try:
         with borrow('rd', path) as r:
             if not r.tile_exists(x, y, z):
@@ -223,9 +230,16 @@ def render(ds, z, x, y, cols=None, style=None):
     valid = ~np.ma.getmaskarray(arr) & np.isfinite(a)
     load_cmap(ds)
     if style and cols is None:
-        data = png(symbology.render(ds, style, a, valid, res, tile_row_lat(y, z, a.shape[0])))
+        rgba = symbology.render(ds, style, a, valid, res, tile_row_lat(y, z, a.shape[0]))
     else:
-        data = png(colorize(ds, a, valid, res, y, z, cols))
+        rgba = colorize(ds, a, valid, res, y, z, cols)
+    if cm is not None:
+        if cm.shape != rgba.shape[:2]:                     # ไทล์ไม่ใช่ 256 → คำนวณ mask ใหม่ตามขนาดจริง
+            from . import aoi as aoimod
+            cm = aoimod.tile_mask(int(clip), z, x, y, rgba.shape[:2])
+        if cm is not None and cm is not False:
+            rgba[..., 3] = np.where(cm, rgba[..., 3], 0)
+    data = png(rgba)
     tc_put(key, data)
     return data, True
 

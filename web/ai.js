@@ -100,30 +100,77 @@ const AIDock = (() => {
   const save = () => ls.set(HKEY, hist.slice(-60));
 
   // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
-  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน' };
+  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน' };
+  const isBiv = p => p.action === 'run_job' && ['bivariate', 'hexbiv'].includes(p.args?.kind);
+  const METHODS = [['quantile', 'ควอนไทล์'], ['equal', 'ช่วงเท่ากัน'], ['breaks', 'กำหนดเกณฑ์เอง'], ['degurba', 'DEGURBA']];
+
+  // แก้ค่าไบแวเรียตในการ์ดก่อนยืนยัน (ชื่อแกน / จำนวนคลาส / วิธีแบ่ง / เกณฑ์ / ลำดับ) — ค่าที่ผู้ใช้แก้ส่งไปตรวจซ้ำตอนรัน
+  function axisEditor(p) {
+    const P = p.args.params;
+    return `<div class="ai-edit">${['x', 'y'].map(ax => { const c = P[ax] || {}; return `<div class="ai-ax"><b>แกน ${ax.toUpperCase()}</b> <span class="tiny muted" translate="no">#${c.dataset_id}</span>
+      <input data-ax="${ax}" data-k="label" value="${esc(c.label || '')}" placeholder="ชื่อแกน">
+      <div class="row" style="gap:4px"><select data-ax="${ax}" data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == (c.n || 3) ? 'selected' : ''}>${n}</option>`).join('')}</select>
+        <select data-ax="${ax}" data-k="method">${METHODS.map(([k, t]) => `<option value="${k}" ${k === (c.method || 'quantile') ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+      ${c.method === 'breaks' ? `<input data-ax="${ax}" data-k="breaks" value="${esc((c.breaks || []).join(', '))}" placeholder="เกณฑ์ เช่น 300, 1500">` : ''}
+      <label class="tiny"><input type="checkbox" data-ax="${ax}" data-k="order" ${c.order === 'classify_first' ? 'checked' : ''}> จัดชั้นก่อนแล้ว majority</label></div>`; }).join('')}</div>`;
+  }
+
   function propCard(p, mi, pi) {
     const e = p.estimate || {};
     const est = p.action === 'run_job'
-      ? (e.ok ? `<div class="tiny">${esc(e.resolution || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซล` : ''}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>`
+      ? (p.edited ? '<div class="tiny warn-t">แก้ค่าแล้ว — ตรวจอีกครั้งตอนรัน</div>' : e.ok ? `<div class="tiny">${esc(e.resolution || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซล` : ''}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>`
         + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
-        : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`) : '';
+        : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`)
+      : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>` : '';
+    const edit = isBiv(p) && p.state === 'pending' ? axisEditor(p) : '';
     const detail = p.action === 'run_job' ? `<details class="tiny"><summary>ค่าที่ตั้ง</summary><pre translate="no">${esc(JSON.stringify(p.args.params, null, 1))}</pre></details>` : '';
     const stx = { pending: '', running: '<span class="tiny muted">กำลังส่ง…</span>', done: `<span class="tiny ok-t">${IC.check}${esc(p.result || 'เรียบร้อย')}</span>`,
-      rejected: '<span class="tiny muted">ไม่ทำ</span>', failed: `<span class="tiny warn-t">${esc(p.result || 'ไม่สำเร็จ')}</span>` }[p.state];
-    return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>${est}${detail}
-      <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}ยืนยัน</button><button class="sm ghost" data-no>ไม่ทำ</button>` : stx}</div></div>`;
+      rejected: '<span class="tiny muted">ไม่ทำ</span>', moved: '<span class="tiny muted">เปิดไปปรับในหน้าสร้างไบแวเรียตแล้ว</span>',
+      failed: `<span class="tiny warn-t">${esc(p.result || 'ไม่สำเร็จ')}</span>` }[p.state];
+    return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>${est}${edit}${detail}
+      <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}${p.action === 'create_report' ? 'เปิดตัวออกแบบรายงาน' : 'ยืนยัน'}</button>`
+        + (isBiv(p) ? `<button class="sm ghost" data-form title="ใส่ค่าทั้งหมดลงฟอร์มหน้าสร้างไบแวเรียต แล้วปรับ/รันเอง">ปรับในหน้าสร้างไบแวเรียต</button>` : '')
+        + '<button class="sm ghost" data-no>ไม่ทำ</button>' : stx}</div></div>`;
   }
 
-  async function decide(mi, pi, ok) {
+  function onEdit(p, el) {
+    const P = p.args.params, c = P[el.dataset.ax] = P[el.dataset.ax] || {}, k = el.dataset.k;
+    if (k === 'n') c.n = +el.value;
+    else if (k === 'order') c.order = el.checked ? 'classify_first' : 'auto';
+    else if (k === 'breaks') c.breaks = el.value.split(/[,\s]+/).map(Number).filter(v => !isNaN(v) && el.value.trim());
+    else c[k] = el.value;
+    if (k === 'method' && el.value === 'breaks' && !(c.breaks || []).length) c.breaks = [];
+    p.edited = true; save();
+    if (k === 'method' || k === 'n') drawMsgs();
+  }
+
+  // ใส่ค่าที่ AI เสนอลงฟอร์มหน้าสร้างไบแวเรียต (BIV ใน app.js) แล้วเปิดหน้านั้น — ข้อเสนอนี้ไม่ใช้แล้ว
+  function toForm(p) {
+    const P = p.args.params;
+    ['x', 'y'].forEach(ax => Object.assign(BIV[ax], { breaks: [], label: '' }, P[ax] || {}));
+    Object.assign(BIV, { target_res: P.target_res || null, aoi_id: P.aoi_id || null, name: P.name || '', colors: null, highlight: P.highlight || [],
+      out: p.args.kind === 'hexbiv' ? 'hex' : 'raster', size_km: P.size_km || BIV.size_km });
+    if (P.palette) BIV.pal = P.palette.startsWith('b:') ? P.palette : 'b:' + P.palette;
+    location.hash = '#/biv';
+    if (location.hash === '#/biv') route();
+  }
+
+  async function decide(mi, pi, ok, form) {
     const p = hist[mi].proposals[pi];
     if (p.state !== 'pending') return;
-    if (!ok) { p.state = 'rejected'; api(ENGINE + '/api/ai/reject', { json: { id: p.id } }).catch(() => { }); save(); drawMsgs(); return; }
+    if (!ok) {
+      p.state = form ? 'moved' : 'rejected';
+      api(ENGINE + '/api/ai/reject', { json: { id: p.id } }).catch(() => { });
+      if (form) { hist.push({ role: 'event', content: 'ผู้ใช้เปิดค่าที่เสนอไปปรับในหน้าสร้างไบแวเรียตเอง' }); toForm(p); }
+      save(); drawMsgs(); return;
+    }
     p.state = 'running'; drawMsgs();
     try {
-      const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id } });
+      const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id, params: p.edited ? p.args.params : undefined } });
       p.state = 'done'; p.result = r.message;
       hist.push({ role: 'event', content: r.message + (r.job_id ? ' — กำลังประมวลผล' : '') });
       if (r.job_id) watchJob(r.job_id);
+      if (r.report) { try { sessionStorage.setItem('ainu-ai-report', JSON.stringify(r.report)); } catch { } location.hash = '#/report?ai=1'; }
       if (typeof jobBadge === 'function') jobBadge();
     } catch (e) { p.state = 'failed'; p.result = e.message; hist.push({ role: 'event', content: `ไม่สำเร็จ: ${p.title} — ${e.message}` }); }
     save(); drawMsgs();
@@ -158,6 +205,8 @@ const AIDock = (() => {
       const mi = +c.dataset.m, pi = +c.dataset.p;
       c.querySelector('[data-ok]')?.addEventListener('click', () => decide(mi, pi, true));
       c.querySelector('[data-no]')?.addEventListener('click', () => decide(mi, pi, false));
+      c.querySelector('[data-form]')?.addEventListener('click', () => decide(mi, pi, false, true));
+      c.querySelectorAll('.ai-edit [data-k]').forEach(el => el.addEventListener('change', () => onEdit(hist[mi].proposals[pi], el)));
     });
     m.scrollTop = m.scrollHeight;
   }
@@ -171,7 +220,7 @@ const AIDock = (() => {
       ${st.connected ? `<table class="kv"><tr><td>ผู้ให้บริการ</td><td>${esc(st.provider_label)}${st.base_url ? ` <span class="mono tiny">${esc(st.base_url)}</span>` : ''}</td></tr>
         <tr><td>รุ่น</td><td><div class="row"><select id="aiModel" translate="no"><option>${esc(st.model)}</option></select><button class="sm ghost" id="aiLoadM">โหลดรายการรุ่น</button></div></td></tr>
         <tr><td>สิทธิ์</td><td><select id="aiMode"><option value="propose" ${st.mode === 'propose' ? 'selected' : ''}>เสนองาน — ต้องกดยืนยันทุกครั้ง</option><option value="read" ${st.mode === 'read' ? 'selected' : ''}>อ่านอย่างเดียว</option></select>
-          <div class="tiny muted" style="margin-top:4px">ผู้ช่วยอ่านคลัง/ประเมินงาน/ค้น Data hub ได้เอง · งานที่เปลี่ยนข้อมูล (ตั้งประเภทค่า, รันงาน, สร้างพื้นที่ศึกษา) รันเมื่อคุณกดยืนยันเท่านั้น · ลบ/ถังขยะ/โทเคนไม่มีให้ผู้ช่วยใช้</div></td></tr></table>
+          <div class="tiny muted" style="margin-top:4px">ผู้ช่วยอ่านคลัง/ประเมินงาน/ค้น Data hub ได้เอง · งานที่เปลี่ยนข้อมูล (ตั้งประเภทค่า, รันงาน, สร้างพื้นที่ศึกษา, ทำรายงาน) รันเมื่อคุณกดยืนยันเท่านั้น · ลบ/ถังขยะ/โทเคนไม่มีให้ผู้ช่วยใช้</div></td></tr></table>
         <button class="sm danger" id="aiOut" style="margin-top:10px">ออกจากระบบ (ลบ key)</button>`
       : `<div class="small muted">${st.enabled ? 'ยังไม่ได้เชื่อมต่อ — ใส่ key ในช่องแชตมุมขวาล่าง' : 'ยังไม่ได้เชื่อมต่อ'}</div>`}`;
     $('#aiOn').onchange = async () => {

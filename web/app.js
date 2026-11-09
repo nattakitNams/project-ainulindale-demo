@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.21';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.23';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -462,6 +462,7 @@ async function pageDataset(id) {
       <div class="mapbar">
         <div class="seg" id="bm"><button data-k="gh">ดาวเทียม</button><button data-k="osm">แผนที่</button><button data-k="none">ไม่มี</button></div>
         <label class="row small" title="ความทึบของชั้นข้อมูล">ข้อมูล <input type="range" id="op" min="0" max="1" step="0.05" value="0.85"></label>
+        ${isR ? `<label class="row small" title="ตัดการแสดงผลตามรูปพื้นที่ศึกษา — แสดงผลเท่านั้น ไฟล์ไม่เปลี่ยน">แสดง <select id="clipSel" class="sm"><option value="">ทั้งกรอบข้อมูล</option>${aoiOptions(aois, { text: a => esc(a.name) })}</select></label>` : ''}
         <span class="tiny muted" id="mapNote"></span>
       </div>
       <div id="map" class="mapbox"></div>
@@ -614,7 +615,7 @@ async function symPanel(d, o = {}) {
     pvTimer = setTimeout(async () => {
       if (o.viewer) { if (!override) { override = true; draw(); } o.onStyle(sty); return; }
       const t = await api(ENGINE + '/api/style-preview', { json: { dataset_id: d.id, style: sty } });
-      window._rasterLayer?.setUrl(`${ENGINE}/api/datasets/${d.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(d.fingerprint || '')}&st=${t.token}`);
+      window._rasterSt = t.token; window._rasterLayer?.setUrl(rTileUrl(d, t.token));
       window._rasterLayer?.setOpacity(sty.opacity ?? .85);
       setMapLegend(sty);
     }, 250);
@@ -853,6 +854,14 @@ function bmSeg(mp, seg) {
   $$('button', seg).forEach(b => b.onclick = () => set(b.dataset.k)); set(mp._bm);
 }
 
+// URL ไทล์ราสเตอร์ของหน้าชุดข้อมูล: st = สไตล์ชั่วคราว · clip = ตัดการแสดงผลตามพื้นที่ศึกษา (จำแยกต่อชุดในเบราว์เซอร์)
+const clipKey = id => 'ainu-clip-' + id;
+const getClip = id => { try { return localStorage.getItem(clipKey(id)) || ''; } catch { return ''; } };
+function rTileUrl(d, st) {
+  const c = getClip(d.id);
+  return `${ENGINE}/api/datasets/${d.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(d.fingerprint || '')}${st ? '&st=' + st : ''}${c ? '&clip=' + c : ''}`;
+}
+
 function initMap(d) {
   const m = d.meta;
   const mp = baseMap('map');
@@ -862,8 +871,17 @@ function initMap(d) {
   if (b) mp.fitBounds([[b[1], b[0]], [b[3], b[2]]]); else mp.setView([13.5, 100.5], 6);
   let layer;
   if (d.kind === 'raster') {
-    layer = L.tileLayer(`${ENGINE}/api/datasets/${d.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(d.fingerprint || '')}`, { maxZoom: 22, opacity: .85 }).addTo(mp);
+    window._rasterSt = null;                                    // token สไตล์ชั่วคราวของชุดก่อนหน้า ไม่ใช้ข้ามหน้า
+    layer = L.tileLayer(rTileUrl(d), { maxZoom: 22, opacity: .85 }).addTo(mp);
     window._rasterLayer = layer;
+    if ($('#clipSel')) {
+      $('#clipSel').value = getClip(d.id);
+      if ($('#clipSel').value !== getClip(d.id)) { try { localStorage.removeItem(clipKey(d.id)); } catch { } }   // พื้นที่ศึกษาถูกลบไปแล้ว
+      $('#clipSel').onchange = () => {
+        try { $('#clipSel').value ? localStorage.setItem(clipKey(d.id), $('#clipSel').value) : localStorage.removeItem(clipKey(d.id)); } catch { }
+        layer.setUrl(rTileUrl(d, window._rasterSt));
+      };
+    }
     if (!d.preview_path && m.pixels > 4e6 && !m.overviews.length) $('#mapNote').textContent = 'ไฟล์ใหญ่ไม่มี overview — ซูมออกจะช้าจนกว่าเตรียมข้อมูลเสร็จ';
   } else {
     const hasColor = (m.fields || []).some(f => f.name === 'color');
@@ -1003,7 +1021,7 @@ async function mapPalette(d) {
   const preview = async () => {
     sty.entries.forEach(e => { const c = cols[+e.value - 1]; if (c) e.color = c; });
     const t = await api(ENGINE + '/api/style-preview', { json: { dataset_id: d.id, style: sty } });
-    window._rasterLayer?.setUrl(`${ENGINE}/api/datasets/${d.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(d.fingerprint || '')}&st=${t.token}`);
+    window._rasterSt = t.token; window._rasterLayer?.setUrl(rTileUrl(d, t.token));
     setMapLegend(sty);
   };
   const draw = () => {
@@ -2022,7 +2040,7 @@ async function pageViewer() {
     return o;
   };
   // สไตล์ raster เฉพาะหน้านี้ (l.rstyle) → ส่งเป็นสไตล์ชั่วคราวให้เซิร์ฟเวอร์ (token) ไม่แตะสไตล์ของชุดข้อมูล
-  const rBase = l => `${ENGINE}/api/datasets/${l.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(byKey[l.key].fingerprint || '')}`;
+  const rBase = l => `${ENGINE}/api/datasets/${l.id}/tile/{z}/{x}/{y}.png?v=${encodeURIComponent(byKey[l.key].fingerprint || '')}${l.clip && byKey['aoi:' + l.clip] ? '&clip=' + l.clip : ''}`;
   const applyRStyle = async (l, obj) => {
     obj = obj || objs.get(l.key)?.obj;
     if (!obj) return;
@@ -2085,8 +2103,9 @@ async function pageViewer() {
             <label class="small">หนา <input type="range" data-a="width" min="0" max="5" step="0.2" value="${l.style.width}"></label>
             <label class="small">พื้น <input type="color" data-a="fill" value="${l.style.fill}"></label>
             <label class="small">ความทึบพื้น <input type="range" data-a="fo" min="0" max="1" step="0.05" value="${l.style.fillOpacity}"></label></div>` : ''}
-          ${l.kind === 'raster' ? `<div class="row small" style="margin-top:6px"><button class="sm" data-a="sym">🎨 ปรับสัญลักษณ์</button>
-            <span class="tiny ${l.rstyle ? '' : 'muted'}" ${l.rstyle ? 'style="color:var(--mint)"' : ''}>${l.rstyle ? 'ปรับเฉพาะแผนที่นี้' : 'ตามสไตล์ของชุดข้อมูล'}</span></div>` : ''}
+          ${l.kind === 'raster' ? `<div class="row small" style="margin-top:6px"><button class="sm" data-a="sym">${IC.palette}ปรับสัญลักษณ์</button>
+            <span class="tiny ${l.rstyle ? '' : 'muted'}" ${l.rstyle ? 'style="color:var(--mint)"' : ''}>${l.rstyle ? 'ปรับเฉพาะแผนที่นี้' : 'ตามสไตล์ของชุดข้อมูล'}</span></div>
+            <label class="row small" style="margin-top:6px" title="ตัดการแสดงผลตามรูปพื้นที่ศึกษา — แสดงผลเท่านั้น ไฟล์ไม่เปลี่ยน">แสดง <select data-a="clip" class="sm"><option value="">ทั้งกรอบข้อมูล</option>${aoiOptions(aois, { text: a => esc(a.name), sel: l.clip || '' })}</select></label>` : ''}
           ${o?.trunc ? '<div class="tiny" style="color:var(--butter)">แสดงไม่ครบในกรอบนี้ — ซูมเข้า</div>' : ''}
           <div class="row" style="margin-top:8px">
             <button class="sm" data-a="zoom">${IC.target}ซูมไปชั้นนี้</button>
@@ -2099,9 +2118,10 @@ async function pageViewer() {
       const l = layers.find(x => x.key === row.dataset.k);
       $$('[data-a]', row).forEach(c => {
         const a = c.dataset.a;
-        const ev = c.type === 'range' || c.type === 'color' ? 'oninput' : c.tagName === 'INPUT' ? 'onchange' : 'onclick';
+        const ev = c.type === 'range' || c.type === 'color' ? 'oninput' : c.tagName === 'INPUT' || c.tagName === 'SELECT' ? 'onchange' : 'onclick';
         c[ev] = () => {
           if (a === 'vis') { l.visible = c.checked; row.classList.toggle('off', !l.visible); sync(); return; }
+          if (a === 'clip') { l.clip = c.value || null; applyRStyle(l); sync(); return; }
           if (a === 'more') { open.has(l.key) ? open.delete(l.key) : open.add(l.key); renderList(); return; }
           if (a === 'op') { l.opacity = +c.value; c.nextElementSibling.textContent = Math.round(l.opacity * 100) + '%'; sync(); return; }
           if (a === 'uc') l.style.useColor = c.checked;
@@ -2256,8 +2276,17 @@ async function pageReport(qs) {
   } else if (qs.get('viewer')) {
     doc.map.layers = vLoad().filter(l => l.visible && byKey[l.key]).map(l => ({ key: l.key, opacity: l.opacity, style: l.style, rstyle: l.rstyle, name: l.name, kind: l.kind }));
     resetViews();
+  } else if (qs.get('ai')) {                                 // ผู้ช่วย AI เสนอรายงาน (ผู้ใช้กดยืนยันแล้ว) → เริ่มหน้าใหม่จากเทมเพลต + ชั้นข้อมูล + ข้อความ
+    let sp = null; try { sp = JSON.parse(sessionStorage.getItem('ainu-ai-report')); sessionStorage.removeItem('ainu-ai-report'); } catch { }
+    if (sp && RPT.TEMPLATES[sp.template]) {
+      const meta = Object.assign({ title: '', subtitle: '', org: 'GISTDA', author: '', map_no: '', date: new Date().toLocaleDateString(I18N.locale()), note: '', caption: '' }, sp.meta || {});
+      doc = Object.assign(RPT.fromTemplate(sp.template, {}), { map: blankMap(), font: doc.font || 'Sarabun', meta });
+      doc.map.layers = (sp.dataset_ids || []).map((id, i) => all.find(x => x.id === id)).filter(Boolean).map((d, i) => vLayerFromDs(d, i));
+      if (sp.extent_aoi_id && byKey['aoi:' + sp.extent_aoi_id]) doc.map.extent = { type: 'aoi', aoi_id: sp.extent_aoi_id };
+      resetViews();
+    }
   }
-  if (qs.get('ds') || qs.get('viewer')) history.replaceState(null, '', '#/report');
+  if (qs.get('ds') || qs.get('viewer') || qs.get('ai')) history.replaceState(null, '', '#/report');
   doc.map.layers = doc.map.layers.filter(l => byKey[l.key]);
   if (/^carto_/.test(doc.map.basemap)) doc.map.basemap = 'esri_light';
 

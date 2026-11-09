@@ -1,0 +1,97 @@
+
+
+
+
+
+
+
+
+
+
+The assistant can read the library, estimate jobs and search the Data hub on its own · anything that changes data (value type, jobs, study areas, reports) runs only after you click confirm · delete/trash/tokens are never available to it
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Opened the report designer with these settings — review, then click "Export" for a PDF
+
+
+
+
+
+
+
+Clip the display to a study area shape — display only, the file is not changed
+
+
+
+
+Put all values into the bivariate form, then adjust and run yourself
+
+
+
+The user opened the proposed settings in the bivariate page to adjust
+
+
+
+
+
+
+
+
+Opened in the bivariate page
+
+Edited — will be checked again when run
+
+
+
+
+Classify first, then majority
+Adjust in the bivariate page
+
+
+Breaks, e.g. 300, 1500
+
+Open report designer
+
+
+
+
+Full data extent
+Symbology
+
+
+Make report
+Report "
+
+
+
+
+

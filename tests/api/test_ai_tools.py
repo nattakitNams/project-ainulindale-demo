@@ -59,6 +59,12 @@ class Mock(BaseHTTPRequestHandler):
                 return reply([call('estimate_job', {'kind': 'bivariate', 'params_json': json.dumps(p)}),
                               call('propose_run_job', {'kind': 'bivariate', 'params_json': json.dumps(p), 'title': 'ประชากร × NDVI'}, 1)])
             return reply(text='เสนองานไบแวเรียตไว้แล้ว กดยืนยันเพื่อรัน')
+        m = re.search(r'SCENARIO_REPORT map=(\d+) aoi=(\d+)', u)
+        if m:
+            if step == 0:
+                return reply([call('propose_create_report', {'dataset_ids': [int(m[1])], 'template': 'gov_l', 'title': 'ประชากร × NDVI กรุงเทพฯ',
+                                                             'subtitle': 'ควอนไทล์ 3×3', 'extent_aoi_id': int(m[2])})])
+            return reply(text='เสนอรายงานแล้ว')
         if 'SCENARIO_BAD' in u:                              # พยายามเรียกเครื่องมือที่ไม่มี (ลบข้อมูล) + ส่งพารามิเตอร์ผิด
             if step == 0:
                 return reply([call('delete_dataset', {'dataset_id': 1}), call('propose_run_job', {'kind': 'zonal', 'params_json': '{}'}, 1)])
@@ -119,6 +125,31 @@ R.check('งานเสร็จ + ลง lineage ว่าสั่งโด�
         f"{jb['status']} · ชุด #{out} · {(lin.get('params') or {}).get('requested_by')}")
 c, j2 = api('/api/ai/confirm', dict(id=pid))
 R.check('ข้อเสนอใช้ซ้ำไม่ได้', c == 400, j2.get('error'))
+
+# 2b) ผู้ใช้แก้ค่าในการ์ด (แกน X 4 คลาส ช่วงเท่ากัน) → รันด้วยค่าที่แก้ · สีเติมใหม่ตามจำนวนคลาส · lineage บอกว่าผู้ใช้แก้
+c, rb = api('/api/ai/chat', dict(messages=[dict(role='user', content=f'SCENARIO_BIV x={X} y={Y}')]))
+pp = rb['proposals'][0]
+ed = dict(pp['args']['params'], x=dict(pp['args']['params']['x'], n=4, method='equal', label='ประชากร (แก้)'))
+c, exb = api('/api/ai/confirm', dict(id=pp['id'], params=ed))
+for _ in range(240):
+    jb = [x for x in api('/api/jobs')[1] if x['id'] == exb.get('job_id')][0]
+    if jb['status'] not in ('queued', 'running'):
+        break
+    time.sleep(1)
+lp = (api(f"/api/datasets/{(jb.get('result') or {}).get('dataset_id')}")[1].get('lineage') or {}).get('params') or {}
+R.check('ค่าที่ผู้ใช้แก้ในการ์ดถูกใช้จริง (4 คลาส, equal, สี 12 ช่อง, edited_by_user)',
+        jb['status'] == 'done' and lp.get('x', {}).get('n') == 4 and lp['x'].get('method') == 'equal' and len(lp.get('colors') or []) == 12
+        and lp.get('requested_by', {}).get('edited_by_user') is True, f"{jb['status']} · x={lp.get('x', {}).get('n')}/{lp.get('x', {}).get('method')} · สี {len(lp.get('colors') or [])}")
+
+# 2c) รายงาน: เสนอ → ยืนยัน → ได้สเปกให้หน้าเว็บเปิดตัวออกแบบ (ไม่สร้างไฟล์/งานฝั่งเครื่อง)
+th = [a for a in api('/api/aoi')[1] if a.get('builtin')]
+n_jobs1 = len(api('/api/jobs')[1])
+c, rr = api('/api/ai/chat', dict(messages=[dict(role='user', content=f'SCENARIO_REPORT map={out} aoi={th[0]["id"] if th else 0}')]))
+rp = (rr.get('proposals') or [{}])[0]
+c, exr = api('/api/ai/confirm', dict(id=rp.get('id')))
+R.check('เสนอรายงาน → ยืนยัน → สเปกเทมเพลต/ชั้น/ข้อความ/กรอบ ไม่มีงานเพิ่ม',
+        rp.get('action') == 'create_report' and exr.get('report', {}).get('template') == 'gov_l' and exr['report']['dataset_ids'] == [out]
+        and exr['report']['meta'].get('title') == 'ประชากร × NDVI กรุงเทพฯ' and len(api('/api/jobs')[1]) == n_jobs1, exr.get('report'))
 
 # 3) ไม่ทำ → ยืนยันภายหลังไม่ได้
 c, r2 = api('/api/ai/chat', dict(messages=[dict(role='user', content=f'SCENARIO_BIV x={X} y={Y}')]))

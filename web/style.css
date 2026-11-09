@@ -545,6 +545,10 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .ai-prop.done { border-color: rgba(158, 232, 212, .35); background: rgba(158, 232, 212, .06); }
 .ai-prop.rejected { opacity: .55; }
 .ai-prop.failed { border-color: rgba(255, 154, 168, .4); }
+.ai-edit { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+.ai-ax { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: rgba(255, 255, 255, .04); min-width: 0; }
+.ai-ax input:not([type=checkbox]), .ai-ax select { width: 100%; min-width: 0; font-size: 12px; padding: 4px 6px; }
+.ai-ax .row select { flex: 1; }
 .ai-prop pre { max-height: 160px; overflow: auto; background: var(--field); padding: 6px 8px; border-radius: 8px; font-family: var(--mono); font-size: 11px; margin: 4px 0 0; white-space: pre-wrap; }
 .ai-prop details summary { cursor: pointer; color: var(--muted); margin-top: 4px; }
 .warn-t { color: var(--peach); } .ok-t { color: var(--mint); } .ok-t svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 3px; }
