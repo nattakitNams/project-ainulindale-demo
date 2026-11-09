@@ -34,3 +34,4 @@ desktop.ini
 # ===== เอกสารภายใน (เก็บในเครื่อง — มี path ภายในและแผนงาน) =====
 DEVLOG.md
 PROJECT_BRIEF.md
+tools/secret_scan.local.txt
