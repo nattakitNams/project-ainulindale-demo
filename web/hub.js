@@ -48,7 +48,18 @@ function hubMd(src, fmt) {
 const hubYears = it => it.a || it.b ? `${(it.a || '?').slice(0, 4)}–${it.b ? it.b.slice(0, 4) : 'ปัจจุบัน'}` : '';
 const hubGsd = g => !g || !g.length ? '' : (g.length === 1 ? fmt(g[0], 2) : `${fmt(g[0], 2)}–${fmt(g[g.length - 1], 2)}`) + ' ม.';
 const hubTheme = k => HUB.idx.meta.themes.find(t => t.k === k);
-const hubLinkNote = r => `${r.status ? 'HTTP ' + r.status : 'ไม่ตอบ'}${r.note ? ' · ' + r.note : ''}${r.final ? ' → ' + r.final : ''} · ตรวจเมื่อ ${new Date(r.at).toLocaleString('th-TH')}`;
+// ภาษาอังกฤษ: ชื่อหมวดมีในรายชื่อแล้ว (en) · ชนิดข้อมูล/เครดิตอยู่ในไฟล์รายชื่อเป็นไทย → ใช้ชุดนี้แทน
+const HUB_EN = I18N.lang === 'en';
+const hubThName = t => t ? (HUB_EN ? t.en : t.th) : '';
+const HUB_TYPES_EN = { raster: 'Raster', timeseries: 'Raster time series', vector: 'Vector', table: 'Table/API', multidim: 'Multidimensional (NetCDF/Zarr)',
+  pointcloud: 'Point cloud', service: 'Map service', scan: 'Scanned image/map' };
+const hubType = k => k === 'platform' ? 'แพลตฟอร์ม' : (HUB_EN ? HUB_TYPES_EN[k] : HUB.idx.meta.types[k]) || k;
+const HUB_CREDITS_EN = ['Collection lists: Planetary-Computer-Catalog and Earth-Engine-Catalog (giswqs on GitHub)',
+  'Descriptions — Planetary Computer: Microsoft STAC API · Earth Engine: Google STAC catalog (earthengine-catalog)',
+  'Open data portals (GISTDA, LDD, data.go.th, HDX): names, descriptions and files from each portal\'s CKAN API',
+  'Wikipedia descriptions are used under CC BY-SA 4.0 — each entry links to the original article',
+  'Check the license / terms of use of each dataset at the source before using or redistributing it'];
+const hubLinkNote = r => `${r.status ? 'HTTP ' + r.status : 'ไม่ตอบ'}${r.note ? ' · ' + r.note : ''}${r.final ? ' → ' + r.final : ''} · ตรวจเมื่อ ${new Date(r.at).toLocaleString(I18N.locale())}`;
 const hubDot = u => { const r = HUB.links[u]; return r ? `<i class="hub-dot ${r.state}" title="${esc(HUB_ST[r.state] + ' · ' + hubLinkNote(r))}"></i>` : ''; };
 function hubStatus(u) {
   const r = HUB.links[u];
@@ -94,17 +105,19 @@ async function hubExport(list, withRes) {
   const T = HUB.idx.meta.types;
   const cols = ['ชื่อชุดข้อมูล', 'รหัส', 'แหล่ง', 'หน่วยงาน', 'ชนิดข้อมูล', 'รูปแบบไฟล์/บริการ', 'หมวด', 'เริ่ม', 'สิ้นสุด', 'อัปเดตล่าสุด', 'ความละเอียด (ม.)', 'ความถี่',
     'ครอบคลุม', 'License', 'เงื่อนไขการใช้', 'ลิงก์', 'ข้อมูลประกอบ', 'จำนวนไฟล์ในชุด', 'สถานะลิงก์', 'HTTP', 'ตรวจเมื่อ', 'ที่มาของคำอธิบาย'];
-  const row = it => [it.t, it.id, it.p, (it.og || [it.pr]).filter(Boolean).join('; '), it.ty === 'platform' ? 'แพลตฟอร์ม' : T[it.ty], it.tr, it.th.map(k => hubTheme(k)?.th || k).join('; '),
-    it.a, it.b, it.up, (it.g || []).join('–'), it.cd, HUB_COVER[it.cv], it.l, HUB_LC[it.lc][0], it.u, it.m, it.nr,
-    HUB_ST[st(it.u).state] || 'ยังไม่ได้ตรวจ', st(it.u).status, st(it.u).at ? new Date(st(it.u).at).toISOString().slice(0, 16).replace('T', ' ') : '', it.ds];
+  const row = it => [it.t, it.id, it.p, (it.og || [it.pr]).filter(Boolean).join('; '), I18N.tr(hubType(it.ty)), it.tr, it.th.map(k => hubThName(hubTheme(k)) || k).join('; '),
+    it.a, it.b, it.up, (it.g || []).join('–'), it.cd, tt(HUB_COVER[it.cv]), it.l, tt(HUB_LC[it.lc][0]), it.u, it.m, it.nr,
+    tt(HUB_ST[st(it.u).state] || 'ยังไม่ได้ตรวจ'), st(it.u).status, st(it.u).at ? new Date(st(it.u).at).toISOString().slice(0, 16).replace('T', ' ') : '', it.ds];
+  const tt = s => I18N.tr(String(s ?? ''));                  // ภาษาอังกฤษ → หัวคอลัมน์/สถานะเป็นอังกฤษด้วย
+  cols.forEach((c, i) => { cols[i] = tt(c); });
   let lines = [cols.map(q).join(',')];
   if (withRes) {
     const get = await hubAllDesc();
-    lines = [[...cols, 'ไฟล์/บริการในชุด', 'รูปแบบ', 'ลิงก์ไฟล์', 'สถานะลิงก์ไฟล์'].map(q).join(',')];
+    lines = [[...cols, ...['ไฟล์/บริการในชุด', 'รูปแบบ', 'ลิงก์ไฟล์', 'สถานะลิงก์ไฟล์'].map(tt)].map(q).join(',')];
     list.forEach(it => {
       const rs = get(it).resources || [];
       if (!rs.length) lines.push([...row(it), '', '', '', ''].map(q).join(','));
-      rs.forEach(r => lines.push([...row(it), r.name, r.format, r.url, HUB_ST[st(r.url).state] || 'ยังไม่ได้ตรวจ'].map(q).join(',')));
+      rs.forEach(r => lines.push([...row(it), r.name, r.format, r.url, tt(HUB_ST[st(r.url).state] || 'ยังไม่ได้ตรวจ')].map(q).join(',')));
     });
   } else list.forEach(it => lines.push(row(it).map(q).join(',')));
   const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });       // BOM → Excel อ่านภาษาไทยถูก
@@ -134,8 +147,8 @@ function hubCard(it) {
   return `<a class="hub-card" href="#/hub/${encodeURIComponent(it.k)}">
     <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}</div>
     <div class="small muted"><span translate="no">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))}</span>${it.og || it.pr ? ' · ' : ''}<span class="hub-src s-${it.s}" translate="no">${esc(it.p)}</span></div>
-    <div class="hub-meta tiny">${[it.ty === 'platform' ? 'แพลตฟอร์ม' : HUB.idx.meta.types[it.ty], hubYears(it) || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
-    <div class="hub-th">${it.th.slice(0, 3).map(k => `<span>${esc(hubTheme(k)?.th || k)}</span>`).join('')}
+    <div class="hub-meta tiny">${[hubType(it.ty), hubYears(it) || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
+    <div class="hub-th">${it.th.slice(0, 3).map(k => `<span>${esc(hubThName(hubTheme(k)) || k)}</span>`).join('')}
       <span class="hub-lc" style="--c:${L[1]}" title="${esc(it.l || 'ไม่ระบุ')} — ${L[2]}">${L[0]}</span>${hubDot(it.u)}</div></a>`;
 }
 
@@ -151,12 +164,12 @@ async function pageHub(key) {
     + `<div id="hbRun" class="card hub-run hide"></div>
     <div class="card hub-filter">
       <input type="search" id="hbQ" placeholder="ค้นหา: ชื่อ, หน่วยงาน, คำสำคัญ เช่น ไฟป่า, ประชากร, flood, NDVI, Sentinel" value="${esc(HUB.q)}">
-      <div class="hub-themes"><button class="chip ${HUB.th ? '' : 'on'}" data-th="">ทุกหมวด</button>${ix.meta.themes.map(t => `<button class="chip ${HUB.th === t.k ? 'on' : ''}" data-th="${t.k}" title="${esc(t.en)}">${esc(t.th)} <em>${cnt(t.k)}</em></button>`).join('')}</div>
+      <div class="hub-themes"><button class="chip ${HUB.th ? '' : 'on'}" data-th="">ทุกหมวด</button>${ix.meta.themes.map(t => `<button class="chip ${HUB.th === t.k ? 'on' : ''}" data-th="${t.k}" ${HUB_EN ? '' : `title="${esc(t.en)}"`}>${esc(hubThName(t))} <em>${cnt(t.k)}</em></button>`).join('')}</div>
       <div class="hub-sel">
         <label class="hub-org"><span>หน่วยงาน</span><div class="row" style="flex-wrap:nowrap;gap:4px"><input type="text" id="hbOrg" list="hbOrgs" placeholder="พิมพ์ชื่อหน่วยงาน เช่น GISTDA, กรมพัฒนาที่ดิน, NASA" value="${esc(HUB.org)}"><button class="sm ghost" id="hbOrgX" title="ล้าง">${IC.x}</button></div>
           <datalist id="hbOrgs">${ix.meta.orgs.map(([o, n]) => `<option value="${esc(o)}">${n} ชุด</option>`).join('')}</datalist></label>
-        <label><span>แหล่ง</span><select id="hbPlat"><option value="">ทั้งหมด</option>${ix.meta.platforms.map(([p, n]) => `<option value="${esc(p)}" ${HUB.plat === p ? 'selected' : ''}>${esc(p)} (${n})</option>`).join('')}</select></label>
-        <label><span>ชนิดข้อมูล</span><select id="hbTy"><option value="">ทั้งหมด</option>${Object.entries(ix.meta.types).map(([k, t]) => `<option value="${k}" ${HUB.ty === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        <label><span>แหล่ง</span><select id="hbPlat"><option value="">ทั้งหมด</option>${ix.meta.platforms.map(([p, n]) => `<option value="${esc(p)}" ${HUB.plat === p ? 'selected' : ''} translate="no">${esc(p)} (${n})</option>`).join('')}</select></label>
+        <label><span>ชนิดข้อมูล</span><select id="hbTy"><option value="">ทั้งหมด</option>${Object.keys(ix.meta.types).map(k => `<option value="${k}" ${HUB.ty === k ? 'selected' : ''}>${esc(hubType(k))}</option>`).join('')}</select></label>
         <label><span>เงื่อนไขการใช้</span><select id="hbLc"><option value="">ทั้งหมด</option>${Object.entries(HUB_LC).map(([k, t]) => `<option value="${k}" ${HUB.lc === k ? 'selected' : ''}>${t[0]} — ${t[2]}</option>`).join('')}</select></label>
         <label><span>ครอบคลุม</span><select id="hbCv"><option value="">ทั้งหมด</option><option value="th" ${HUB.cover === 'th' ? 'selected' : ''}>มีประเทศไทย</option><option value="thailand" ${HUB.cover === 'thailand' ? 'selected' : ''}>เฉพาะไทย/ภูมิภาค</option><option value="global" ${HUB.cover === 'global' ? 'selected' : ''}>ทั้งโลก</option></select></label>
         <label><span>สถานะลิงก์</span><select id="hbLink"><option value="">ทั้งหมด</option>${Object.entries(HUB_ST).map(([k, t]) => `<option value="${k}" ${HUB.link === k ? 'selected' : ''}>${t}</option>`).join('')}<option value="none" ${HUB.link === 'none' ? 'selected' : ''}>ยังไม่ได้ตรวจ</option></select></label>
@@ -164,7 +177,7 @@ async function pageHub(key) {
         <label class="row small"><input type="checkbox" id="hbOld" ${HUB.old ? 'checked' : ''}> แสดงชุดที่เลิกใช้แล้ว</label>
       </div></div>
     <div id="hbRes"></div>
-    <div class="tiny muted hub-credit">${ix.meta.credits.map(esc).join('<br>')} · สร้างรายชื่อเมื่อ ${esc(ix.meta.built)}</div>`;
+    <div class="tiny muted hub-credit">${(HUB_EN ? HUB_CREDITS_EN : ix.meta.credits).map(esc).join('<br>')} · สร้างรายชื่อเมื่อ ${esc(ix.meta.built)}</div>`;
   const summary = () => {
     const n = { ok: 0, warn: 0, bad: 0 };
     ix.items.forEach(it => { const s = HUB.links[it.u]?.state; if (s) n[s]++; });
@@ -233,7 +246,7 @@ async function hubDetail(it) {
     ['หน้าข้อมูล / ดาวน์โหลด', it.u, it.s === 'gee' ? 'หน้าแคตตาล็อกของ Earth Engine' : it.s === 'pc' ? 'หน้าแคตตาล็อกของ Planetary Computer' : it.s === 'ckan' ? `หน้าชุดข้อมูลใน ${it.p}` : 'เว็บไซต์ผู้ผลิต'],
     x.source_page ? ['เว็บไซต์ของชุดข้อมูล', x.source_page, 'ลิงก์ที่ผู้ให้ข้อมูลระบุ'] : null,
     it.m && it.s !== 'other' && it.s !== 'platform' ? [it.s === 'ckan' ? 'ข้อมูลประกอบ (CKAN API JSON)' : 'ข้อมูลประกอบ (STAC JSON)', it.m, 'ไฟล์ข้อมูลประกอบที่เครื่องอ่านได้'] : null,
-    ...(x.mirrors || []).map(m => [`มีใน ${m.platform} ด้วย`, m.url, 'ชุดเดียวกันที่พอร์ทัลอื่นดึงไปแสดง']),
+    ...(x.mirrors || []).map(m => [`มีในพอร์ทัลอื่นด้วย: ${m.platform}`, m.url, 'ชุดเดียวกันที่พอร์ทัลอื่นดึงไปแสดง']),
     ...(x.providers || []).filter(p => p.url).map(p => [`ผู้ให้: ${p.name}`, p.url, (p.roles || []).join(', ')]),
     d.source_url && d.source_url !== it.u && d.source_url !== it.m ? ['ที่มาของคำอธิบาย', d.source_url, d.source] : null,
   ].filter((l, i, arr) => l && arr.findIndex(o => o && o[1] === l[1]) === i);      // ลิงก์ซ้ำแสดงครั้งเดียว
@@ -243,14 +256,14 @@ async function hubDetail(it) {
     ['รหัสชุดข้อมูล', it.id ? `<code>${esc(it.id)}</code>` : ''],
     ['แหล่ง', `<span translate="no">${esc(it.p)}</span>`],
     ['หน่วยงาน', orgs.map(o => `<a class="chip" href="#/hub" data-goorg="${esc(o)}" translate="no">${esc(o)}</a>`).join(' ')],
-    ['ชนิดข้อมูล', esc([it.ty === 'platform' ? 'แพลตฟอร์ม' : HUB.idx.meta.types[it.ty], it.tr].filter(Boolean).join(' · '))],
+    ['ชนิดข้อมูล', esc([hubType(it.ty), it.tr].filter(Boolean).join(' · '))],
     ['ช่วงเวลา', esc(hubYears(it))],
     ['อัปเดตล่าสุด', esc(it.up || '')],
     ['ความถี่', esc(it.cd || '')],
     ['ความละเอียด', esc(hubGsd(it.g))],
     ['ครอบคลุม', esc(HUB_COVER[it.cv] || '') + (it.bb ? ` <span class="tiny muted mono">[${it.bb.map(n => fmt(n, 2)).join(', ')}]</span>` : '')],
     ['เงื่อนไขการใช้', `<span class="hub-lc" style="--c:${LC[1]}">${LC[0]}</span> ${esc(it.l || 'ไม่ระบุในรายชื่อ — ดูที่ต้นทาง')} <span class="tiny muted">· ${LC[2]}</span>`],
-    ['หมวด', it.th.map(k => `<a class="chip" href="#/hub" data-goth="${k}">${esc(hubTheme(k)?.th || k)}</a>`).join(' ')],
+    ['หมวด', it.th.map(k => `<a class="chip" href="#/hub" data-goth="${k}">${esc(hubThName(hubTheme(k)) || k)}</a>`).join(' ')],
     ['คำสำคัญ (จากต้นทาง)', `<span translate="no">${esc((x.keywords || []).join(', '))}</span>`],
     it.n ? ['หมายเหตุ', esc(it.n)] : null,
   ].filter(f => f && f[1]);

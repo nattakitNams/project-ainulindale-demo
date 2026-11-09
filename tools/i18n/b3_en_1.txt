@@ -1,0 +1,32 @@
+text from Wikipedia
+HDX (Thailand)
+LDD Catalog (Land Development Department)
+STAC of
+in sheet
+Text by the data provider
+Text by the website owner
+Official metadata published by the provider
+Government Open Data (data.go.th)
+Description written by the data provider in
+Description from the producer's website
+every
+days
+years
+months
+hours
+This article is about
+(a related organization/project/instrument), not a description of the dataset itself
+Dataset list not harvested yet
+Expanded into
+datasets in the list
+(only datasets with map files/services)
+choose this source in the filter to see them all
+Thailand datasets only
+Direct from producers
+Also listed in another portal
+Thailand
+Language
+App's private Python + packages
+results, cache, logs
+opens the app
+code

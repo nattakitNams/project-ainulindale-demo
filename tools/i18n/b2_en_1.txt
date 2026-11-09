@@ -1,0 +1,58 @@
+
+Share of pixel area covered by shapes, 0–1 (e.g. building area percentage) · pixels split 10× finer to count
+
+
+
+that covers the most area in that pixel (pixels split 10× finer to count — slower)
+
+
+
+
+Reference raster — pixels will match this dataset (ready for bivariate)
+
+Output extent = extent of this dataset (or the selected study area)
+Pixels covered by shapes = 1, not covered = 0 (e.g. building / no building)
+
+will be converted to codes 1, 2, 3… with a code table file (_codes.csv)
+
+
+shapes smaller than a pixel at this zoom — zoom in to see them
+Value from field — the one covering the most area in the pixel
+
+
+
+Count if the pixel touches a shape at all (all touched)
+text is converted to codes + _codes.csv
+overlapping shapes: later ones cover earlier ones
+Custom (coordinates + resolution)
+Choose the field to use as value first
+Pixel center inside the shape
+first shapes — zoom in to see all
+pixels · extent follows the vector
+(arc-seconds ″ · 1″ ≈ 30 m)
+UTM zone 47N (EPSG:32647)
+UTM zone 48N (EPSG:32648)
+
+Resolution must be greater than 0
+Align with a raster in the library
+Enter the resolution as a number
+WGS 84 degrees (EPSG:4326)
+No raster in the library yet
+The vector has no extent
+Field used as value
+Present / absent (1 / 0)
+
+Pixels get the value of
+Enter the resolution
+the selected field
+Feature order
+This file's own (
+Which pixels count
+Choose field
+shapes in view
+
+Conversion method
+(meters)
+more
+
+

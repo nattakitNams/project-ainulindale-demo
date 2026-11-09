@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.13';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.14';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -448,8 +448,8 @@ async function pageDataset(id) {
       const txt = fo && fo.value && fo.value !== '__index__' && fo.dataset.num === '0';
       $('#rzHelp').innerHTML = ({
         presence: 'พิกเซลที่ทับรูป = 1 ไม่ทับ = 0 (เช่น มีอาคาร / ไม่มีอาคาร)',
-        attribute: `พิกเซลได้ค่าของ${fld}${txt ? ' — <b>ข้อความ</b> จะแปลงเป็นรหัส 1, 2, 3… พร้อมไฟล์ตารางรหัส (_codes.csv)' : ''} · รูปที่ซ้อนกัน ตัวหลังทับตัวก่อน`,
-        majority: `พิกเซลได้ค่าของ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
+        attribute: `พิกเซลได้ค่าของ ${fld}${txt ? ' — <b>ข้อความ</b> จะแปลงเป็นรหัส 1, 2, 3… พร้อมไฟล์ตารางรหัส (_codes.csv)' : ''} · รูปที่ซ้อนกัน ตัวหลังทับตัวก่อน`,
+        majority: `พิกเซลได้ค่าของ ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
         fraction: 'สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ',
       })[md] + '<br><span class="tiny">ขอบเขตผลลัพธ์ = ขอบเขตของชุดนี้ (หรือพื้นที่ศึกษาที่เลือก)</span>';
     };
@@ -1245,7 +1245,7 @@ async function pageAoi(qs) {
         <div class="row" style="margin-top:14px"><input type="text" id="aName" placeholder="ชื่อพื้นที่ศึกษา เช่น สิงห์บุรี" style="flex:1"><button id="aSave" class="primary">${IC.check}บันทึก</button></div>
       </div>
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>พื้นที่ที่บันทึกไว้</h2><span class="chip">${aois.length}</span></div>
-        ${aois.length ? `<table><tbody>${aois.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b>${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'drawn' ? 'วาดเอง' : a.source?.type === 'coords' ? `พิมพ์พิกัด · ${a.source.points} จุด · ${esc(a.source.crs)}` : `${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}`}</div></td>
+        ${aois.length ? `<table><tbody>${aois.map(a => `<tr data-a="${a.id}" style="cursor:pointer"><td><b translate="no">${esc(a.name)}</b><div class="tiny muted">${a.source?.type === 'drawn' ? 'วาดเอง' : a.source?.type === 'coords' ? `พิมพ์พิกัด · ${a.source.points} จุด · ${esc(a.source.crs)}` : `<span translate="no">${esc(a.source?.dataset_name || '')} · ${esc(a.source?.field || '')} = ${esc((a.source?.values || []).slice(0, 4).join(', '))}${(a.source?.values || []).length > 4 ? ' …' : ''}</span>`}</div></td>
           <td class="small">${fmt(a.area_km2, 1)} ตร.กม.</td><td style="text-align:right"><button class="sm ghost danger" data-del="${a.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="empty">ยังไม่มี</div>'}
       </div></div>
       <div class="card sticky"><div class="mapbar"><div class="seg" id="bm"><button data-k="gh">ดาวเทียม</button><button data-k="osm">แผนที่</button><button data-k="none">ไม่มี</button></div><span class="tiny muted" id="mapNote"></span></div>

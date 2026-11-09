@@ -1,0 +1,300 @@
+Population (people/km²)
+Data pixel width ≈
+Type to filter
+Saved areas
+Space in the workspace
+Unsupported file extension
+Restart server
+Building the hexagon grid…
+Domain not found (DNS)
+Outside the data extent
+Histogram (sampled values)
+Compare several settings
+Add a map from a link
+then choose the value column
+Show scale 1:xxx
+Poster A3 portrait
+Could not load features
+Use as study area
+in the symbology below
+Zonal bivariate
+Study area not found #
+⚠ finer than the data
+": hexagon cells (
+&nbsp;&nbsp;← code
+Cannot read GeoJSON
+Pastel1 (categorical)
+traffic (original file)
+Initial map frame
+Text encoding
+Coordinate label size (pt)
+Output resolution
+False precision: "
+Maximum per pixel
+Mean per pixel
+The main layer has no statistics
+Could not fetch features
+Fetching polygons from the link
+Clip to the study area
+Make a vector grid
+Count nodata as value
+The service did not return an image
+Colors saved to the file
+Adjusted for this map only
+pixels · value type
+Image from a map service
+Installation not finished yet
+Delete files in the workspace
+The link returned no polygons
+Quick way to tell: if
+Empty = no data
+No commercial use
+Cannot read the vector
+e.g. 0 or 0, 255
+e.g. GISTDA ArcGIS
+e.g. pop_2015_2024
+Leave empty = automatic
+Ties in majority
+Give a code if there is data
+Hexagon bivariate
+Unknown coordinate system
+No features at all
+(affects calculations)
+) may not yet be in
+features · fetching
+Rules by value type
+Fetching features…
+Estimating time…
+Trying to connect
+Reading the list…
+Font size (pt)
+Label size (pt)
+Converted data
+Frame width (mm)
+Line width (mm)
+Legend
+Invalid job type
+cells, but this frame has
+Download the new version
+If the browser asks
+All sides (outside the frame)
+This line has numbers
+Color-blind safe
+areas · highlight
+Area and output
+No layers yet — press
+No coordinates entered yet
+Letter spacing (em)
+Government A4 portrait
+File/service format
+Longitude, latitude
+Drag to reorder
+Urban centre (≥
+Create a study area
+List built on
+Color in #rrggbb format
+web address page →
+Cannot read the list
+Writing GeoPackage…
+Cannot connect (
+Fill the frame (crop)
+Choose the dataset for axis
+Choose files in the right panel
+Done: total weight
+Touch (all touched)
+Convert to hexagons
+Locator map
+then refresh this page
+Tiles in memory
+Non-commercial
+CRS mismatch: "
+MB download · ~
+Windows may warn
+
+features in the extent
+Installing
+Paper size (mm)
+Most recent data first
+Data and methods
+Grid line opacity
+Resolution (m)
+Resolution of "
+Study area name
+Check that it works
+Display filters
+Installation failed
+Next: install →
+Whole data extent
+Duplicate (Ctrl+D)
+Source of the description
+Installation log
+Labels from field
+Sum of values (valid)
+Very large output (
+Area (km²)
+areas · coded
+Free space
+Area in highlight
+Area name field
+Esri satellite imagery
+Present / absent (1/0)
+Government A4 landscape
+Links checked
+Frame/coordinate label color
+Rectangle/color bar
+More than 4×4 is hard to read
+Write GeoPackage
+Condition (where)
+Thailand/region only
+Token replaced
+Axis: needs breaks
+Rename dataset
+Convert to raster
+Show highlight only
+Token (encrypted)
+Highlight selection mode
+in the value type card
+Files/services in the dataset
+Files in the workspace
+Dataset not found #
+No coordinate numbers found
+" is not a raster
+(token required?)
+) and target (
+Invalid JSON
+MB after installation)
+Set3 (categorical)
+[Report] boundary
+[Default style]
+[Canvas] boundary
+Clipping rule
+Bar chart per code
+Checking links…
+Drawing the map…
+Number size (pt)
+Heading size (pt)
+New resolution
+Maximum cells
+Class / category
+Relinked to the new file
+Could not fetch the boundary
+Check all links
+First installation
+Original before copying
+Source (lineage)
+Palette saved
+Style saved
+Save as palette
+Resample
+Area from coordinates
+Esri terrain
+Cancelled by user
+Confirm value type
+Inner margin (mm)
+Dataset list
+Cannot draw the map
+Pixel center
+Statistics only
+Hexagon (hex)
+Hexagons approx.
+Dataset page in
+Cannot connect
+Compare settings
+× a single job
+Add layer
+Add element
+Undo (Ctrl+Z)
+Producer website
+Invalid band
+Bivariate map
+Result folder
+on the Data hub page
+In highlight (codes
+Go to download page
+Source file not found
+Unknown command
+Not allowed
+← Back to Data hub
+🎨 Adjust symbology
+" (from sampled values)
+(not confirmed)
+Exact (exact values)
+Linear (gradient)
+Cannot read WKT
+features in view
+Restarting…
+Label halo
+Extent (WGS84)
+Extent/area
+Reset to default
+Number of points in the cell
+Years flooded
+Files in dataset
+Lower class
+Higher class
+cells · highlight
+fetched per request
+Show broken only
+Check settings
+Currently opened with
+Setup assistant
+Installation complete ✔
+Redo (Ctrl+Y)
+Result storage
+min · remaining ~
+Highlight weight
+Boundary labels
+Very large output
+Pixels increased
+Pixels unchanged
+areas · grid
+Total area
+Study area "
+Cannot be undone
+Code = classY ×
+Image / logo
+File link status
+Create hexagons
+Create bivariate
+Cannot find the extent
+Divide equally ÷k²
+Allow
+Terms of use
+Preparing folders
+Open data page
+Add dataset
+Choose a field first
+Frame line (mm)
+Linear X axis
+Layer viewer
+Basemap
+Use this template?
+The file has scale ×
+Token not recorded
+Dataset not found
+No event
+✔ Connected
+(empty text)
+(including files in the dataset
+= reference grid
+Different CRS (
+DEGURBA axis X
+DEGURBA axis Y
+nodata in the file
+Urban cluster (≥
+Installing…
+Estimating…
+Uploading…
+Reading values…
+Set breaks manually
+Ticks on the frame edge
+Base data
+Click a cell to
+Resolution "
+Thickness (mm)
+Parallel computation
+Count total = 0
+Cannot lay out the page
+From a boundary layer
+Number of features
+classX + 1 (1–

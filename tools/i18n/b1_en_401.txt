@@ -1,0 +1,250 @@
+Class transition (class → class)
+Connecting to the GISTDA service…
+Copy files into the app's database
+Metadata (CKAN API JSON)
+Sample values (histogram/quantiles)
+Check the data-page links of every dataset
+Installs only into the app folder
+Installation complete — start →
+Installed but cannot be imported
+Next: choose where to store results →
+Whole data extent (Thailand)
+Resample / clip
+Sum ÷ area (per km²)
+Cancelled (force-stopped after waiting
+No entries yet — press Classify
+Coordinate system WGS 84 (EPSG:4326)
+Delete the app folder once = everything is removed
+The web page is only the control screen
+or use the local fallback page instead
+Server error
+×, then reduced — slower than normal
+Choose datasets for both axes first
+Log scale X axis (very skewed data)
+Colors can only be edited on bivariate maps
+Use colors from the data (color field)
+" uses a different hexagon grid (
+" is not a hex dataset created by the app
+Size (km between centers)
+Province boundaries (GISTDA 2016)
+The datasets do not overlap
+Break sets for axis X (one set per line)
+Break sets for axis Y (one set per line)
+The source changed after this result was made
+Adjust the number of classes to match to use it
+items (the app fetches batch by batch until complete)
+colors are hard to read; at most 4×4 recommended
+Cannot read field values from the service
+Cannot encrypt/decrypt the token
+Could not load the Data hub list
+Copied / downloaded files
+No cache kept outside the app folder
+&nbsp;← results, cache, logs
+(Could not load the basemap)
+) — check the coordinate system / axis order
+Anuphan — sans, modern
+Dashboard / infographic A4
+The reference grid must be a raster
+width x height, e.g. 174 x 140
+Installing into the app folder…
+Density / continuous values
+I understand and want to install
+parameter sets, too many (max 40)
+Check the links of every dataset in the list
+Trash — restore or delete permanently
+Token saved (encrypted)
+Delete the app folder (or run
+Share of area covered (0–1)
+Web page (automatic pairing)
+Breaks computed from sampled values at run time
+Terms of use (from the source)
+The server is still an older version
+The browser did not create a file
+Cannot open GeoTIFF over the network
+Extract anywhere, e.g.
+No other datasets on the same grid
+• Text can include placeholders, e.g.
+(the app made a preview copy)
+DEGURBA cell clusters (1 km)
+Kanit — bold headings
+Incomplete shapefile: missing file
+District boundaries (GISTDA 2016)
+Classify first, then majority
+Count (e.g. people/pixel)
+points — at least 3 points required
+The main layer has no per-code statistics
+A vector dataset must be chosen
+Results of failed/cancelled jobs
+Extent preview on satellite imagery
+Move the study area to the trash?
+Merge 4 pixels into 1 pixel
+A shape has only
+Delete incomplete result folders
+This link type has no features
+Paste coordinates, one point per line, e.g.
+Heading (auto = automatic)
+Esri light grey (good for printing)
+Opening in a browser may work
+Add token (stored encrypted)
+to see the output size before running
+and this page will connect by itself
+All code is open for review
+Can be used/redistributed (with attribution)
+Thai TIS-620 / Windows-874
+The file changed after this result was made
+The file changed since it was imported
+This item is not in the Data hub
+No features match the condition
+% of cell area with data
+Prompt — rounded, infographic
+
+Bold frame = highlight (codes
+Subdistrict boundaries (GISTDA 2016)
+Metadata (STAC JSON)
+Basemap opacity
+Density (per km²)
+Value column in the hexagon dataset
+Revert to the dataset style
+Download packages from PyPI
+Name the study area first
+Install as a program (3.9)
+Must be a vector dataset
+The service did not reply with JSON
+Field covering the most area
+Only http/https links are accepted
+Longitude, latitude (X, Y)
+Latitude, longitude (Y, X)
+Feature order (1, 2, 3…)
+Link given by the data provider
+Choose datasets for both axes
+No feature found near this point
+Page not found (the link may have moved)
+No values to compute breaks
+" does not match the target grid
+) — V1 does not reproject yet
+Singleband gray
+The VRT references files that cannot be found
+The vector has no CRS (.prj)
+Square grid (raster)
+Creating the study area…
+The data have only
+Change once, applies everywhere
+Line length in the cell (km)
+Mean (area-weighted)
+Zoom in to see the whole boundary
+Downloading Python packages
+Clip using pixels of size
+Continuous / density
+A pixel belongs to an area by
+Highlight area (km²)
+Cancelled (force-stopped)
+Order when coarsening
+International humanitarian (OCHA)
+Ratio (after ÷ before)
+Automatic (count axis)
+Internet (pypi.org)
+× — would have to process
+to read on the producer's site
+Done · processing time
+Convert to hexagons (hex)
+Geospatial data sources
+Use for hexagon bivariate
+in highlight (not set)
+No hexagons in the area
+No code (as in the original job)
+WGS 84 lon/lat (degrees)
+[Report] cannot draw layer
+[Canvas] cannot draw layer
+nodata and excluded values
+Citation (from the source)
+New edits do not apply yet
+Computing (see the Jobs tab)
+The class data have
+Click on the map to see values
+File name indicates density
+Download into the database
+See progress in the Jobs tab
+Coded area (km²)
+Figure for a scientific article
+Preview copy (overview)
+What goes over the internet
+Data page / download
+Compare 2 periods
+Encoding changed
+Cannot open the raster file
+Cannot open the vector file
+Choose areas from this layer
+Edit the dataset style →
+Packages to install (~
+Enter the hexagon size (km)
+Selected features not found
+Interpolated from 3×3 in OKLab
+“Take the most common value”
+(the app only remembers the file location)
+vector: no preparation needed
+All calculations happen in
+Invalid encoding
+Starting the engine…
+Covers all layers
+Value per pixel (raw)
+classes — try fewer classes
+Left + bottom (outside the frame)
+Clip 2%–98% of sampled values
+Uppercase (English)
+Processed on this computer
+Pixel (row, column)
+Value type not confirmed
+No area selected
+are not removed when the app is deleted)
+Clear tiles in memory
+Automatic by value type
+Select all results
+Cache (rebuilt automatically)
+Show deprecated datasets
+This mode requires a field
+In the app folder (recommended)
+Files / services in this dataset
+File not found at this path
+No polygons in the area
+App's private Python
+WGS 84 / UTM zone 47N
+WGS 84 / UTM zone 48N
+Reference grid (raster)
+Building overviews…
+Layer opacity
+values (must be pairs): "
+values — at most
+Area-weighted mean
+Hide values (comma separated)
+Pull from the layer viewer
+Following the dataset style
+Must be a polygon (got
+Difference (after − before)
+Coordinates outside the world (
+Confirm the value type of "
+Items and names shown
+Percent change
+Empty = today (Buddhist year)
+Create a bivariate map
+Share of pixels per class
+Cannot read class data
+Compare several settings…
+Open in layer viewer
+Choose files from this computer…
+Dataset website
+Majority (ties →
+Also include values from other datasets
+Style file for QGIS
+↔ area-weighted grid alignment
+" has no WGS84 extent
+) ; 0 = no data
+) but the web page is v
+Discrete (ranges)
+Invert (white → black)
+Keywords (from the source)
+Running/queued jobs
+A new folder will be created
+Number of areas per code
+One job at a time, running #
+Every element on the page
+Value type saved

@@ -5,53 +5,71 @@
 'use strict';
 const I18N = (() => {
   let lang = 'th';
-  try { lang = localStorage.getItem('ainu-lang') || 'th'; } catch { }   // ค่าเริ่มต้นไทย · เลือก EN ไว้ → จำไว้   // เลือกไว้ → ตามนั้น · ไม่เคยเลือก → ตามภาษาเบราว์เซอร์
+  try { lang = localStorage.getItem('ainu-lang') || 'th'; } catch { }   // ค่าเริ่มต้นไทย · เลือก EN ไว้ → จำไว้
   const SKIP = '[translate="no"], script, style, code, textarea, .hub-desc, .hub-url, .name, .path, .mono, .vname, .leaflet-tile-pane, .rpt-page';
-  let re = null, dict = null;
   const TH = /[฀-๿]/;
+  let re = null, reShort = null, dict = null;
+  const rx = k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   function build() {
     dict = window.I18N_EN || {};
     const keys = Object.keys(dict).filter(k => dict[k]).sort((a, b) => b.length - a.length);
     if (!keys.length) return;
-    re = new RegExp(keys.map(k => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+    // คำยาว: แทนได้ทุกที่ (ยาวสุดก่อน) · คำสั้น (≤ 5 ตัว เช่น "สี" "ลบ" "ชั้น"): แทนเฉพาะเมื่อไม่ติดอักษรไทยข้างหน้า/หลัง
+    // — ภาษาไทยไม่เว้นวรรคระหว่างคำ ไม่งั้นจะไปแทนกลางคำอื่นหรือกลางชื่อข้อมูลของผู้ใช้
+    const long = keys.filter(k => k.length > 5), short = keys.filter(k => k.length <= 5);
+    re = long.length ? new RegExp(long.map(rx).join('|'), 'g') : null;
+    reShort = short.length ? new RegExp(`(?<![\\u0E00-\\u0E7F])(?:${short.map(rx).join('|')})(?![\\u0E00-\\u0E7F])`, 'g') : null;
   }
-  const tr = s => (re && TH.test(s)) ? s.replace(re, m => dict[m]) : s;
+  // ตัวเลือกที่ผูกกับข้อมูล (value เป็นเลข id เช่น ชุดข้อมูล/พื้นที่ศึกษา): ส่วนแรกก่อน " · " คือชื่อของผู้ใช้ → ไม่แปล แปลเฉพาะส่วนต่อท้าย
+  const trText = (s, el) => {
+    if (el && el.tagName === 'OPTION' && /^\d+$/.test(el.value || '') && !/^[\s\d.≈~(]/.test(s)) {   // ป้ายความละเอียด (3″, 1.25′) ขึ้นต้นด้วยตัวเลข = ไม่ใช่ชื่อข้อมูล
+      const i = s.indexOf(' · ');
+      return i < 0 ? s : s.slice(0, i) + tr(s.slice(i));
+    }
+    return tr(s);
+  };
+  const tr = s => {
+    if (!dict || !TH.test(s)) return s;
+    if (re) s = s.replace(re, m => dict[m]);
+    if (reShort && TH.test(s)) s = s.replace(reShort, m => dict[m]);
+    return s;
+  };
+  const ATTRS = ['placeholder', 'title', 'aria-label', 'data-tip'];
   function skip(el) { return el && el.closest && el.closest(SKIP); }
+  function attrs(el) {
+    for (const a of ATTRS) {
+      const v = el.getAttribute(a);
+      if (v && TH.test(v)) { const t = tr(v); if (t !== v) el.setAttribute(a, t); }
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'button' || el.type === 'submit') && TH.test(el.value)) el.value = tr(el.value);
+  }
   function node(n) {
     if (n.nodeType === 3) {
-      if (TH.test(n.nodeValue) && !skip(n.parentElement)) { const v = tr(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+      if (TH.test(n.nodeValue) && !skip(n.parentElement)) { const v = trText(n.nodeValue, n.parentElement); if (v !== n.nodeValue) n.nodeValue = v; }
       return;
     }
     if (n.nodeType !== 1 || skip(n)) return;
-    for (const a of ['placeholder', 'title', 'aria-label', 'data-tip']) {
-      const v = n.getAttribute(a);
-      if (v && TH.test(v)) n.setAttribute(a, tr(v));
-    }
-    if ((n.tagName === 'INPUT' && (n.type === 'button' || n.type === 'submit')) && TH.test(n.value)) n.value = tr(n.value);
+    attrs(n);
     const w = document.createTreeWalker(n, NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT, {
       acceptNode: x => x.nodeType === 1 && x.matches(SKIP) ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT });
     let x;
     while ((x = w.nextNode())) {
-      if (x.nodeType === 3) { if (TH.test(x.nodeValue)) { const v = tr(x.nodeValue); if (v !== x.nodeValue) x.nodeValue = v; } }
-      else for (const a of ['placeholder', 'title', 'aria-label', 'data-tip']) {
-        const v = x.getAttribute(a);
-        if (v && TH.test(v)) x.setAttribute(a, tr(v));
-      }
+      if (x.nodeType === 3) { if (TH.test(x.nodeValue)) { const v = trText(x.nodeValue, x.parentElement); if (v !== x.nodeValue) x.nodeValue = v; } }
+      else attrs(x);
     }
   }
   function start() {
     document.documentElement.lang = lang;
     if (lang !== 'en') return;
     build();
-    if (!re) return;
+    if (!re && !reShort) return;
     node(document.body);
     new MutationObserver(ms => {
       for (const m of ms) {
-        if (m.type === 'characterData') node(m.target);
-        else if (m.type === 'attributes') node(m.target);
+        if (m.type === 'characterData' || m.type === 'attributes') node(m.target);
         else m.addedNodes.forEach(node);
       }
-    }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['placeholder', 'title', 'aria-label', 'data-tip'] });
+    }).observe(document.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ATTRS });
     const _alert = window.alert, _confirm = window.confirm;
     window.alert = m => _alert(tr(String(m)));
     window.confirm = m => _confirm(tr(String(m)));
@@ -59,6 +77,11 @@ const I18N = (() => {
   function set(l) { try { localStorage.setItem('ainu-lang', l); } catch { } location.reload(); }
   // ปุ่มสลับภาษา: <span data-lang-switch></span> ที่ไหนก็ได้
   function switches() {
+    if (!document.querySelector('.lang-float')) {             // ลอยมุมขวาบน — แสดงเฉพาะตอนหน้าเชื่อมต่อ/ติดตั้งบังหน้าแอป (CSS :has)
+      const f = document.createElement('div');
+      f.className = 'lang-float'; f.setAttribute('data-lang-switch', '');
+      document.body.appendChild(f);
+    }
     document.querySelectorAll('[data-lang-switch]').forEach(el => {
       el.setAttribute('translate', 'no');
       el.classList.add('lang-sw');

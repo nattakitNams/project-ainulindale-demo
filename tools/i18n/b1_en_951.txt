@@ -1,0 +1,330 @@
+The zone layer has
+Dataset name
+Uninstall
+every 3 seconds…
+The service replied
+Pixel area
+Coded area
+Page font
+Corner radius (mm)
+Not checked
+Move to trash?
+Dataset ID
+Queue position
+Invalid shape
+Delete all permanently
+Delete preview copies
+North arrow
+Status from pressing
+Preview copy F
+Area outline color
+Map number
+Reading vector "
+Writing tile by tile
+Change (
+Add from path
+Add to library
+Cannot split fully
+Map number
+Show coordinate system
+Show only range
+Use 2–98% range
+Use this area
+In memory
+Folder not found
+Not found in the trash
+No features
+Unknown type
+N / UTM accepted)
+The frame can have up to
+Target grid
+Vector grid
+Custom frame
+Legend size
+Font size
+Your data
+Inputs
+Metadata
+Summary
+Skip empty tiles
+Value per pixel
+Excluded values
+Number of columns
+Geometry type
+Layer
+Name (for reference)
+Name must not be empty
+Hexagon dataset
+cells, over the limit
+Zoom to this layer
+Hide when printing
+Download from
+Downloadable
+View only
+km²/cell)
+Check terms
+Check and create
+Following the dataset
+Installation complete
+Installed?
+Cannot import
+Statistics weight
+Grand total
+Study area
+Frame background
+Image from service
+Grid origin
+No layers yet
+Not confirmed
+Not drawn yet
+Move to trash
+Include files in dataset
+Image/logo
+Drag files here
+Create from the menu
+Create polygon
+Cannot export
+Report designer
+Last updated
+Credits/sources
+e.g. population
+Prepare data
+Esri dark grey
+Change palette
+Open web page
+Open folder
+Pan map
+Done: valid
+Show author
+Show note
+Original notebook
+Enter the token first
+Zonal bivariate
+Not copied
+Field not found "
+No other datasets
+← Library
+ⓘ / padlock
+" is split into
+(= data #
+(top first)
+WGS 84 degrees
+Output grid
+Number card
+Cancelling
+Exporting
+Output size
+Fill opacity
+Resolution
+Frame thickness
+Density
+Figure caption
+Subtitle
+Value from field
+Lower value
+Default
+End panning
+Pixel count
+Shown layer
+Relink file
+Output name
+Dataset "
+Equal interval
+Double-click
+km²/cell
+Check computer
+Login required
+Import palette
+Force stop?
+Save palette
+Save style
+pixels of "
+Pixels decreased
+Free space
+Scale 1
+Includes Thailand
+No jobs yet
+Merge notes
+Delete (Delete)
+Try again
+Finer
+Data link
+Map link
+Lock position
+Empty the trash?
+Create map
+Colors from data
+Grid line color
+Actually read from
+Same as output
+Compare
+Change
+Cannot add
+Deprecated
+About
+Split pixel ×
+Band used
+Show all
+Show more (
+Source
+Pairing token
+App folder
+File/service
+File changed
+No labels
+No token
+→ continuous
+(download
+= data #
+A3 portrait
+A4 portrait
+A5 portrait
+Checking…
+Loading…
+Paper size
+Heading size
+Library
+Space freed
+Value as in file
+Displayed value
+Higher value
+Hidden values
+Data type
+Boundary layer
+Layers
+Layer used
+Map title
+Overlay link…
+left → right
+per km²
+Trash is empty
+Whole extent
+Total weight
+Force stop
+Saved
+Fit data
+Type a name…
+Type coordinates
+Conditional
+Cancelled
+Confirmed
+All codes
+Line spacing
+Details
+Deleted permanently
+Two-tone arrow
+Empty the trash
+million pixels
+Link status
+Created
+Text color
+Label color
+Page background
+Export CSV
+Exported
+Page
+Elements
+This computer
+Changed from
+Add token
+Started job #
+Start comparing
+Boundary line
+Edit in the tab
+Edit palette
+Insert data
+Alternating bar
+equally
+Main map
+Result folder
+Use the grid of
+Use template
+Drive not found
+→ count
+⏱ Processing
+" · rule
+" offset
+A3 landscape
+A4 landscape
+A5 landscape
+CRS of "
+[Link] #
+New path
+Card frame
+Coordinate grid
+Grid family
+Alignment
+Custom…
+Size (pt)
+Click the icon
+Width
+Value at point
+Value used
+Exact value
+Value in file
+Unique values
+Number of classes
+Number of cells
+Dataset
+Cannot zoom
+Hide/show
+Download
+Four-point star
+Proceed
+Check links
+Checked at
+Check finished
+CSV table
+Continuous
+If deleted permanently
+Out of bounds
+Save manually
+Value type
+Coordinate labels
+Sum before
+Sum after
+pixels (~
+Card background
+Name field
+Scale
+Aggregate pixels
+Coordinate system
+Inner margin
+items (~
+Delete all
+Layer order
+Copyright
+File link
+Line arrow
+bottom → top
+Draw map
+Create grid
+Symbology
+Hexagon
+Automatic
+Reading block
+Connect
+Add back
+Add layer
+Added
+Start job?
+Start checking
+Done
+Grid lines
+Line with ticks
+X / Y axis
+Platform
+Show/hide
+In highlight
+Bivariate
+files, e.g.
+File not found
+No CRS
+No file
+→ counted as
+(median
+(rerun)
+(remaining ~
+(offset
+
+/km²)

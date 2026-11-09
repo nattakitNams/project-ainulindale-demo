@@ -1,0 +1,200 @@
+again (the pairing link will open) or paste the token from the file
+False precision: count values split into finer pixels
+Aggregate pixels → summed · split pixels → divided equally
+Aggregate pixels → majority · split pixels → same value
+Finer = divided equally ÷k² · Coarser = sum
+means it was broken in the source file; no choice can recover it
+Tiles via the app's proxy (the token never reaches the browser)
+Indian 1975 / UTM zone 47N (older Thai maps)
+Indian 1975 / UTM zone 48N (older Thai maps)
+Not yet — needs internet the first time, then press
+No statistics yet — wait for data preparation to finish
+The shape appears on the map as you type · it is closed automatically
+Link — removed from the registry (no local file)
+✘ Cannot connect — needed for the first installation
+" pixels are not square — not supported in V1
+&nbsp;&nbsp;&nbsp;&nbsp;← results, cache, logs
+Rotated raster — V1 does not support calculations on it
+°E) — if unintended, check axis order / coordinate system
+Closed automatically (last point joined back to the first)
+Output goes to workspace/derived/ in a new folder each time
+Waited too long — close the run.bat window and open it again
+equally — looks finer but contains no new information
+The new file must be the same type (raster/vector)
+© Google (check the terms of use before publishing)
+Click on the map to see values of all visible layers
+No sample values yet — wait for data preparation to finish
+No data layers (raster/vector) are visible
+Before you start — what the installer will and will not do
+Target resolution is finer than the source data
+Package installation failed — see the log below
+Encrypted token storage is supported on Windows only
+Export the visible layers as a printable map
+Fine pan/zoom: double-click the map on the page
+equally; looks finer but contains no new information
+Not found — other features work, but PDF export does not
+＋ Choose from a boundary layer (province/district/subdistrict)…
+Hides values only on the map (does not affect calculations); use
+Value type must be count / density / class
+Coordinates not usable yet — see the message below the coordinate box
+Map image (view only, no values to calculate)
+No boundary layer yet — add a boundary file or
+Cannot write files at this location (insufficient permission)
+Increase the cell size or choose a smaller study area
+(Windows 10/11 · no admin rights needed)
+) — create a new hex with matching size/projection
+Not installed yet — run the setup assistant first
+Delete files in the workspace (whole result folder)
+Local fallback page: http://127.0.0.1
+Cannot read GetCapabilities (not XML)
+├─ Ainulindale.bat &nbsp;&nbsp;← opens the app
+) — the link is probably wrong (try adding / at the end)
+Google Hybrid ⚠ check the terms before publishing
+later features cover earlier ones
+classes — most values are identical; try fewer classes
+Lines with empty boxes are hidden automatically
+Allow access to apps/devices on this computer
+Your original files outside the workspace are not deleted
+This file uses 0 as nodata — if 0 means
+→ this page will open the setup assistant itself
+Microsoft Edge / Chrome (used to print PDF)
+Computed at the source resolution (no pixel splitting)
+Layers and basemap are set in the tab
+datasets — preparing statistics/previews in the Jobs tab
+Humanitarian map standard (UN-OCHA style)
+Not paired with the engine on this computer yet
+Geographic coordinate system WGS 84 (EPSG:4326)
+The shape has no area (points in a straight line?)
+Choose provinces / districts / subdistricts from this layer
+The app was closed or the process stopped while working
+The .dbf is Thai TIS-620 but the .cpg
+No .prj file → coordinate system (CRS) unknown
+Does not touch Python or any other program on this computer
+(Could not load the basemap — offline?)
+first features in view — zoom in to see all
+people/km² · elevation · temperature · NDVI
+Number of breaks must equal (number of classes − 1)
+Dropped cells that are empty/zero in every dataset, leaving
+Use the original job settings (flood × population)
+The file has a color table → probably class data
+Nothing yet — paste a map service link above
+DEGURBA works only with 3 classes
+Colors changed but not yet saved to the file
+Breaks must be in ascending order with no duplicates
+real path · unchecked = remember the path
+GB — high-resolution results take several GB
+Hexagon size (km between centers)
+people/pixel · number of buildings · number of trees
+Click areas on the map to select/deselect
+sampled values at the source resolution · breaks
+km²) is smaller than 4 pixels of the data (
+Engine ready at http://127.0.0.1
+Installation complete — starting the engine…
+A directory of who has what data, and where
+Delete the study-area boundary file in the workspace
+or close the run.bat window and open it again
+Engine found — not paired yet
+Nothing found — try other keywords or clear the filters
+" to the trash — can be restored from the trash
+(converted from density at the center latitude)
+Paletted / Unique values
+
+Automatic frame from data/study area
+Building overviews for the preview copy…
+The data do not overlap — choose a study area
+The resolution is finer than the reference grid (
+A vector (polygon) dataset must be chosen
+
+Save colors to the file (tif + qml + legend)
+The destination is an internal network — not checked
+Test build: SHA-256 values are not locked yet
+Planetary Computer catalog page
+because the files are not digitally signed yet → press
+Increase the cell size or choose a study area
+Also include values from other datasets (same grid)
+features in view (simplified for the zoom level)
+
+Excluded values must be numbers separated by
+The same dataset shown by another portal
+Engine somewhere else? Change the address
+Not confirmed — must be confirmed before calculations
+or paste full paths, one file per line — E
+The site limits requests; try again later
+Uses the original settings; output goes to a new folder
+Reusable in later jobs (same size)
+→ uses values after scaling (same as QGIS)
+(e.g. never flooded), enter 0 in the box
+The current layout will be replaced by
+Target resolution equals the original
+Excluded values (treated as no data)
+Area-weighted grid alignment: the grid lines of "
+Name (Thai sources/direct producers first)
+Everything of the app will be in this folder
+The study area does not overlap the data extent
+No layers yet — add them in the tab
+This axis is not split (single-variable map)
+Machine-readable metadata file
+Your data files are not uploaded anywhere
+Municipal boundaries (Dept. of Public Works and Town & Country Planning 1:50,000)
+Local engine (fallback page)
+The local engine is an older version
+All in the grid (including cells without a code)
+The study area must be a polygon (got
+Contains red-green — not color-blind safe
+Please wait, this page will open the app itself
+Share of area where value ≥ threshold (%)
+The source site redirects to an internal address (
+Not a true gradient; other sizes may look odd
+(must be in the same folder as the .shp)
+(open Ainulindale.bat first)
+Northing, Easting (swapped for you)
+Noto Sans Thai — plain, easy to read
+first features — zoom in to see all
+× output resolution · window
+values, too many for unique values (≤
+Study area name, e.g. Sing Buri
+Download Ainulindale-setup.zip
+Only Feature Layers can be downloaded
+Drop cells that are empty/zero in every dataset
+Nothing yet — add datasets above
+Latitude, longitude (swapped for you)
+View-only links cannot make a report
+Links using this token will stop working
+Share of count values (e.g. people) per class
+Choose at least 1 layer
+The app did not write or edit this text
+Use Ainulindalë on your computer
+Uses the same grid as the selected hex dataset
+(pypi.org) official sources only
+) are not integer multiples of each other
+Singleband pseudocolor
+The process ended without reporting a result (exit
+Hexagon dataset → raster: choose
+Install the engine on this computer
+Some new features will not work
+No description from the source yet — press
+colors) hard to read — at most 4×4 recommended
+Breaks (values equal to a break go to the upper class)
+Choose a study area from a boundary layer
+Choose at least 1 area
+Not specified in the list — see the source
+False precision: count values split into
+Computing DEGURBA on axis X for the whole grid…
+Computing DEGURBA on axis Y for the whole grid…
+that layer on the map (file not modified)
+Installing the package manager (pip)
+The service did not return the selected features
+The value type has not been confirmed for "
+The shape is outside Thailand (center
+Earth Engine catalog page
+After installation, everything will be in
+Read the producer's terms before use
+Choose at least 1 dataset
+Not all shown in this view — zoom in
+This mode rasterizes finer by
+Unknown link — supported: XYZ (
+└─ (results are outside the app folder
+" is split into finer pixels
+(no browser permission needed)
+AINULINDALË · Setup assistant
+IBM Plex Sans Thai — modern

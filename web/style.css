@@ -496,3 +496,5 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 .lang-sw { display: inline-flex; border: 1px solid var(--line); border-radius: 20px; overflow: hidden; }
 .lang-sw button { background: transparent; border: 0; border-radius: 0; padding: 3px 10px; font-size: 11.5px; font-weight: 600; color: var(--muted); box-shadow: none; min-height: 0; }
 .lang-sw button.on { background: rgba(195, 182, 255, .22); color: var(--text); }
+.lang-float { display: none; position: fixed; top: 14px; right: 16px; z-index: 10001; background: #23263a; }
+body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inline-flex; }

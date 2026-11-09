@@ -1,0 +1,310 @@
+= data
+[Job queue]
+[Tile] #
+mask at
+Bar chart
+Invert
+Copied
+Cell size
+File size
+Coverage
+Quantile
+Description
+Prepared by
+Count
+Period
+Satellite
+Italic
+Color required
+Repeat value
+Present
+Label
+Sum of values
+Author
+Ready
+Fit frame
+This palette
+Projection
+Background
+Figure 1
+None yet
+Spacing
+items (
+Delete token?
+Axis order
+Image link
+Classification
+Color / width
+Number color
+Map colors
+Organization
+Web page
+Category
+Note
+Stopped
+Same
+Add row
+Start job
+Choose manually
+Converted
+Subfiles
+No response within
+Job not found
+Image not found
+“sum”
+“mean”
+✔ OK
+(raw
+) and "
+MB) of
+UTM zone
+Job log
+Running
+Text
+Cadence
+Opacity
+Height
+Value should be…
+Sampled values
+Axis name
+Zoom in
+Hide values
+Fetched
+km²)
+Settings
+Install
+per cell
+per code
+All
+Global
+All categories
+Weight
+Partial
+Unlock
+Result
+Error
+pixels)
+Area
+arc-seconds
+Corner radius
+Run again?
+Delete permanently?
+Deleted on
+Bottom
+Failed
+Drawn
+How to use
+seconds)
+End
+Breaks X
+Breaks Y
+Over 40
+Highlight
+Compass
+Computer
+Template
+Change
+Dashed line
+remaining ~
+Rename
+Double bar
+Portrait
+Polygon
+Unknown
+No color
+Not specified
+Hidden
+✘ Will not
+🔒 Token
+" first
+" in "
+(queued
+touch
+Restore
+Data
+Values ≤0
+Align
+Pair
+Class X
+Class Y
+Parameter sets
+Set
+Zoom out
+km²
+Number
+Minimum
+Requires
+Trash
+Outside Thailand
+Import
+says
+Save
+Approx.
+Difference
+Converted
+Provider
+Elapsed
+Fit screen
+pixels
+Coded
+Cancel
+Confirm
+Moved "
+Queued…
+Run again
+items
+Report
+Format
+Delete permanently
+Date
+Draw
+seconds
+Frame color
+Fill color
+Line color
+Maximum
+Export
+Very thick
+Heading
+Updated
+Mean
+e.g. 0
+Choose…
+remaining)
+but got
+Map
+and
+App guess
+OK
+in view
+No response
+← Back
+→ class
+→ after
+(showing
+) of
+Rule
+km (
+Width
+of "
+Grayscale
+Reset colors
+Value ≤
+Search
+Count
+sets (
+cells…
+m²
+Table
+Source
+Top
+Sum
+Ready
+Port
+Palette
+Field
+Has value
+Total ≥
+Queued
+Delete row
+Link
+Statistics
+Create
+Breaks
+Write
+Add
+When
+Start
+Sort
+Choose
+Done
+X axis
+Y axis
+Band
+Source
+Token
+press
+Not found
+None
+… more
+km)
+Grid
+Center
+Before
+Size
+Zoom
+Up
+Class
+Rural
+Type
+Class
+Name
+cells
+Left
+View result
+also
+OK
+Check
+min
+Normal
+Fill
+Language
+Also in
+Code
+System
+Lock
+Bottom
+Clear
+million
+Method
+Empty
+Category
+Stop
+After
+Over
+Threads
+Open
+as
+Broken
+Line
+row)
+Convert
+done
+Show
+Mode
+Tile
+File
+✔ Will
+✔ Found
+km
+with
+Right
+should
+Value
+Jobs
+from
+points
+h
+datasets
+Zoom
+at
+Thin
+Close
+mm
+Shrink
+Total
+Run
+shapes
+High
+Thick
+Axis
+Cache
+Touch
+Thailand
+Press
+Top
+m
+Has
+Down
+Delete
+Color
