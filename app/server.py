@@ -1016,6 +1016,12 @@ def validate_job(kind, p):
         dx, dy = _confirmed_raster(p['x']['dataset_id']), _confirmed_raster(p['y']['dataset_id'])
         sx, sy = engine.Source(dx), engine.Source(dy)
         g = engine.make_grid([sx, sy], Fraction(p['target_res']))
+        for s in (sx, sy):                     # ไขว้ได้เฉพาะส่วนที่ทับกัน → เตือนเมื่อชุดหนึ่งเล็กกว่ามาก (เช่น แปลงจากเวกเตอร์แล้วได้แค่กรอบของรูป)
+            cover = (g.width * g.rx * g.height * g.ry) / (s.w * s.rx * s.h * s.ry)
+            if cover < 0.95:
+                o = sy if s is sx else sx
+                warns.append(f'ขอบเขตของ "{o.name}" ครอบ "{s.name}" แค่ {cover:.0%} — แผนที่จะมีเฉพาะส่วนที่ทับกัน '
+                             f'· ถ้า "{o.name}" แปลงมาจากเวกเตอร์ ให้แปลงใหม่โดยตั้ง "ขอบเขตผลลัพธ์" = "{s.name}" (นอกรูป = 0)')
         ox, oy = engine.OnGrid(sx, g), engine.OnGrid(sy, g)
         aoi_name = _apply_aoi(p, g, [ox, oy])
         engine.check_tiles(g, [ox, oy])

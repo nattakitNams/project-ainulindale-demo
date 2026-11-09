@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.15';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.16';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -348,7 +348,7 @@ function cardHtml(d) {
 
 // ================= หน้าชุดข้อมูล =================
 async function pageDataset(id) {
-  const [d, all, aois] = await Promise.all([api(ENGINE + '/api/datasets/' + id), api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi')]);
+  const [d, all, aois, fr] = await Promise.all([api(ENGINE + '/api/datasets/' + id), api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), api(ENGINE + '/api/folders').catch(() => ({ folders: [] }))]);
   const m = d.meta, isR = d.kind === 'raster', st = d.stats || {}, g = m.value_type_guess || {};
   const v = $('#view');
   const kv = rows => `<table class="kv">${rows.filter(Boolean).map(([k, x]) => `<tr><td>${k}</td><td>${x}</td></tr>`).join('')}</table>`;
@@ -425,10 +425,11 @@ async function pageDataset(id) {
         <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>แปลงเป็นราสเตอร์</h2></div>
         <div class="grid-form">
           <div class="field full"><span>กริดผลลัพธ์</span><div class="seg" id="rzGrid"><button data-g="own">กำหนดเอง (พิกัด + ความละเอียด)</button><button data-g="ref" ${rasters.length ? '' : 'disabled title="ยังไม่มี raster ในคลัง"'}>จับกริดกับ raster ในคลัง</button></div></div>
-          <label class="field full rzRef"><span>raster อ้างอิง — พิกเซลจะตรงกับชุดนี้ (ใช้ไบแวเรียตต่อได้ทันที)</span><select id="rzRef">${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${esc((x.meta.res_label || '').split(' (')[0])}</option>`).join('')}</select></label>
+          <div class="field full rzRef"><span>raster อ้างอิง — พิกเซลจะตรงกับชุดนี้ (ใช้ไบแวเรียตต่อได้ทันที)</span><select id="rzRef">${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${esc((x.meta.res_label || '').split(' (')[0])}</option>`).join('')}</select></div>
           <label class="field rzRef"><span>ความละเอียด</span><select id="rzRes"></select></label>
           <label class="field rzOwn"><span>ระบบพิกัด</span><select id="rzCrs"><option value="">ของไฟล์นี้ (${esc((m.crs_name || '').split(' · ')[0])})</option><option value="EPSG:32647">UTM โซน 47N (EPSG:32647)</option><option value="EPSG:32648">UTM โซน 48N (EPSG:32648)</option><option value="EPSG:4326">WGS 84 องศา (EPSG:4326)</option></select></label>
-          <label class="field rzOwn"><span>ความละเอียด <b id="rzUnit"></b></span><input type="number" id="rzResOwn" min="0" step="any" value="30"></label>
+          <label class="field rzOwn"><span>ความละเอียด <b id="rzUnit"></b></span><select id="rzResSel"></select><input type="number" id="rzResOwn" class="hide" min="0" step="any" value="30" placeholder="พิมพ์ความละเอียด" style="margin-top:6px"></label>
+          <div class="field full"><span>ขอบเขตผลลัพธ์</span><select id="rzExt"><option value="">กรอบของชุดนี้ (bbox ของเวกเตอร์)</option>${rasters.map(x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ครอบทั้งผืนเท่ากับชุดนี้</option>`).join('')}</select></div>
           <label class="field"><span>วิธีแปลง</span><select id="rzMode"><option value="presence">มี / ไม่มี (1 / 0)</option><option value="attribute">ค่าจากฟิลด์</option><option value="majority">ค่าจากฟิลด์ — ที่กินพื้นที่มากสุดในพิกเซล</option><option value="fraction">สัดส่วนพื้นที่ที่ทับ (0–1)</option></select></label>
           <label class="field rzF"><span>ฟิลด์ที่ใช้เป็นค่า</span><select id="rzField"><option value="">— เลือกฟิลด์ —</option>${m.fields.map(f => { const num = /int|float|double|real/i.test(f.type); return `<option value="${esc(f.name)}" data-num="${num ? 1 : 0}">${esc(f.name)} · ${num ? 'ตัวเลข' : 'ข้อความ'}</option>`; }).join('')}<option value="__index__">ลำดับ feature (1, 2, 3…)</option></select></label>
           <label class="field"><span>พิกเซลไหนนับ</span><select id="rzRule"><option value="center">จุดกึ่งกลางพิกเซลอยู่ในรูป</option><option value="touch">แตะรูปนิดเดียวก็นับ (all touched)</option></select></label>
@@ -507,13 +508,31 @@ async function pageDataset(id) {
       } catch (e) { toast(e.message, true); }
     };
     // กริด: กำหนดเอง (ไม่ต้องมี raster) หรือจับกับ raster ในคลัง · ขอบเขตผลลัพธ์ = ของ vector นี้ (หรือพื้นที่ศึกษา) เสมอ
-    let rzGrid = 'own';
+    let rzGrid = 'own', rzExtTouched = false;
+    // ความละเอียด (กริดกำหนดเอง): ค่าสำเร็จรูปตามหน่วย + "พิมพ์เอง…"
+    const RZ_PRESET = { geo: [[1, '1″ (≈ 30 ม.)'], [3, '3″ (≈ 90 ม.)'], [7.5, '7.5″ (≈ 250 ม.)'], [15, '15″ (≈ 500 ม.)'], [30, '30″ (≈ 1 กม.)']],
+      m: [[10, '10 ม.'], [30, '30 ม.'], [100, '100 ม.'], [250, '250 ม.'], [500, '500 ม.'], [1000, '1 กม.']] };
+    const rzGeo = () => $('#rzCrs').value === 'EPSG:4326' || (!$('#rzCrs').value && m.geographic);
+    const rzFillRes = () => {
+      const ps = RZ_PRESET[rzGeo() ? 'geo' : 'm'];
+      $('#rzResSel').innerHTML = ps.map(([v, l]) => `<option value="${v}">${l}</option>`).join('') + '<option value="custom">พิมพ์เอง…</option>';
+      $('#rzResSel').value = rzGeo() ? 1 : 30;
+      $('#rzResOwn').value = $('#rzResSel').value;
+      $('#rzResOwn').classList.add('hide');
+    };
+    $('#rzResSel').onchange = () => {
+      const c = $('#rzResSel').value === 'custom';
+      $('#rzResOwn').classList.toggle('hide', !c);
+      if (c) $('#rzResOwn').focus(); else $('#rzResOwn').value = $('#rzResSel').value;
+    };
+    // ขอบเขต: จับกริดกับ raster → ค่าเริ่มต้นครอบทั้งผืนเท่าชุดนั้น (นอกรูป = 0 ไบแวเรียตได้ทั้งพื้นที่) จนกว่าผู้ใช้เลือกเอง
+    const rzExtDefault = () => { if (!rzExtTouched) $('#rzExt').value = rzGrid === 'ref' ? $('#rzRef').value : ''; };
+    $('#rzExt').onchange = () => { rzExtTouched = true; rzSync(); };
     const rzSync = () => {
       $$('#rzGrid button').forEach(b => b.classList.toggle('on', b.dataset.g === rzGrid));
       $$('.rzRef').forEach(e => e.classList.toggle('hide', rzGrid !== 'ref'));
       $$('.rzOwn').forEach(e => e.classList.toggle('hide', rzGrid !== 'own'));
-      const geo = $('#rzCrs').value === 'EPSG:4326' || (!$('#rzCrs').value && m.geographic);
-      $('#rzUnit').textContent = geo ? '(ฟิลิปดา ″ · 1″ ≈ 30 ม.)' : '(เมตร)';
+      $('#rzUnit').textContent = rzGeo() ? '(ฟิลิปดา ″ · 1″ ≈ 30 ม.)' : '(เมตร)';
       const md = $('#rzMode').value, fo = $('#rzField').selectedOptions[0];
       $('.rzF').classList.toggle('hide', md === 'presence' || md === 'fraction');
       const fld = fo && fo.value ? (fo.value === '__index__' ? 'ลำดับ feature' : `ฟิลด์ "${fo.value}"`) : 'ฟิลด์ที่เลือก';
@@ -523,14 +542,19 @@ async function pageDataset(id) {
         attribute: `พิกเซลได้ค่าของ ${fld}${txt ? ' — <b>ข้อความ</b> จะแปลงเป็นรหัส 1, 2, 3… พร้อมไฟล์ตารางรหัส (_codes.csv)' : ''} · รูปที่ซ้อนกัน ตัวหลังทับตัวก่อน`,
         majority: `พิกเซลได้ค่าของ ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
         fraction: 'สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ',
-      })[md] + '<br><span class="tiny">ขอบเขตผลลัพธ์ = ขอบเขตของชุดนี้ (หรือพื้นที่ศึกษาที่เลือก)</span>';
+      })[md] + '<br><span class="tiny">' + ($('#rzExt').value
+        ? 'ขอบเขตผลลัพธ์ = ทั้งผืนของ raster ที่เลือก — นอกรูปเวกเตอร์ได้ 0 (ไบแวเรียตกับชุดนั้นได้ครบทั้งพื้นที่)'
+        : 'ขอบเขตผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือก "ครอบทั้งผืนเท่ากับ" ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน') + '</span>';
     };
-    $$('#rzGrid button').forEach(b => b.onclick = () => { if (b.disabled) return; rzGrid = b.dataset.g; if (rzGrid === 'ref' && !$('#rzRes').options.length) loadRz(); rzSync(); });
-    $('#rzRef').onchange = loadRz;
-    $('#rzCrs').onchange = () => { $('#rzResOwn').value = $('#rzCrs').value === 'EPSG:4326' ? 1 : 30; rzSync(); };
+    $$('#rzGrid button').forEach(b => b.onclick = () => { if (b.disabled) return; rzGrid = b.dataset.g; if (rzGrid === 'ref' && !$('#rzRes').options.length) loadRz(); rzExtDefault(); rzSync(); });
+    $('#rzRef').onchange = () => { loadRz(); rzExtDefault(); rzSync(); };
+    $('#rzCrs').onchange = () => { rzFillRes(); rzSync(); };
     $('#rzMode').onchange = rzSync;
     $('#rzField').onchange = () => { if ($('#rzField').value && $('#rzMode').value === 'presence') $('#rzMode').value = 'attribute'; rzSync(); };
-    if (m.geographic) $('#rzResOwn').value = 1;
+    const rasOpt = tail => x => `<option value="${x.id}">#${x.id} ${esc(x.name)} · ${tail(x)}</option>`;
+    dsPicker($('#rzRef'), rasters, fr.folders || [], rasOpt(x => esc((x.meta.res_label || '').split(' (')[0])), null);
+    dsPicker($('#rzExt'), rasters, fr.folders || [], rasOpt(() => 'ครอบทั้งผืนเท่ากับชุดนี้'), 'กรอบของชุดนี้ (bbox ของเวกเตอร์)');
+    rzFillRes();
     rzSync();
     if ($('#hxRun')) hexCardBind(d);
     $('#rzRun').onclick = () => {
@@ -538,7 +562,7 @@ async function pageDataset(id) {
       if ((md === 'attribute' || md === 'majority') && !$('#rzField').value) return toast('เลือกฟิลด์ที่จะใช้เป็นค่าก่อน', true);
       const g = rzGrid === 'ref' ? { grid: 'ref', ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value } : { grid: 'own', crs: $('#rzCrs').value || null, target_res: $('#rzResOwn').value };
       if (!(+g.target_res > 0) && !String(g.target_res).includes('/')) return toast('ใส่ความละเอียด', true);
-      runJob('rasterize', { dataset_id: id, ...g, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
+      runJob('rasterize', { dataset_id: id, ...g, extent_dataset_id: +$('#rzExt').value || null, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
     };
   }
   initMap(d);
@@ -989,23 +1013,44 @@ const BIV = {
   aoi_id: null, aoi_rule: 'center', aoi_mask_res: '',
 };
 
+// ตัวเลือกชุดข้อมูลแบบค้นหาชื่อ + กรองโฟลเดอร์ (รวมโฟลเดอร์ย่อย) — กรองตัวเลือกใน <select> เดิม ค่าที่เลือกอยู่ไม่หาย
+//   blank = ข้อความตัวเลือกค่าว่าง (null = ไม่มีตัวเลือกว่าง)
+function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —') {
+  const pathName = id => { const o = []; let f = FOL.find(x => x.id === id); while (f) { o.unshift(f.name); f = FOL.find(x => x.id === f.parent_id); } return o.join(' / '); };
+  const sub = id => { const s = new Set([id]); let grew = true; while (grew) { grew = false; FOL.forEach(f => { if (s.has(f.parent_id) && !s.has(f.id)) { s.add(f.id); grew = true; } }); } return s; };
+  const box = document.createElement('div');
+  box.className = 'dsp';
+  box.innerHTML = (FOL.length ? `<select class="dsp-f" title="โฟลเดอร์"><option value="">ทุกโฟลเดอร์</option><option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>${FOL.map(f => [f.id, pathName(f.id)]).sort((a, b) => a[1].localeCompare(b[1], 'th')).map(([i, p]) => `<option value="${i}" translate="no">📁 ${esc(p)}</option>`).join('')}</select>` : '')
+    + '<input type="search" class="dsp-q" placeholder="ค้นหาชื่อชุดข้อมูล หรือ #id">';
+  sel.before(box);
+  const q = box.querySelector('.dsp-q'), fs = box.querySelector('.dsp-f');
+  const apply = () => {
+    const t = q.value.trim().toLowerCase(), fv = fs ? fs.value : '', cur = sel.value;
+    const inF = fv === '' ? null : fv === 'root' ? new Set([null]) : sub(+fv);
+    const show = list.filter(d => String(d.id) === cur || ((!inF || inF.has(d.folder_id || null)) && (!t || d.name.toLowerCase().includes(t) || ('#' + d.id).includes(t))));
+    sel.innerHTML = (blank != null ? `<option value="">${blank}</option>` : '') + show.map(optFn).join('') + (show.length > (cur ? 1 : 0) ? '' : '<option disabled>ไม่พบชุดข้อมูลที่ตรงเงื่อนไข</option>');
+    sel.value = cur;
+  };
+  q.oninput = apply;
+  if (fs) fs.onchange = apply;
+}
+
 async function pageBiv() {
-  const [all, aois] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), loadPals()]);
+  const [all, aois, , fr] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), loadPals(), api(ENGINE + '/api/folders').catch(() => ({ folders: [] }))]);
   const list = all.filter(d => d.kind === 'raster' || (isHex(d) && d.role !== 'map'));
   const qh = +new URLSearchParams(location.hash.split('?')[1] || '').get('hex');
   if (qh && list.some(d => d.id === qh)) { BIV.out = 'hex'; if (!isHex(list.find(d => d.id === BIV.x.dataset_id))) { BIV.x.dataset_id = qh; BIV.x.method = 'quantile'; } }
   if (!BIV.pal) BIV.pal = 'b:' + STATE.default_palette;
   const v = $('#view');
-  const opt = sel => list.map(d => isHex(d) ? `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>⬡ #${d.id} ${esc(d.name)} · หกเหลี่ยม ${fmt(d.meta.hex.d_km, 3)} กม.</option>`
+  const opt = (sel, arr = list) => arr.map(d => isHex(d) ? `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>⬡ #${d.id} ${esc(d.name)} · หกเหลี่ยม ${fmt(d.meta.hex.d_km, 3)} กม.</option>`
     : `<option value="${d.id}" ${d.id == sel ? 'selected' : ''}>#${d.id} ${esc(d.name)} · ${esc(d.meta.res_label.split(' (')[0])} · ${esc(VT_SHORT[d.value_type] || '')}${d.value_type_confirmed ? '' : ' (ยังไม่ยืนยัน)'}</option>`).join('');
-  v.innerHTML = head('Bivariate', 'สร้างแผนที่ไบแวเรียต', 'ไขว้ข้อมูล 2 ชุด → ตาราง nX × nY สี · ผลเป็น GeoTIFF + QML + legend + สถิติ + lineage',
-    `<button id="preset">${IC.refresh}ตั้งค่าแบบงานเดิม (น้ำท่วม × ประชากร)</button>`)
+  v.innerHTML = head('Bivariate', 'สร้างแผนที่ไบแวเรียต', 'ไขว้ข้อมูล 2 ชุด → ตาราง nX × nY สี · ผลเป็น GeoTIFF + QML + legend + สถิติ + lineage')
     + `<div class="steps">
     <div class="step"><div class="cols2">
       ${['x', 'y'].map(ax => `<div class="card axis" id="ax_${ax}" style="--c:${ax === 'x' ? 'var(--sky)' : 'var(--rose)'}">
         <div class="card-head"><h2>แกน ${ax.toUpperCase()} <span class="muted small">${ax === 'x' ? 'ซ้าย → ขวา' : 'ล่าง → บน'}</span></h2></div>
         <div class="grid-form">
-          <label class="field full"><span>ชุดข้อมูล</span><select data-k="dataset_id"><option value="">— เลือก —</option>${opt(BIV[ax].dataset_id)}</select></label>
+          <div class="field full"><span>ชุดข้อมูล</span><select data-k="dataset_id"><option value="">— เลือก —</option>${opt(BIV[ax].dataset_id)}</select></div>
           <label class="field full hexF hide"><span>คอลัมน์ค่าในชุดหกเหลี่ยม</span><select data-k="field"></select></label>
           <label class="field"><span>ชื่อแกน</span><input type="text" data-k="label" value="${esc(BIV[ax].label)}" placeholder="เช่น ประชากร"></label>
           <label class="field"><span>จำนวนคลาส</span><select data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == BIV[ax].n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
@@ -1201,6 +1246,7 @@ async function pageBiv() {
 
   ['x', 'y'].forEach(ax => {
     const el = $('#ax_' + ax);
+    dsPicker($('[data-k="dataset_id"]', el), list, fr.folders || [], d => opt(null, [d]));
     $$('[data-k]', el).forEach(i => i.onchange = async () => {
       readAxis(ax);
       if (i.dataset.k === 'dataset_id' || (i.dataset.k === 'n' && BIV[ax].method === 'breaks')) await suggestBreaks(ax);
@@ -1223,15 +1269,6 @@ async function pageBiv() {
   $('#res').onchange = () => { BIV.target_res = $('#res').value; fillMask(); };
   $$('#outSeg button').forEach(b => b.onclick = () => { setOut(b.dataset.o); if (BIV.out === 'raster') loadRes(); });
   $('#hxSizeB').oninput = () => { BIV.size_km = +$('#hxSizeB').value; setOut(BIV.out); };
-  $('#preset').onclick = () => {
-    Object.assign(BIV.x, { n: 3, method: 'breaks', breaks: [300, 1500], metric: 'density', order: 'auto', label: 'ประชากร (คน/ตร.กม.)' });
-    Object.assign(BIV.y, { n: 3, method: 'breaks', breaks: [1, 5], metric: 'value', order: 'auto', label: 'จำนวนปีที่ท่วม' });
-    Object.assign(BIV, { pal: 'b:traffic', highlight: [8, 9], tie: 'high', count_down_valid: 'positive', colors: null });
-    const pop = list.find(d => d.value_type === 'count' && d.role === 'input'), fl = list.find(d => /flood|ท่วม/i.test(d.name) && d.value_type === 'class' && d.role === 'input');
-    if (!BIV.x.dataset_id && pop) BIV.x.dataset_id = pop.id;
-    if (!BIV.y.dataset_id && fl) BIV.y.dataset_id = fl.id;
-    pageBiv();
-  };
   const collect = () => {
     readAxis('x'); readAxis('y');
     Object.assign(BIV, { target_res: $('#res').value, tie: $('#tie').value, count_down_valid: $('#cdv').value, name: $('#bname').value.trim(),
