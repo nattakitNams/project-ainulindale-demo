@@ -145,9 +145,9 @@ function hubFilter() {
 function hubCard(it) {
   const L = HUB_LC[it.lc];
   return `<a class="hub-card" href="#/hub/${encodeURIComponent(it.k)}">
-    <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}</div>
+    <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}${it.ni ? `<span class="chip ok" title="มีไฟล์ที่แอปนำเข้าคลังได้เอง">นำเข้าได้ ${it.ni}</span>` : ''}</div>
     <div class="small muted"><span translate="no">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))}</span>${it.og || it.pr ? ' · ' : ''}<span class="hub-src s-${it.s}" translate="no">${esc(it.p)}</span></div>
-    <div class="hub-meta tiny">${[hubType(it.ty), hubYears(it) || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
+    <div class="hub-meta tiny">${[hubType(it.ty), hubYears(it) || (it.y ? (it.y[0] === it.y[1] ? `ปี ${it.y[0]}` : `${it.y[0]}–${it.y[1]}`) : '') || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
     <div class="hub-th">${it.th.slice(0, 3).map(k => `<span>${esc(hubThName(hubTheme(k)) || k)}</span>`).join('')}
       <span class="hub-lc" style="--c:${L[1]}" title="${esc(it.l || 'ไม่ระบุ')} — ${L[2]}">${L[0]}</span>${hubDot(it.u)}</div></a>`;
 }
@@ -238,6 +238,28 @@ async function pageHub(key) {
   draw();
 }
 
+// นำเข้าไฟล์จาก Data hub เข้าคลัง: ชื่อ · พื้นที่ศึกษา (ค่าเริ่มต้น = พื้นที่พื้นฐาน เช่น ประเทศไทย) · ประเภทค่า → งานดาวน์โหลดในตัวประมวลผล
+async function hubImport(it, r) {
+  let aois = [];
+  try { aois = await api(ENGINE + '/api/aoi'); } catch (e) { return toast(e.message, true); }
+  const base = aois.find(a => a.builtin);
+  const nm = (r.name || r.url.split('/').pop()).replace(/\/content$/, '').replace(/\.(tiff?|geojson|json)$/i, '');
+  const guess = /(^|[_\W])(ppp|pop|population|count)([_\W]|$)/i.test(nm) ? 'count' : /night|viirs|ndvi|density|_pd_|temperature|rain/i.test(nm) ? 'density' : '';
+  const isTif = /\.tiff?(\/content)?(\?|$)/i.test(r.url);
+  const o = await ui.open('นำเข้าคลังจาก Data hub', `<p class="small" translate="no"><b>${esc(it.t)}</b><br><span class="mono tiny">${esc(r.name || r.url)}</span></p>
+    <label class="field"><span>ชื่อในคลัง</span><input type="text" id="hiName" value="${esc(nm)}"></label>
+    <label class="field" style="margin-top:8px"><span>พื้นที่</span><select id="hiAoi"><option value="">ทั้งไฟล์ (ไม่ตัด)</option>${aoiOptions(aois, { sel: base ? base.id : '' })}</select></label>
+    ${isTif ? `<label class="field" style="margin-top:8px"><span>ประเภทค่า</span><select id="hiVt"><option value="">ยังไม่ระบุ (ยืนยันทีหลังในหน้าชุดข้อมูล)</option>${['count', 'density', 'class'].map(k => `<option value="${k}" ${k === guess ? 'selected' : ''}>${esc(VT_SHORT[k] || k)}</option>`).join('')}</select>
+      <span class="tiny muted">${guess ? 'แอปเดาจากชื่อไฟล์ — ตรวจให้ตรงความหมายของข้อมูล' : 'เช่น จำนวนคน/พิกเซล = จำนวนนับ · ดัชนี/ความหนาแน่น = ค่าต่อเนื่อง · รหัสชั้น = ชั้น'}</span></label>` : ''}
+    <p class="tiny muted" style="margin-top:10px">ตัดตามกรอบพื้นที่ศึกษา · เซิร์ฟเวอร์ที่ไม่รองรับการอ่านบางส่วนจะดาวน์โหลดทั้งไฟล์ก่อน · ดูความคืบหน้าในแท็บงาน</p>`,
+    [{ label: 'ยกเลิก', cls: 'ghost', value: () => null }, { label: 'นำเข้า', cls: 'primary', value: () => ({ name: $('#hiName').value.trim(), aoi_id: +$('#hiAoi').value || null, value_type: $('#hiVt')?.value || null }) }]);
+  if (!o) return;
+  try {
+    const x = await api(ENGINE + '/api/hub/import', { json: { hub_key: it.k, url: r.url, ...o } });
+    toast(x.message); if (typeof jobBadge === 'function') jobBadge();
+  } catch (e) { toast(e.message, true); }
+}
+
 async function hubDetail(it) {
   const v = $('#view');
   if (!it) { v.innerHTML = `<div class="note err">ไม่พบรายการนี้ใน Data hub</div><p><a href="#/hub">← กลับ Data hub</a></p>`; return; }
@@ -267,8 +289,11 @@ async function hubDetail(it) {
     ['คำสำคัญ (จากต้นทาง)', `<span translate="no">${esc((x.keywords || []).join(', '))}</span>`],
     it.n ? ['หมายเหตุ', esc(it.n)] : null,
   ].filter(f => f && f[1]);
-  const linkRow = (t, u, sub, raw) => `<div class="hub-link"><div><a href="${esc(u)}" target="_blank" rel="noopener noreferrer"${raw ? ' translate="no"' : ''}>${esc(t)}</a>
-    ${sub ? `<div class="tiny muted">${esc(sub)}</div>` : ''}<div class="tiny mono muted hub-url">${esc(u)}</div></div><div class="hub-st">${hubStatus(u)}</div></div>`;
+  const linkRow = (t, u, sub, raw, act) => `<div class="hub-link"><div><a href="${esc(u)}" target="_blank" rel="noopener noreferrer"${raw ? ' translate="no"' : ''}>${esc(t)}</a>
+    ${sub ? `<div class="tiny muted">${esc(sub)}</div>` : ''}<div class="tiny mono muted hub-url">${esc(u)}</div></div><div class="hub-st">${act || ''}${hubStatus(u)}</div></div>`;
+  // ไฟล์ที่แอปนำเข้าเองได้ (GeoTIFF / GeoJSON ลิงก์ตรง) → ปุ่ม "นำเข้าคลัง" (ตัดตามพื้นที่ศึกษา) · ไฟล์อื่น = ลิงก์ดาวน์โหลดตรง
+  const canImport = r => !r.key && /\.(tiff?)(\/content)?(\?|$)|\.(geo)?json(\?|$)/i.test(r.url || '');
+  const nImp = res.filter(canImport).length;
   v.innerHTML = `<p style="margin:0 0 10px"><a href="#/hub">← Data hub</a></p>`
     + head(`<span translate="no">${esc(it.p)}</span>` + (it.dp ? ' · <span style="color:var(--butter)">เลิกใช้แล้ว</span>' : ''), `<span translate="no">${esc(it.t)}</span>`, `<span translate="no">${esc(it.sd || '')}</span>`,
       `<a class="btn primary" href="${esc(it.u)}" target="_blank" rel="noopener noreferrer">${IC.download}ไปหน้าดาวน์โหลด</a>`)
@@ -280,7 +305,9 @@ async function hubDetail(it) {
           ${d.text ? `<div class="tiny muted hub-attr">ที่มา: <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">${esc(d.source)}</a> · ${esc(d.license_note || '')} · แอปไม่ได้เขียนหรือแก้ข้อความนี้</div>` : ''}
         </div>
         ${res.length ? `<div class="card"><div class="card-head"><h2>ไฟล์ / บริการในชุดนี้ <span class="muted small">${fmt(it.nr || res.length, 0)} รายการ${it.nr > res.length ? ` (แสดง ${res.length})` : ''}</span></h2></div>
-          <div class="hub-links">${res.map(r => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '), true)).join('')}</div></div>` : ''}
+          ${nImp ? `<div class="note info small" style="margin-top:0">นำเข้าคลังได้ ${fmt(nImp, 0)} ไฟล์ — กด "นำเข้าคลัง" แล้วเลือกพื้นที่ศึกษา แอปจะดาวน์โหลดเฉพาะส่วนที่ต้องการ (ถ้าเซิร์ฟเวอร์รองรับ) ตัดตามพื้นที่ แล้วเพิ่มเข้าคลังให้</div>` : ''}
+          <div class="hub-links">${res.map((r, i) => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.size ? fmt(r.size / 1e6, 1) + ' MB' : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '), true,
+            canImport(r) ? `<button class="sm primary" data-imp="${i}">${IC.download}นำเข้าคลัง</button>` : '')).join('')}</div></div>` : ''}
         ${x.citation ? `<div class="card"><div class="card-head"><h2>การอ้างอิง (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.citation, 'md')}</div></div>` : ''}
         ${x.terms ? `<div class="card"><div class="card-head"><h2>เงื่อนไขการใช้ (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.terms, 'md')}</div></div>` : ''}
       </div>
@@ -291,6 +318,7 @@ async function hubDetail(it) {
           <div class="hub-links">${links.map(([t, u, sub]) => linkRow(t, u, sub)).join('')}</div>
           <div class="tiny muted" style="margin-top:8px">สถานะจากการกด "ตรวจสอบทุกลิงก์" ในหน้า Data hub</div></div>
       </div></div>`;
+  $$('[data-imp]').forEach(b => b.onclick = () => hubImport(it, res[+b.dataset.imp]));
   $$('[data-goth]').forEach(a => a.onclick = () => { HUB.th = a.dataset.goth; HUB.shown = 40; });
   $$('[data-goorg]').forEach(a => a.onclick = () => { HUB.org = a.dataset.goorg; HUB.shown = 40; });
   if ($('#hdMap')) {

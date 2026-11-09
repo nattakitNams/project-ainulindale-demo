@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.27';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.31';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,6 +28,7 @@ const ROLE_C = { input: 'var(--sky)', derived: 'var(--peach)', map: 'var(--rose)
 // ---------- ไอคอน (เส้น 1.8px) ----------
 const P = d => `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`;
 const IC = {
+  calc: P('<rect x="4.5" y="3.5" width="15" height="17" rx="2"/><path d="M8 8h8M8.5 13.5h2M8.5 17h2M13.5 13.5h2M13.5 17h2"/>'),
   chat: P('<path d="M5 5.5h14a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 17h-8l-4.5 3.5V17H5a1.5 1.5 0 0 1-1.5-1.5V7A1.5 1.5 0 0 1 5 5.5z"/>'),
   lock: P('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5"/>'),
   unlock: P('<rect x="5" y="10.5" width="14" height="10" rx="2"/><path d="M8 10.5V8a4 4 0 0 1 7.6-1.7"/>'),
@@ -132,7 +133,7 @@ async function route() {
   maps.forEach(m => m.remove()); maps = [];
   clearInterval(window._poll);
   const h = location.hash || '#/';
-  const r = ['viewer', 'report', 'biv', 'change', 'aoi', 'hub', 'jobs', 'system', 'trash'].find(k => h.startsWith('#/' + k)) || 'home';
+  const r = ['viewer', 'report', 'biv', 'change', 'tools', 'aoi', 'hub', 'jobs', 'system', 'trash'].find(k => h.startsWith('#/' + k)) || 'home';
   $$('#nav a, .side-trash').forEach(a => a.classList.toggle('on', a.dataset.r === r));
   const v = $('#view');
   v.innerHTML = '<p class="muted">กำลังโหลด…</p>';
@@ -147,6 +148,7 @@ async function route() {
     else if (r === 'viewer') await pageViewer();
     else if (r === 'report') await pageReport(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'change') await pageChange();
+    else if (r === 'tools') await pageTools(new URLSearchParams(h.split('?')[1] || ''));
     else if (r === 'system') await pageSystem();
     else await pageHome();
   } catch (e) { v.innerHTML = `<div class="note err">${esc(e.message)}</div>`; console.error(e); }
@@ -455,9 +457,11 @@ async function pageDataset(id) {
         ${/Polygon/.test(m.geometry_type || '') ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav)"></span>ใช้เป็นพื้นที่ศึกษา</h2></div><p class="small muted" style="margin-top:0">เลือกจังหวัด / อำเภอ / ตำบล จากชั้นนี้</p><a class="btn" href="#/aoi?ds=${d.id}">${IC.target}เลือกพื้นที่จากชั้นนี้</a></div>` : ''}`}
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--muted);color:var(--muted)"></span>รายละเอียด</h2></div>${kv(info)}
       ${isR && st.valid != null && d.role !== 'map' ? '<h3>ฮิสโทแกรม (ค่าสุ่ม)</h3><canvas class="hist" id="hist"></canvas><div class="tiny muted" id="histNote"></div>' : ''}</div>
-      ${d.lineage ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--butter);color:var(--butter)"></span>ที่มา (lineage)</h2>
-        <div class="row"><button class="sm" id="rerun">${IC.refresh}รันซ้ำ</button><button class="sm" onclick='openFolder(${attr(d.out_dir)})'>${IC.folder}โฟลเดอร์ผล</button></div></div>
-        <pre class="log">${esc(JSON.stringify(d.lineage, null, 1))}</pre></div>` : ''}
+      <div class="card" id="profCard"><div class="card-head"><h2><span class="dot" style="background:var(--butter);color:var(--butter)"></span>ประวัติชุดข้อมูล</h2>
+        <div class="row">${d.lineage ? `<button class="sm" id="rerun">${IC.refresh}รันซ้ำ</button><button class="sm" onclick='openFolder(${attr(d.out_dir)})'>${IC.folder}โฟลเดอร์ผล</button>` : ''}
+          <a class="btn sm ghost" href="${ENGINE}/api/datasets/${d.id}/profile.md">${IC.download}.md</a></div></div>
+        <div id="profBody" class="small muted">กำลังโหลด…</div>
+        ${d.lineage ? `<details class="tiny" style="margin-top:10px"><summary>lineage.json (ข้อมูลดิบ)</summary><pre class="log">${esc(JSON.stringify(d.lineage, null, 1))}</pre></details>` : ''}</div>
     </div>
     <div class="card sticky">
       <div class="mapbar">
@@ -588,6 +592,36 @@ async function pageDataset(id) {
   }
   initMap(d);
   if ($('#symPanel')) symPanel(d);
+  profileCard(d);
+}
+
+// ประวัติชุดข้อมูล: โน้ต (ผู้ใช้ / ผู้ช่วย AI) · ไฟล์อะไร · มาจากไหน · สร้างโดยงานอะไร (ชุดต้นทาง + ค่าที่ตั้ง) · ชุดที่ทำต่อ
+async function profileCard(d) {
+  const el = $('#profBody'); if (!el) return;
+  let p; try { p = await api(`${ENGINE}/api/datasets/${d.id}/profile`); } catch (e) { el.textContent = e.message; return; }
+  if (!document.body.contains(el)) return;
+  const kv = rows => `<table class="kv">${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td translate="no">${/^https?:\/\//.test(String(v)) ? `<a href="${esc(v)}" target="_blank" rel="noopener">${esc(v)}</a>` : esc(v)}</td></tr>`).join('')}</table>`;
+  const dsLink = x => `<a href="#/ds/${x.id}" translate="no">#${x.id} ${esc(x.name)}</a>${x.exists === false ? ' <span class="muted">(ถูกลบแล้ว)</span>' : ''}`;
+  const ai = p.notes.ai, mb = p.made_by;
+  el.className = 'small';
+  el.innerHTML = `
+    <div class="prof-note"><div class="row" style="justify-content:space-between"><b>โน้ต</b><button class="sm ghost" id="noteEdit">${IC.edit}${p.notes.user ? 'แก้' : 'เขียนโน้ต'}</button></div>
+      <div class="prof-text ${p.notes.user ? '' : 'muted'}" ${p.notes.user ? 'translate="no"' : ''}>${p.notes.user ? esc(p.notes.user) : 'ยังไม่มีโน้ต — บันทึกได้ว่าข้อมูลนี้คืออะไร ใช้ทำอะไร ข้อควรระวัง'}</div></div>
+    ${ai ? `<div class="prof-note ai"><div class="row" style="justify-content:space-between"><b>${IC.chat}โน้ตจากผู้ช่วย AI</b><button class="sm ghost danger" id="noteAiDel" title="ลบโน้ตของผู้ช่วย">${IC.trash}</button></div>
+      <div class="prof-text" translate="no">${esc(ai.text)}</div><div class="tiny muted">${esc(ai.model || '')} · ${esc(ai.at || '')}</div></div>` : ''}
+    <h3>ไฟล์อะไร / รูปแบบสำคัญ</h3>${kv(p.facts)}
+    ${p.origin.length ? `<h3>มาจากไหน</h3>${kv(p.origin)}` : ''}
+    ${mb ? `<h3>สร้างโดยงาน: ${esc(mb.operation_th)}</h3><div class="tiny muted">${esc(mb.created_at || '')} · แอป v${esc(mb.app_version || '')}</div>
+      <div style="margin:6px 0"><b>ชุดต้นทาง:</b> ${mb.parents.map(dsLink).join(' · ') || '—'}</div>${kv(mb.settings)}
+      ${Object.keys(mb.summary || {}).length ? `<details class="tiny"><summary>สรุปผล</summary>${kv(Object.entries(mb.summary))}</details>` : ''}` : ''}
+    ${p.children.length ? `<h3>ชุดที่ทำต่อจากชุดนี้</h3><div>${p.children.map(c => dsLink(c) + ` <span class="tiny muted">${esc(c.operation_th)}</span>`).join('<br>')}</div>` : ''}`;
+  $('#noteEdit').onclick = async () => {
+    const t = await ui.open('โน้ตของชุดข้อมูล', `<p class="muted small">เช่น ข้อมูลนี้คืออะไร หน่วยของค่า ใช้ทำอะไร ข้อควรระวัง</p><textarea id="noteTxt" rows="6" style="width:100%">${esc(p.notes.user || '')}</textarea>`,
+      [{ label: 'ยกเลิก', cls: 'ghost', value: () => null }, { label: 'บันทึก', cls: 'primary', value: () => $('#noteTxt').value }]);
+    if (t === null) return;
+    await api(`${ENGINE}/api/datasets/${d.id}/note`, { json: { text: t } }); profileCard(d);
+  };
+  if ($('#noteAiDel')) $('#noteAiDel').onclick = async () => { await api(`${ENGINE}/api/datasets/${d.id}/note`, { json: { clear_ai: true } }); profileCard(d); };
 }
 
 // ================= สัญลักษณ์ (Symbology แบบ QGIS) =================
@@ -1606,7 +1640,8 @@ async function pageAoi(qs) {
 // ================= งาน =================
 const KIND = { prepare: ['เตรียมข้อมูล', 'db', 'var(--muted)'], resample: ['ปรับความละเอียด', 'layers', 'var(--peach)'], bivariate: ['ไบแวเรียต', 'map', 'var(--rose)'],
   rasterize: ['แปลงเป็นราสเตอร์', 'raster', 'var(--sky)'], vgrid: ['กริดเวกเตอร์', 'grid', 'var(--mint)'],
-  hex: ['แปลงเป็นหกเหลี่ยม', 'hex', 'var(--lav)'], hexbiv: ['ไบแวเรียตหกเหลี่ยม', 'hex', 'var(--rose)'] };
+  hex: ['แปลงเป็นหกเหลี่ยม', 'hex', 'var(--lav)'], hexbiv: ['ไบแวเรียตหกเหลี่ยม', 'hex', 'var(--rose)'],
+  calc: ['สูตรคำนวณ', 'calc', 'var(--sky)'], trend: ['อนุกรมเวลา', 'pulse', 'var(--peach)'], mosaic: ['รวมราสเตอร์', 'layers', 'var(--mint)'], vmerge: ['รวมเวกเตอร์', 'vector', 'var(--mint)'] };
 const fmtDur = s => s == null ? '–' : s < 60 ? `${Math.max(1, Math.round(s))} วินาที` : s < 3600 ? `${Math.floor(s / 60)} นาที ${Math.round(s % 60)} วินาที` : `${Math.floor(s / 3600)} ชม. ${Math.round(s % 3600 / 60)} นาที`;
 const JOB_ST = { queued: 'รอคิว', running: 'กำลังทำ', cancelling: 'กำลังยกเลิก', done: 'เสร็จ', failed: 'ล้มเหลว', cancelled: 'ยกเลิกแล้ว' };
 const JOB_CLS = { done: 'ok', failed: 'err', cancelled: 'warn', running: 'raster', queued: '' };
@@ -1917,6 +1952,160 @@ async function pageChange() {
   $('#cA').onchange = $('#cB').onchange = loadRes; if (rs.length) loadRes();
   $('#cRun').onclick = () => runJob('change', { a_id: +$('#cA').value, b_id: +$('#cB').value, mode: $('#cMode').value, target_res: $('#cRes').value,
     aoi_id: +$('#cAoi').value || null, name: $('#cName').value.trim() || null }, () => location.hash = '#/jobs');
+}
+
+// ================= เครื่องมือข้อมูล: สูตรคำนวณ · อนุกรมเวลา · รวมราสเตอร์ · รวมเวกเตอร์ =================
+const CALC_PRESETS = [
+  { k: 'ndvi', t: 'NDVI (พืชพรรณ)', e: '(NIR - RED) / (NIR + RED)', v: ['NIR', 'RED'] },
+  { k: 'ndwi', t: 'NDWI (น้ำ)', e: '(GREEN - NIR) / (GREEN + NIR)', v: ['GREEN', 'NIR'] },
+  { k: 'ndbi', t: 'NDBI (สิ่งปลูกสร้าง)', e: '(SWIR - NIR) / (SWIR + NIR)', v: ['SWIR', 'NIR'] },
+  { k: 'diff', t: 'ผลต่าง (B − A)', e: 'B - A', v: ['A', 'B'] },
+  { k: 'ratio', t: 'อัตราส่วน (A ÷ B)', e: 'A / B', v: ['A', 'B'] },
+  { k: 'thr', t: 'เกินเกณฑ์ → 1 / 0', e: 'where(A > 0.3, 1, 0)', v: ['A'] },
+];
+const TREND_STATS = { slope: 'แนวโน้มต่อปี (ความชันถดถอยเชิงเส้น)', change: 'เปลี่ยนแปลง (ปีท้าย − ปีแรก)', pct: 'เปลี่ยนแปลง % (เทียบปีแรก)', mean: 'ค่าเฉลี่ยทุกปี',
+  std: 'ส่วนเบี่ยงเบนมาตรฐาน (ความผันผวน)', max_year: 'ปีที่ค่าสูงสุด', min_year: 'ปีที่ค่าต่ำสุด', count_above: 'จำนวนปีที่ค่า > เกณฑ์ (เช่น ความถี่น้ำท่วม)', count_below: 'จำนวนปีที่ค่า < เกณฑ์' };
+const TOOLS = { tab: 'calc' };
+async function pageTools(q) {
+  const [all, aois, fr] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), api(ENGINE + '/api/folders').catch(() => ({ folders: [] }))]);
+  if (q.get('t')) TOOLS.tab = q.get('t');
+  const FOL = fr.folders || [];
+  const rs = all.filter(d => d.kind === 'raster' && !d.trashed_at), vs = all.filter(d => d.kind === 'vector' && !d.trashed_at);
+  const okR = rs.filter(d => d.value_type_confirmed);
+  const opt = d => `<option value="${d.id}">#${d.id} ${esc(d.name)} · ${esc((d.meta.res_label || '').split(' (')[0])}${(d.meta.count || 1) > 1 ? ` · ${d.meta.count} แบนด์` : ''}${d.value_type ? ' · ' + esc(VT_SHORT[d.value_type] || '') : ''}</option>`;
+  const aoiSel = id => `<label class="field"><span>พื้นที่ศึกษา</span><select id="${id}"><option value="">ทั้งขอบเขตที่ข้อมูลทับกัน</option>${aoiOptions(aois)}</select></label>`;
+  const T = [['calc', 'สูตรคำนวณ'], ['trend', 'อนุกรมเวลา / ตรวจการเปลี่ยนแปลง'], ['mosaic', 'รวมราสเตอร์'], ['vmerge', 'รวมเวกเตอร์']];
+  const v = $('#view');
+  v.innerHTML = head('Tools', 'เครื่องมือข้อมูล', 'คำนวณด้วยสูตร (NDVI ฯลฯ) · เทียบอนุกรมเวลาหลายปี · ต่อไฟล์ราสเตอร์ · รวมชั้นเวกเตอร์ — ผลลัพธ์เข้าคลังพร้อมประวัติไฟล์ต้นทาง')
+    + `<div class="seg" id="tTabs" style="margin-bottom:14px">${T.map(([k, t]) => `<button data-k="${k}" class="${TOOLS.tab === k ? 'on' : ''}">${t}</button>`).join('')}</div><div id="tBody"></div>`;
+  $$('#tTabs button').forEach(b => b.onclick = () => { TOOLS.tab = b.dataset.k; location.hash = '#/tools?t=' + b.dataset.k; });
+  const body = $('#tBody');
+  const resFill = async (sel, ids) => {
+    ids = ids.filter(Boolean);
+    if (!ids.length) { sel.innerHTML = '<option value="">— เลือกข้อมูลก่อน —</option>'; return; }
+    try {
+      const r = await api(`${ENGINE}/api/res-options?ids=${ids.join(',')}`);
+      const cur = sel.value;
+      sel.innerHTML = r.options.map(o => `<option value="${o.value}">${esc(o.label.split(' (')[0])} · ${fmt(o.px / 1e6, 1)} ล้านพิกเซล${o.is_source.length ? ' · = ข้อมูล' : ''}</option>`).join('');
+      sel.value = r.options.some(o => o.value === cur) ? cur : (r.options.filter(o => o.is_source.length).map(o => o.value)[0] || r.options[0]?.value);
+    } catch (e) { sel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
+  };
+  const done = () => location.hash = '#/jobs';
+  const checklist = (list, id) => `<input type="search" class="dsp-q" id="${id}Q" placeholder="ค้นหาชื่อชุดข้อมูล" style="margin-bottom:6px">
+    <div class="tool-list" id="${id}">${list.map(d => `<label class="tool-it" data-n="${esc(d.name.toLowerCase())}"><input type="checkbox" value="${d.id}"> <span>#${d.id} ${esc(d.name)}</span>
+      <span class="tiny muted">${esc((d.meta.res_label || d.meta.crs_name || '').split(' (')[0])}${d.meta.features ? ' · ' + fmt(d.meta.features, 0) + ' feature' : ''}</span></label>`).join('') || '<div class="small muted">ยังไม่มีข้อมูลประเภทนี้ในคลัง</div>'}</div>`;
+  const wireCheck = id => { $('#' + id + 'Q').oninput = e => { const t = e.target.value.trim().toLowerCase(); $$(`#${id} .tool-it`).forEach(x => x.classList.toggle('hide', !!t && !x.dataset.n.includes(t))); }; };
+  const checked = id => $$(`#${id} input:checked`).map(x => +x.value);
+
+  if (TOOLS.tab === 'calc') {
+    const st = TOOLS.calc || (TOOLS.calc = { expr: CALC_PRESETS[0].e, vars: CALC_PRESETS[0].v.map(k => ({ k, id: '', band: '' })) });
+    body.innerHTML = `<div class="card" style="max-width:920px">
+      <div class="grid-form"><label class="field full"><span>สูตรสำเร็จรูป</span><select id="cpPre"><option value="">— เขียนสูตรเอง —</option>${CALC_PRESETS.map(p => `<option value="${p.k}">${p.t} · ${esc(p.e)}</option>`).join('')}</select></label></div>
+      <h3 style="margin:12px 0 6px">ตัวแปร</h3><div id="cpVars"></div><button class="sm" id="cpAdd">${IC.plus}เพิ่มตัวแปร</button>
+      <div class="grid-form" style="margin-top:12px"><label class="field full"><span>สูตร</span><input type="text" id="cpExpr" class="mono" value="${esc(st.expr)}" spellcheck="false"></label></div>
+      <div class="tiny muted" style="margin:4px 0 12px">ใช้ได้: ตัวแปรด้านบน ตัวเลข + − * / ** % · เปรียบเทียบ &lt; &gt; == (ได้ 1/0) · and or · ฟังก์ชัน where(เงื่อนไข, ค่าจริง, ค่าเท็จ) abs sqrt log log10 exp min max clip round floor ceil · พิกเซลที่ตัวแปรใดไม่มีค่า หรือหารด้วย 0 → ไม่มีข้อมูล</div>
+      <div class="grid-form"><label class="field"><span>ความละเอียด</span><select id="cpRes"></select></label>${aoiSel('cpAoi')}
+        <label class="field"><span>ประเภทค่าผลลัพธ์</span><select id="cpVt"><option value="density">ต่อเนื่อง (ดัชนี อัตราส่วน)</option><option value="count">จำนวนนับ</option><option value="class">ชั้น (เช่น ผล 1/0)</option></select></label>
+        <label class="field"><span>ชื่อผลลัพธ์</span><input type="text" id="cpName" placeholder="เช่น NDVI 2024"></label></div>
+      <div class="tiny muted" style="margin:10px 0">ทุกตัวแปรปรับลงกริดเดียวกันตามประเภทค่าของมันก่อนคำนวณ (ต้องระบบพิกัดเดียวกัน) · ผลเป็น float32</div>
+      <button id="cpRun" class="primary">${IC.play}คำนวณ</button></div>`;
+    const bands = i => {
+      const x = st.vars[i], d = okR.find(r => r.id === x.id), n = d ? (d.meta.count || 1) : 1;
+      const b = $(`[data-b="${i}"]`);
+      b.innerHTML = Array.from({ length: n }, (_, j) => `<option value="${j + 1}">${j + 1}${d?.meta.descriptions?.[j] ? ' · ' + esc(d.meta.descriptions[j]) : ''}</option>`).join('');
+      b.value = x.band || (d?.band || 1);
+    };
+    const draw = () => {
+      $('#cpVars').innerHTML = st.vars.map((x, i) => `<div class="row tool-var">
+        <label class="field" style="width:110px"><span>ชื่อ</span><input type="text" class="mono" data-k="${i}" value="${esc(x.k)}"></label>
+        <label class="field" style="flex:1;min-width:220px"><span>ชุดข้อมูล</span><select data-d="${i}"></select></label>
+        <label class="field" style="width:110px"><span>แบนด์</span><select data-b="${i}"></select></label>
+        <button class="sm ghost danger" data-x="${i}" title="ลบตัวแปร">${IC.minus}</button></div>`).join('');
+      st.vars.forEach((x, i) => {
+        const s = $(`[data-d="${i}"]`);
+        dsPicker(s, okR, FOL, opt);
+        s.value = x.id; bands(i);
+        s.onchange = () => { x.id = +s.value || ''; x.band = ''; bands(i); resFill($('#cpRes'), st.vars.map(y => y.id)); };
+        $(`[data-k="${i}"]`).oninput = e => x.k = e.target.value.trim();
+        $(`[data-b="${i}"]`).onchange = e => x.band = +e.target.value || '';
+        $(`[data-x="${i}"]`).onclick = () => { st.vars.splice(i, 1); draw(); };
+      });
+    };
+    draw();
+    resFill($('#cpRes'), st.vars.map(y => y.id));
+    $('#cpPre').onchange = e => {
+      const p = CALC_PRESETS.find(x => x.k === e.target.value); if (!p) return;
+      $('#cpExpr').value = st.expr = p.e;
+      st.vars = p.v.map((k, i) => ({ k, id: st.vars[i]?.id || '', band: st.vars[i]?.band || '' })); draw();
+    };
+    $('#cpExpr').oninput = e => st.expr = e.target.value;
+    $('#cpAdd').onclick = () => { const used = new Set(st.vars.map(x => x.k)); st.vars.push({ k: 'ABCDEFGHIJKL'.split('').find(c => !used.has(c)) || 'X', id: '', band: '' }); draw(); };
+    $('#cpRun').onclick = () => {
+      const vars = {};
+      for (const x of st.vars) { if (!x.k || !x.id) return toast('ใส่ชื่อและเลือกชุดข้อมูลให้ครบทุกตัวแปร', true); vars[x.k] = { dataset_id: x.id, band: x.band || null }; }
+      runJob('calc', { expr: $('#cpExpr').value.trim(), vars, target_res: $('#cpRes').value, aoi_id: +$('#cpAoi').value || null,
+        value_type: $('#cpVt').value, name: $('#cpName').value.trim() || null }, done);
+    };
+  } else if (TOOLS.tab === 'trend') {
+    const st = TOOLS.trend || (TOOLS.trend = { items: [] });
+    const yearOf = d => (d.name.match(/(?:19|20)\d\d/g) || []).pop() || '';
+    body.innerHTML = `<div class="card" style="max-width:920px">
+      <div class="small muted" style="margin-bottom:10px">เลือกราสเตอร์ตัวแปรเดียวกันหลายปี (เช่น NDVI 2015–2024 · ประชากรทุก 5 ปี · ชั้นน้ำท่วมรายปี) แล้วใส่ปีของแต่ละชุด — ได้ราสเตอร์ 1 ชั้นตามสถิติที่เลือก</div>
+      <div id="trItems"></div>
+      <div class="row" style="margin:6px 0 14px"><select id="trPick"></select><button class="sm" id="trAdd">${IC.plus}เพิ่มปี</button></div>
+      <div class="grid-form"><label class="field full"><span>สถิติ</span><select id="trStat">${Object.entries(TREND_STATS).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select></label>
+        <label class="field" id="trThrF"><span>เกณฑ์</span><input type="number" step="any" id="trThr" placeholder="เช่น 0.5"></label>
+        <label class="field"><span>ต้องมีค่าอย่างน้อย (ปี)</span><input type="number" min="2" id="trMin" placeholder="ทุกปี"></label>
+        <label class="field"><span>ความละเอียด</span><select id="trRes"></select></label>${aoiSel('trAoi')}
+        <label class="field full"><span>ชื่อผลลัพธ์</span><input type="text" id="trName" placeholder="เช่น แนวโน้ม NDVI 2015–2024"></label></div>
+      <div class="tiny muted" style="margin:10px 0">แนวโน้มต่อปี = ความชันของเส้นถดถอย (หน่วยข้อมูล/ปี) ใช้ทุกปีที่มีค่า · เปลี่ยนแปลง/% ใช้ปีแรกกับปีท้าย · พิกเซลที่มีค่าน้อยกว่าที่กำหนด → ไม่มีข้อมูล</div>
+      <button id="trRun" class="primary">${IC.play}คำนวณ</button></div>`;
+    const draw = () => {
+      $('#trItems').innerHTML = st.items.length ? `<table><thead><tr><th>ปี</th><th>ชุดข้อมูล</th><th></th></tr></thead><tbody>${st.items.map((x, i) => {
+        const d = okR.find(r => r.id === x.id);
+        return `<tr><td style="width:110px"><input type="number" data-y="${i}" value="${esc(x.year)}" style="width:90px"></td><td>#${x.id} ${esc(d?.name || '?')}</td><td style="text-align:right"><button class="sm ghost danger" data-x="${i}">${IC.minus}</button></td></tr>`;
+      }).join('')}</tbody></table>` : '<div class="small muted">ยังไม่ได้เพิ่มชุดข้อมูล (อย่างน้อย 2 ปี)</div>';
+      $$('[data-y]').forEach(e => e.oninput = () => st.items[+e.dataset.y].year = e.value);
+      $$('#trItems [data-x]').forEach(e => e.onclick = () => { st.items.splice(+e.dataset.x, 1); draw(); resFill($('#trRes'), st.items.map(x => x.id)); });
+    };
+    dsPicker($('#trPick'), okR, FOL, opt, '— เลือกชุดข้อมูลเพื่อเพิ่ม —');
+    $('#trAdd').onclick = () => {
+      const id = +$('#trPick').value; if (!id) return;
+      if (st.items.some(x => x.id === id)) return toast('เพิ่มชุดนี้แล้ว', true);
+      st.items.push({ id, year: yearOf(okR.find(r => r.id === id)) });
+      st.items.sort((a, b) => (+a.year || 0) - (+b.year || 0)); draw(); resFill($('#trRes'), st.items.map(x => x.id));
+    };
+    const thr = () => $('#trThrF').classList.toggle('hide', !$('#trStat').value.startsWith('count_'));
+    $('#trStat').onchange = thr; thr();
+    draw(); resFill($('#trRes'), st.items.map(x => x.id));
+    $('#trRun').onclick = () => {
+      if (st.items.some(x => x.year === '' || x.year == null)) return toast('ใส่ปีให้ครบทุกชุด', true);
+      runJob('trend', { items: st.items.map(x => ({ dataset_id: x.id, year: +x.year })), stat: $('#trStat').value,
+        threshold: $('#trThr').value === '' ? null : +$('#trThr').value, min_years: +$('#trMin').value || null,
+        target_res: $('#trRes').value, aoi_id: +$('#trAoi').value || null, name: $('#trName').value.trim() || null }, done);
+    };
+  } else if (TOOLS.tab === 'mosaic') {
+    body.innerHTML = `<div class="card" style="max-width:920px">
+      <div class="small muted" style="margin-bottom:10px">ต่อไฟล์ราสเตอร์หลายแผ่น (เช่น ภาพดาวเทียมหลายแผ่นที่ติดกัน · ข้อมูลรายจังหวัด) เป็นไฟล์เดียว — ทุกไฟล์ต้องระบบพิกัดและจำนวนแบนด์เดียวกัน ใช้ความละเอียดของไฟล์แรก</div>
+      ${checklist(rs, 'msL')}
+      <div class="grid-form" style="margin-top:12px"><label class="field"><span>ส่วนที่ซ้อนกันใช้ค่าจาก</span><select id="msM"><option value="first">ไฟล์แรกที่มีค่า</option><option value="last">ไฟล์หลังสุด</option><option value="min">ค่าต่ำสุด</option><option value="max">ค่าสูงสุด</option></select></label>
+        <label class="field"><span>ชื่อผลลัพธ์</span><input type="text" id="msName" placeholder="เช่น ภาพรวมภาคเหนือ"></label></div>
+      <button id="msRun" class="primary" style="margin-top:12px">${IC.play}รวมราสเตอร์</button></div>`;
+    wireCheck('msL');
+    $('#msRun').onclick = () => runJob('mosaic', { dataset_ids: checked('msL'), method: $('#msM').value, name: $('#msName').value.trim() || null }, done);
+  } else {
+    body.innerHTML = `<div class="card" style="max-width:920px">
+      <div class="small muted" style="margin-bottom:10px">รวม shapefile / GeoPackage / GeoJSON หลายชั้นเป็นชั้นเดียว (GeoPackage) — แปลงพิกัดตามชั้นแรก · เพิ่มคอลัมน์ <span class="mono">source</span> บอกว่ามาจากชั้นไหน · ฟิลด์ที่ไม่ตรงกันเว้นว่าง</div>
+      ${checklist(vs, 'vmL')}
+      <div class="grid-form" style="margin-top:12px"><label class="field"><span>รวมรูป (dissolve)</span><select id="vmD"><option value="">ไม่รวม — เก็บทุกรูปตามเดิม</option><option value="all">รวมเป็นรูปเดียว</option><option value="field">รวมตามฟิลด์…</option></select></label>
+        <label class="field hide" id="vmFF"><span>ฟิลด์</span><input type="text" id="vmF" placeholder="เช่น prov_code หรือ source"></label>
+        <label class="field"><span>ชื่อผลลัพธ์</span><input type="text" id="vmName" placeholder="เช่น ขอบเขตรวม"></label></div>
+      <button id="vmRun" class="primary" style="margin-top:12px">${IC.play}รวมเวกเตอร์</button></div>`;
+    wireCheck('vmL');
+    $('#vmD').onchange = () => $('#vmFF').classList.toggle('hide', $('#vmD').value !== 'field');
+    $('#vmRun').onclick = () => runJob('vmerge', { dataset_ids: checked('vmL'), dissolve: !!$('#vmD').value,
+      dissolve_field: $('#vmD').value === 'field' ? $('#vmF').value.trim() : null, name: $('#vmName').value.trim() || null }, done);
+  }
 }
 
 // ================= V3: ระบบ (3.8) =================

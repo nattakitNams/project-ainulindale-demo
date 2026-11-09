@@ -122,15 +122,24 @@ def inspect(url, token=None):
         fts = [dict(id=_text(f, 'Name'), name=_text(f, 'Title') or _text(f, 'Name')) for f in _find_all(root, 'FeatureType') if _text(f, 'Name')]
         return dict(type='wfs', url=base, title=base, layers=fts, layer=q.get('typenames') or q.get('typename') or (fts[0]['id'] if fts else None),
                     version=root.attrib.get('version', '2.0.0'))
-    if re.search(r'\.(tif|tiff)$', base, re.I):
+    if re.search(r'\.(tif|tiff)(/content)?$', base, re.I):         # /content = ไฟล์บน Zenodo
         import rasterio
         try:
-            with rasterio.open('/vsicurl/' + url) as d:
+            with rasterio.Env(GDAL_HTTP_TIMEOUT=20, GDAL_HTTP_CONNECTTIMEOUT=10, GDAL_HTTP_MAX_RETRY=1), rasterio.open('/vsicurl/' + url) as d:   # เซิร์ฟเวอร์ช้า → ไม่ค้าง
                 info = dict(width=d.width, height=d.height, crs=str(d.crs), dtypes=list(d.dtypes), res=list(d.res),
                             overviews=d.overviews(1), tiled=d.profile.get('tiled'), bounds=list(d.bounds))
         except Exception as e:
-            raise LinkError(f'เปิด GeoTIFF ทางเน็ตไม่ได้: {e}')
-        return dict(type='cog', url=url, title=base.rsplit('/', 1)[-1], **info,
+            if 'range' not in str(e).lower():
+                raise LinkError(f'เปิด GeoTIFF ทางเน็ตไม่ได้: {e}')
+            # เซิร์ฟเวอร์ไม่รองรับอ่านบางส่วน (เช่น data.worldpop.org) → ใช้ได้แบบดาวน์โหลดทั้งไฟล์แล้วตัดในเครื่อง (ดูภาพผ่านลิงก์ไม่ได้)
+            try:
+                h = requests.head(url, headers=UA, timeout=30, allow_redirects=True)
+                size = int(h.headers.get('Content-Length') or 0) or None
+            except requests.RequestException:
+                size = None
+            return dict(type='cog', url=url, title=re.sub(r'/content$', '', base).rsplit('/', 1)[-1], range=False, file_bytes=size,
+                        note='เซิร์ฟเวอร์ไม่รองรับการอ่านบางส่วน — ดาวน์โหลดทั้งไฟล์แล้วตัดพื้นที่ในเครื่อง' + (f' (~{size / 1e6:,.0f} MB)' if size else ''))
+        return dict(type='cog', url=url, title=re.sub(r'/content$', '', base).rsplit('/', 1)[-1], **info,
                     note=None if info['tiled'] and info['overviews'] else 'ไม่ใช่ COG เต็มรูปแบบ (ไม่มีไทล์/overview) — ตัดตามพื้นที่จะช้า')
     if re.search(r'\.(geo)?json$', base, re.I) or 'f=geojson' in low or 'outputformat=application%2fjson' in low:
         return dict(type='geojson', url=url, title=base.rsplit('/', 1)[-1])

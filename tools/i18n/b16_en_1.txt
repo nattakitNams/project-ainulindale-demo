@@ -1,0 +1,129 @@
+Allowed: the variables above, numbers + − * / ** % · comparisons &lt; &gt; == (give 1/0) · and or · functions where(condition, if_true, if_false) abs sqrt log log10 exp min max clip round floor ceil · pixels where any variable has no value, or division by 0 → no data
+Join several raster tiles (e.g. adjacent satellite scenes · per-province data) into one file — all files must share the same CRS and band count; the first file's resolution is used
+Pick rasters of the same variable over several years (e.g. NDVI 2015–2024 · population every 5 years · yearly flood layers) and enter the year of each — the result is one raster for the chosen statistic
+Trend per year = slope of the regression line (data units/year) using every year with a value · change/% uses the first and last year · pixels with fewer values than required → no data
+Calculate with formulas (NDVI etc.) · compare multi-year time series · join raster tiles · merge vector layers — results go to the library with their source files recorded
+Merge several shapefile / GeoPackage / GeoJSON layers into one layer (GeoPackage) — reprojected to the first layer · adds a column
+All variables are brought onto one grid according to their value type before calculating (same CRS required) · output is float32
+No pixel could be calculated (data do not overlap / every pixel is nodata / the formula gives non-finite values)
+" is not allowed (English letters/digits/_ starting with a letter · not a function name)
+Only vectors can be merged (shapefile / GeoPackage / GeoJSON in the library)
+All datasets must use the same CRS — resample/reproject first
+years — every dataset is read together per tile, using more memory
+CRS differ — every layer will be reprojected to the first layer's (
+A time series needs at least 2 datasets (each with a year)
+telling which layer it came from · fields that do not match are left empty
+No datasets added yet (at least 2 years)
+Merge method must be first / last / min / max
+Enter a name and choose a dataset for every variable
+Enter a threshold for counting years
+Trend per year (linear regression slope)
+Duplicate years — each dataset must be a different year
+Standard deviation (variability)
+The formula must use at least 1 variable
+Time series / change detection
+Enter a formula (max 500 characters)
+All datasets must have the same number of bands
+No data of this type in the library yet
+Change (last year − first year)
+Choose at least 2 rasters
+Choose at least 2 vectors
+Continuous (index, ratio)
+Threshold (e.g. flood frequency)
+e.g. NDVI trend 2015–2024
+e.g. prov_code or source
+Change % (vs first year)
+No dissolve — keep every shape
+Whole overlapping extent of the data
+Choose a dataset to add
+" has no CRS (.prj)
+Require values in at least (years)
+Overlapping areas take values from
+Choose the output resolution
+" first (dataset page)
+) · requires values in at least
+must be a raster in the library
+Number of years with value < threshold
+Number of years with value > threshold
+NDBI (built-up)
+Define 1–12 variables
+Resolution of the first dataset
+Statistic must be one of
+Standard deviation
+Only rasters can be merged
+e.g. Northern region mosaic
+Search dataset name
+Class (e.g. 1/0 result)
+bands — no band
+First file with a value
+files · overlap method
+Dissolve
+Ratio (A ÷ B)
+Above threshold → 1 / 0
+Only numbers are allowed
+Enter a year for every dataset
+Output value type
+Data tools
+" — available variables
+Dissolve into one shape
+This dataset is already added
+Choose data first
+First file with a value
+NDVI (vegetation)
+Mean of all years
+Year of minimum
+Year of maximum
+Difference (B − A)
+Overlap
+e.g. NDVI 2024
+e.g. Merged boundary
+Use the last file
+" in the merged layers
+Number of years with value
+Formula syntax error
+Preset formula
+Variable name "
+Dissolve by field…
+Time series (
+Write your own formula
+No field "
+Unknown job
+_profile.md
+dataset #
+Merge rasters
+Merge vectors
+Add variable
+Last file
+Unknown "
+NDWI (water)
+Import to library
+Time series
+Tools
+Merging…
+Minimum
+Maximum
+Importable
+Formula calculator
+(position
+by field
+Remove variable
+e.g. 0.5
+(none)
+Add year
+" already
+(band
+clipped to
+Variable
+Dissolve
+Calculate
+dataset #
+every year
+app v
+Using "
+" has
+year (
+Formula
+Read
+Note
+Edit
+

@@ -4,7 +4,11 @@ const AIDock = (() => {
   const HKEY = 'ainu-ai-chat', OKEY = 'ainu-ai-open';
   let st = null, busy = false, hist = [];
   const ls = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
-  const md = s => esc(s).replace(/```([\s\S]*?)```/g, '<pre>$1</pre>').replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
+  // markdown อย่างง่าย + ลิงก์คลิกได้ ([ชื่อ](url) และ URL เปล่า) — เปิดแท็บใหม่ · รับเฉพาะ http(s)
+  const md = s => esc(s).replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
+    .replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+    .replace(/(^|[\s(>])(https?:\/\/[^\s<)]+)/g, '$1<a href="$2" target="_blank" rel="noopener noreferrer">$2</a>')
+    .replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>');
 
   async function refresh() { st = await api(ENGINE + '/api/ai'); return st; }
 
@@ -100,7 +104,23 @@ const AIDock = (() => {
   const save = () => ls.set(HKEY, hist.slice(-60));
 
   // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
-  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน' };
+  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', download: 'ดาวน์โหลดเข้าคลัง' };
+
+  // การ์ดดาวน์โหลดจาก Data hub: ไฟล์ · ปี · ขนาด · พื้นที่ · ประเภทค่า (เลือกได้) · สัญญาอนุญาต · แหล่ง
+  function dlCard(p) {
+    const a = p.args, f = a.file || {}, e = p.estimate || {};
+    const vt = p.state === 'pending'
+      ? `<select data-k="value_type"><option value="">ยังไม่ระบุ (ยืนยันทีหลัง)</option>${['count', 'density', 'class'].map(k => `<option value="${k}" ${a.value_type === k ? 'selected' : ''}>${VT_TH[k]}</option>`).join('')}</select>`
+      : (VT_TH[a.value_type] || 'ยังไม่ระบุ');
+    const rows = [['ชุดข้อมูล', `<span translate="no">${esc(a.title || '')}</span>`], ['ไฟล์', `<span translate="no">${esc(f.name || '')}</span>${f.year ? ` · ปี ${f.year}` : ''}${f.size_mb ? ` · ${fmt(f.size_mb, 1)} MB` : ''}`],
+      ['พื้นที่', a.aoi_name ? `ตัดตามกรอบ <span translate="no">${esc(a.aoi_name)}</span>` : 'ทั้งไฟล์'],
+      ['ประเภทค่า', `<span class="ai-res">${vt}</span>`], ['ชื่อในคลัง', `<span translate="no">${esc(a.name || '')}</span>`]];
+    if (e.ok) rows.push(['ข้อมูลไฟล์', `${esc(e.crs || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซลทั้งไฟล์` : ''}${e.note ? `<br><span class="warn-t">${esc(e.note)}</span>` : ''}`]);
+    else if (e.error) rows.push(['ข้อมูลไฟล์', `<span class="warn-t">เปิดหัวไฟล์ไม่ได้: ${esc(e.error)}</span>`]);
+    if (a.license) rows.push(['สัญญาอนุญาต', esc(a.license)]);
+    if (a.source) rows.push(['แหล่ง', `<a href="${esc(a.source)}" target="_blank" rel="noopener">เปิดหน้าต้นทาง</a>`]);
+    return `<table class="kv ai-kv">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('')}</table>`;
+  }
   const isBiv = p => p.action === 'run_job' && ['bivariate', 'hexbiv'].includes(p.args?.kind);
   const METHODS = [['quantile', 'ควอนไทล์'], ['equal', 'ช่วงเท่ากัน'], ['breaks', 'กำหนดเกณฑ์เอง'], ['degurba', 'DEGURBA']];
 
@@ -160,7 +180,8 @@ const AIDock = (() => {
       ? (p.edited ? '<div class="tiny warn-t">แก้ค่าแล้ว — ตรวจอีกครั้งตอนรัน</div>' : e.ok ? `<div class="tiny">${esc(e.resolution || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซล` : ''}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>`
         + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
         : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`)
-      : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>` : '';
+      : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>`
+      : p.action === 'download' ? dlCard(p) : '';
     const P = p.args?.params || {};
     const resEd = p.state !== 'pending' || p.action !== 'run_job' ? ''
       : p.res_options?.length ? `<label class="ai-res tiny">ความละเอียด <select data-k="target_res">${p.res_options.map(o => `<option value="${esc(o.value)}" ${String(o.value) === String(P.target_res) ? 'selected' : ''}>${esc(o.label)} · ${fmt(o.pixels / 1e6, 1)} ล้านพิกเซล${o.same_as_source ? ' · = ข้อมูล' : ''}</option>`).join('')}</select></label>`
@@ -180,6 +201,7 @@ const AIDock = (() => {
 
   function onEdit(p, el) {
     const k = el.dataset.k;
+    if (p.action === 'download') { p.args[k] = el.value || null; p.edited = true; save(); drawMsgs(); return; }   // ประเภทค่าของไฟล์ที่จะโหลด
     if (!el.dataset.ax) {                                   // ค่าระดับงาน: ความละเอียด / ขนาดหกเหลี่ยม
       p.args.params[k] = k === 'size_km' ? +el.value : el.value;
       p.edited = true; save(); drawMsgs(); return;
@@ -215,7 +237,8 @@ const AIDock = (() => {
     }
     p.state = 'running'; drawMsgs();
     try {
-      const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id, params: p.edited ? p.args.params : undefined } });
+      const edited = !p.edited ? undefined : p.action === 'download' ? { value_type: p.args.value_type || null } : p.args.params;
+      const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id, params: edited } });
       p.state = 'done'; p.result = r.message;
       hist.push({ role: 'event', content: r.message + (r.job_id ? ' — กำลังประมวลผล' : '') });
       if (r.job_id) watchJob(r.job_id);
@@ -226,15 +249,30 @@ const AIDock = (() => {
   }
 
   // ติดตามงานที่รันจากข้อเสนอ → แจ้งผลในแชต (ผลนี้ส่งให้ AI ในรอบถัดไปด้วย)
+  // งานที่ผู้ช่วยเสนอเสร็จครบทุกงาน → แชตเดินต่อเอง 1 รอบ: ผู้ช่วยเขียนโน้ตประวัติชุดใหม่ แล้วสรุป/ถามขั้นต่อไป (เช่น ตั้งค่าไบแวเรียต)
+  const watching = new Set();
+  async function autoContinue() {
+    if (busy || !st?.connected || !st?.enabled) return;
+    busy = true; drawMsgs();
+    try {
+      const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/' } });
+      hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
+    } catch (e) { hist.push({ role: 'error', content: e.message }); }
+    busy = false; save(); drawMsgs();
+  }
+
   function watchJob(id) {
+    watching.add(id);
     const tick = async () => {
       let j;
       try { j = (await api(ENGINE + '/api/jobs')).find(x => x.id === id); } catch { return setTimeout(tick, 5000); }
-      if (!j) return;
+      if (!j) { watching.delete(id); return; }
       if (['queued', 'running', 'cancelling'].includes(j.status)) return setTimeout(tick, 3000);
       const did = j.result?.dataset_id;
       hist.push({ role: 'event', content: j.status === 'done' ? `งาน #${id} เสร็จแล้ว${did ? ` → ผลลัพธ์ชุดข้อมูล #${did}` : ''}` : `งาน #${id} ${j.status === 'failed' ? 'ล้มเหลว: ' + (j.error || '') : j.status}`, link: did ? `#/ds/${did}` : null });
+      watching.delete(id);
       save(); drawMsgs();
+      if (!watching.size) autoContinue();
     };
     setTimeout(tick, 2000);
   }

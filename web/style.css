@@ -508,6 +508,13 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .crumb.on { color: var(--text); font-weight: 600; }
 .crumbs .sep { color: var(--muted); }
 .crumb.over, .folder.over { border-color: var(--lav); background: rgba(195, 182, 255, .14); }
+/* ประวัติชุดข้อมูล */
+.prof-note { padding: 10px 12px; border-radius: 10px; background: rgba(246, 227, 161, .06); border: 1px solid rgba(246, 227, 161, .18); margin-bottom: 10px; }
+.prof-note .prof-text { white-space: pre-wrap; margin-top: 4px; line-height: 1.55; }
+.prof-note.ai { background: rgba(195, 182, 255, .07); border-color: rgba(195, 182, 255, .25); }
+.prof-note b svg { width: 13px; height: 13px; vertical-align: -2px; margin-right: 4px; }
+#profBody h3 { font-size: 13px; margin: 14px 0 6px; }
+#profBody .kv td:first-child { white-space: nowrap; width: 1%; }
 /* เมนูคลิกขวา: ความทึบเฉพาะสี */
 .op-menu { position: fixed; z-index: 2000; width: 230px; padding: 12px 14px; background: var(--elev); border: 1px solid var(--line-2); border-radius: var(--r); box-shadow: var(--shadow); }
 .op-menu input[type=range] { flex: 1; }
@@ -581,3 +588,10 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .folder .fa ~ .tiny, .folder:hover .tiny { }
 .folder:hover > .tiny { display: none; }
 .ds[draggable="true"] { cursor: grab; }
+
+/* เครื่องมือข้อมูล */
+.tool-list { max-height: 320px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; padding: 6px; }
+.tool-it { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 8px; cursor: pointer; }
+.tool-it:hover { background: rgba(255,255,255,.04); }
+.tool-it > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-var { margin-bottom: 6px; align-items: flex-end; flex-wrap: wrap; }

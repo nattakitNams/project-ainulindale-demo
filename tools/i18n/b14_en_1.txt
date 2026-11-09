@@ -1,0 +1,199 @@
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+On Google Earth Engine — the app cannot download it (export it as GeoTIFF with a GEE account, then add it to the library)
+
+
+
+
+
+
+
+
+
+This URL is not in the downloadable files of this dataset
+The server is slow — the file header could not be read within 25 seconds. The download still works (the background job waits longer)
+
+
+
+
+
+
+
+No files the app can download — open the source link, download it yourself, then add it to the library
+
+The server does not support partial reads — the whole file is downloaded, then clipped locally
+
+
+
+
+
+
+
+
+No note yet — record what this data is, what it is used for, and any caveats
+
+
+
+
+MB (server does not support partial reads) → clipped locally
+
+
+
+e.g. what this data is, units of the values, what it is used for, caveats
+
+
+On Planetary Computer — the app cannot download it yet
+
+(arc-seconds for geographic data / metres for projected)
+
+
+
+
+
+
+
+
+
+
+
+Continuous (area-weighted mean)
+
+
+) — it will be added to the library when done
+Count (totals preserved)
+
+## What file / key format
+Not set (confirm later)
+
+lineage.json (raw)
+
+## Datasets made from this one
+
+What file / key format
+
+## Note from the AI assistant
+Class / code (majority)
+Datasets made from this one
+(displayed values already scaled)
+Target resolution
+user edited the card
+
+) · confirmed by user
+
+Downloaded the whole file
+Download to library
+
+Map service link
+Cannot read the file header
+Note from the AI assistant
+
+Dataset profile
+Delete the assistant's note
+Started downloading "
+Dataset note
+value type used
+
+## Created by job
+### Settings
+Data hub item
+pixels (whole file)
+Open source page
+### Source datasets
+Hexagon size
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

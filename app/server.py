@@ -259,6 +259,17 @@ def ai_confirm():
         raise ApiError(str(e))
 
 
+@app.route('/api/hub/import', methods=['POST'])
+def hub_import():
+    """ปุ่ม "นำเข้าคลัง" ในหน้า Data hub — ไฟล์ต้องอยู่ในรายการนำเข้าได้ของชุดนั้น"""
+    from . import ai_tools
+    b = request.get_json(force=True)
+    try:
+        return jsonify(ai_tools.start_hub_import(str(b.get('hub_key')), str(b.get('url')), b.get('name'), b.get('aoi_id'), b.get('value_type') or None))
+    except ai_tools.ToolError as e:
+        raise ApiError(str(e))
+
+
 @app.route('/api/ai/reject', methods=['POST'])
 def ai_reject():
     from . import ai_tools
@@ -340,6 +351,39 @@ def browse():
         return jsonify(paths=json.loads(r.stdout.strip().splitlines()[-1]))
     except Exception:
         return jsonify(paths=[], error=r.stderr[-500:])
+
+
+@app.route('/api/datasets/<int:did>/profile')
+def ds_profile(did):
+    """ประวัติชุดข้อมูล: ไฟล์อะไร รูปแบบสำคัญ มาจากไหน พ่อแม่/ลูก ค่าที่ตั้ง โน้ต"""
+    from . import profile
+    ds_or_404(did)
+    return jsonify(profile.build(did))
+
+
+@app.route('/api/datasets/<int:did>/profile.md')
+def ds_profile_md(did):
+    from urllib.parse import quote
+    from . import profile
+    p = profile.build(ds_or_404(did)['id'])
+    name = export.slug(p['name'], 60) + '_ประวัติ.md'
+    return Response(profile.as_markdown(p), mimetype='text/markdown; charset=utf-8',
+                    headers={'Content-Disposition': f"attachment; filename*=UTF-8''{quote(name)}"})
+
+
+@app.route('/api/datasets/<int:did>/note', methods=['POST'])
+def ds_note(did):
+    """โน้ตของผู้ใช้ (ว่าง = ลบ) · ลบโน้ตของ AI ได้ด้วย ai=false"""
+    d = ds_or_404(did)
+    b = request.get_json(force=True)
+    m = dict(d['meta'])
+    if 'text' in b:
+        t = (b.get('text') or '').strip()[:5000]
+        m['note_user'] = t or None
+    if b.get('clear_ai'):
+        m.pop('note_ai', None)
+    db.update('datasets', did, meta=m)
+    return jsonify(ok=True)
 
 
 @app.route('/api/datasets/<int:did>')
@@ -1056,6 +1100,12 @@ def _confirmed_raster(did):
 def validate_job(kind, p):
     """ตรวจค่าที่ตั้ง + ประเมินขนาดผลลัพธ์ก่อนรัน"""
     warns = []
+    if kind in ('calc', 'trend', 'mosaic', 'vmerge'):
+        from . import ops_tools
+        if kind in ('calc', 'trend'):
+            for v in (p.get('vars') or {}).values() if kind == 'calc' else (p.get('items') or []):
+                _confirmed_raster(v['dataset_id'])
+        return ops_tools.estimate(kind, p)
     if kind in ('hex', 'hexbiv'):
         from . import ops_hex
         if kind == 'hexbiv':
@@ -1231,6 +1281,14 @@ def create_job():
         title = p.get('name') or f'แปลงเป็นหกเหลี่ยม {res}: ' + ', '.join(db.get('datasets', int(i))['name'] for i in p['dataset_ids'][:3]) + aoi_txt
     elif kind == 'hexbiv':
         title = (p.get('name') or 'ไบแวเรียตหกเหลี่ยม') + f' · {res}{aoi_txt}'
+    elif kind == 'calc':
+        title = p.get('name') or f'คำนวณ: {p.get("expr", "")[:50]} · {res}{aoi_txt}'
+    elif kind == 'trend':
+        title = p.get('name') or f'อนุกรมเวลา ({p.get("stat")}) {len(p.get("items") or [])} ปี · {res}{aoi_txt}'
+    elif kind == 'mosaic':
+        title = p.get('name') or f'รวมราสเตอร์ {len(p.get("dataset_ids") or [])} ไฟล์'
+    elif kind == 'vmerge':
+        title = p.get('name') or f'รวมเวกเตอร์ {len(p.get("dataset_ids") or [])} ชั้น'
     else:
         title = (p.get('name') or 'ไบแวเรียต') + f' · {res}{aoi_txt}'
     jid = jobs.submit(kind, p, title)

@@ -47,10 +47,23 @@ def op_download(job, P, log):
     elif t == 'cog':
         src = '/vsicurl/' + m['url']
         outp = out_dir / f'{name}.tif'
+        tmp = None
+        if bbox and m.get('range') is False:                 # เซิร์ฟเวอร์ไม่รองรับอ่านบางส่วน → โหลดทั้งไฟล์มาก่อน แล้วตัดในเครื่อง
+            tmp = out_dir / '_download_full.tif'
+            r = requests.get(m['url'], headers=links.UA, stream=True, timeout=60)
+            r.raise_for_status()
+            size, got = int(r.headers.get('Content-Length') or 0), 0
+            with open(tmp, 'wb') as f:
+                for c in r.iter_content(1 << 20):
+                    f.write(c)
+                    got += len(c)
+                    P(min(0.5, got / size * 0.5) if size else 0.25, f'ดาวน์โหลดทั้งไฟล์ {got / 1e6:,.1f}{f" / {size / 1e6:,.1f}" if size else ""} MB')
+            log(f'ดาวน์โหลดทั้งไฟล์ {got / 1e6:,.1f} MB (เซิร์ฟเวอร์ไม่รองรับอ่านบางส่วน) → ตัดพื้นที่ในเครื่อง')
+            src = str(tmp)
         if bbox:
             from rasterio.warp import transform_bounds
             from rasterio.windows import from_bounds
-            with rasterio.open(src) as d:
+            with rasterio.Env(GDAL_HTTP_TIMEOUT=90, GDAL_HTTP_CONNECTTIMEOUT=30, GDAL_HTTP_MAX_RETRY=4, GDAL_HTTP_RETRY_DELAY=3), rasterio.open(src) as d:
                 bb = transform_bounds('EPSG:4326', d.crs, *bbox) if d.crs else bbox
                 win = from_bounds(*bb, d.transform).round_offsets().round_lengths()
                 win = win.intersection(rasterio.windows.Window(0, 0, d.width, d.height))
@@ -60,9 +73,15 @@ def op_download(job, P, log):
                 log(f'ตัดตามพื้นที่ศึกษา: {int(win.width):,} × {int(win.height):,} พิกเซล')
                 with rasterio.open(outp, 'w', **prof) as o:
                     o.scales, o.offsets = d.scales, d.offsets          # คง scale/offset ของต้นฉบับ (ค่าดิบเหมือนเดิม)
+                    H, step = int(win.height), 2048                    # อ่าน/เขียนทีละแถบ — ไฟล์ระดับประเทศไม่ต้องโหลดทั้งภาพเข้าหน่วยความจำ
                     for b in range(1, d.count + 1):
-                        o.write(d.read(b, window=win), b)
-                        P(0.9 * b / d.count, f'แบนด์ {b}/{d.count}')
+                        for r0 in range(0, H, step):
+                            h = min(step, H - r0)
+                            w = rasterio.windows.Window(win.col_off, win.row_off + r0, win.width, h)
+                            o.write(d.read(b, window=w), b, window=rasterio.windows.Window(0, r0, int(win.width), h))
+                            P((0.5 if tmp else 0) + (0.4 if tmp else 0.9) * ((b - 1) + (r0 + h) / H) / d.count, f'แบนด์ {b}/{d.count} · แถว {r0 + h:,}/{H:,}')
+            if tmp:
+                tmp.unlink(missing_ok=True)                    # เก็บเฉพาะส่วนที่ตัดแล้ว
         else:
             r = requests.get(m['url'], headers=links.UA, stream=True, timeout=60)
             size = int(r.headers.get('Content-Length') or 0)
@@ -87,9 +106,13 @@ def op_download(job, P, log):
                note='ไม่บันทึกโทเคน' if token else None)
     (out_dir / 'source.json').write_text(json.dumps(src, ensure_ascii=False, indent=1), encoding='utf-8')
     from . import catalog
+    vt = p.get('value_type') if t == 'cog' and p.get('value_type') in ('count', 'density', 'class') else None   # ผู้ใช้ยืนยันในการ์ดแล้ว
     did = catalog._insert(str(outp), m['url'], True, 'raster' if t == 'cog' else 'vector', None,
                           p.get('name') or f"{lk['name']} (ดาวน์โหลด {datetime.now():%Y-%m-%d})",
-                          [f'ดาวน์โหลดจาก {m["url"]} เมื่อ {src["downloaded_at"]}'], role='input', job_id=job['id'])
+                          [f'ดาวน์โหลดจาก {m["url"]} เมื่อ {src["downloaded_at"]}'], role='input', job_id=job['id'], value_type=vt)
+    if p.get('purpose') or p.get('hub_key'):                       # ที่มาจาก Data hub + วัตถุประสงค์ (ผู้ช่วย AI)
+        d0 = db.get('datasets', did)
+        db.update('datasets', did, meta=dict(d0['meta'], hub_key=p.get('hub_key'), purpose=p.get('purpose')))
     log(f'บันทึก {outp}')
     return dict(output=str(outp), dataset_id=did, summary=dict(features=n or None, source=src))
 

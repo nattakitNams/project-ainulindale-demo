@@ -198,6 +198,19 @@ TOOLS_PROPOSE = """
   ความละเอียดที่เหมาะกับระดับการตัดสินใจ, พื้นที่ และรูปแบบรายงาน/ภาษาสำหรับผู้ชมนั้น
 - ใส่ "purpose" (วัตถุประสงค์ 1 ประโยค) ในทุกข้อเสนองานและรายงาน — จะถูกบันทึกในที่มาของผลลัพธ์และใช้ในรายงาน
 - ชื่อเรื่อง/คำอธิบายรายงานต้องสื่อวัตถุประสงค์และข้อค้นพบ ไม่ใช่ชื่อไฟล์
+หาข้อมูลที่ยังไม่มีในคลัง (เช่น ผู้ใช้อยากวิเคราะห์ night light กับประชากร):
+1) list_datasets ดูว่ามีในคลังแล้วหรือยัง · ยังไม่มี → search_data_hub หลายคำ (อังกฤษสั้น ๆ เช่น "population", "worldpop", "nighttime lights", "viirs") แล้ว get_hub_item ชุดที่น่าใช้
+2) สรุปตัวเลือกให้ผู้ใช้เป็นข้อ ๆ: ชื่อ · แหล่ง · ปีที่มี (years) · ความละเอียด · ขอบเขต · สัญญาอนุญาต · แอปนำเข้าให้ได้ไหม (files_app_can_import / downloadable_files) — แนะนำชุด/ปีที่เหมาะกับวัตถุประสงค์
+   ถ้าผู้ใช้ขอ "ลิงก์" หรือแอปนำเข้าเองไม่ได้: ให้ลิงก์ไฟล์ตรงที่กดแล้วดาวน์โหลดทันที (url ใน downloadable_files / direct_links_app_cannot_import) เป็นรายการตามปีที่ขอ — ห้ามให้แค่ลิงก์หน้าเว็บถ้ามีลิงก์ไฟล์ตรง
+   ชุดบน GEE ไม่มีลิงก์ไฟล์ตรง: บอกตรง ๆ + ให้ gee_id (ใช้ ee.ImageCollection('<gee_id>') ส่งออกเอง) และเสนอชุดอื่นที่มีไฟล์ตรง · ห้ามแต่ง URL เอง ใช้เฉพาะที่ได้จากเครื่องมือ
+   (สองชุดที่จะไขว้ควรเป็นปีเดียวกันหรือใกล้กันที่สุด · บอกตรง ๆ ถ้าชุดอยู่บน GEE/Planetary Computer ซึ่งแอปโหลดเองไม่ได้ แล้วเสนอชุดอื่นที่โหลดได้)
+3) ถามพื้นที่: ค่าแนะนำ = ประเทศไทย (พื้นที่ศึกษาพื้นฐาน) แต่ถามว่าจะเอาเฉพาะบางจังหวัดไหม — ถ้าใช่ propose_create_study_area จากชั้นขอบเขตจังหวัด GISTDA (L05_Province ดูฟิลด์ชื่อจังหวัดด้วย get_dataset)
+   ถามรวมในคำถามเดียวกับการเลือกชุด/ปี ถ้าทำได้
+4) ผู้ใช้เลือกแล้ว → propose_download_data ทีละไฟล์ (ตัดตาม aoi_id, ใส่ value_type ถ้าความหมายชัด เช่น WorldPop จำนวนคน = count, night light radiance = density) → ผู้ใช้กดยืนยัน
+5) รอ "[แจ้งจากแอป] งาน #N เสร็จ → ชุด #M" (หรือ job_status) แล้วค่อยออกแบบไบแวเรียตตามวัตถุประสงค์ ถามค่าที่ยังไม่ชัด (คลาส/วิธีแบ่ง/ความละเอียด) → propose_run_job
+ประวัติชุดข้อมูล: ทุกครั้งที่ชุดใหม่เข้าคลังจากงานที่คุณเสนอ (ดาวน์โหลด / ไบแวเรียต / แปลง) ให้ write_dataset_note ทันทีที่รู้ว่าเสร็จ — 2–5 ประโยค:
+  เป็นข้อมูลอะไร · หน่วย/ความหมายของค่า (เช่น คน/พิกเซล, radiance nW/cm²/sr) · แหล่งและปี · ทำเพื่อวัตถุประสงค์อะไร · ข้อควรระวัง (เช่น ปีไม่ตรงกัน, ความแม่นยำเทียม)
+  ไฟล์รูปแบบ/พ่อแม่/ค่าที่ตั้ง แอปบันทึกให้เองแล้ว (get_dataset_profile) — โน้ตเน้นความหมายที่คนอ่านต้องรู้ · ผู้ใช้ถามที่มาของชุดไหน ให้ใช้ get_dataset_profile
 ถามก่อนเสนองาน — ห้ามเดาเองเงียบ ๆ เมื่อผู้ใช้ยังไม่ได้ระบุสิ่งที่มีผลมาก:
 - ความละเอียดผลลัพธ์ (หรือ size_km ของหกเหลี่ยม): เรียก resolution_options แล้วเสนอ 3–5 ตัวเลือกที่สมเหตุสมผล พร้อมขนาดจริง (≈ ม./กม.) และจำนวนพิกเซล แนะนำ 1 ค่าพร้อมเหตุผลสั้น ๆ
   (ละเอียดกว่าข้อมูลต้นทาง = ความแม่นยำเทียม · หยาบมาก = เสียรายละเอียด · ใหญ่มาก = ช้า) แล้วรอผู้ใช้ตอบ
@@ -223,7 +236,14 @@ TOOLS_PROPOSE = """
 - hex: {"dataset_ids":[7],"size_km":1,"aoi_id":2,"name":"pop_hex_1km"}
 - change: {"a_id":3,"b_id":7,"mode":"diff","target_res":"<value>","aoi_id":2} · mode: diff | pct | transition (ข้อมูลชั้น)
 - vgrid: {"dataset_ids":[7],"target_res":"<value>","aoi_id":2}
-- download (ลิงก์ → ไฟล์): {"link_id":12,"aoi_id":2}"""
+- download (ลิงก์ในคลัง → ไฟล์): {"link_id":12,"aoi_id":2} — ไฟล์จาก Data hub ใช้ propose_download_data แทน
+- calc (สูตรคำนวณราสเตอร์ เช่น NDVI): {"expr":"(NIR - RED) / (NIR + RED)","vars":{"NIR":{"dataset_id":8,"band":4},"RED":{"dataset_id":8,"band":3}},"target_res":"<value>","aoi_id":2,"value_type":"density","name":"NDVI 2024"}
+  ตัวแปรตั้งชื่อเองได้ (อังกฤษ/ตัวเลข/_) ชี้ชุด+แบนด์ · สูตรใช้ได้ + - * / ** % < > == and or และ where abs sqrt log log10 exp min max clip round floor ceil เท่านั้น
+  ภาพหลายแบนด์: ดู get_dataset (meta.count / descriptions) ว่าแบนด์ไหนคือ RED/NIR — ไม่แน่ใจให้ถามผู้ใช้ · ผล 1/0 ใช้ value_type "class"
+- trend (อนุกรมเวลา / ตรวจการเปลี่ยนแปลงหลายปี): {"items":[{"dataset_id":3,"year":2015},{"dataset_id":4,"year":2020},{"dataset_id":5,"year":2024}],"stat":"slope","target_res":"<value>","aoi_id":2,"name":"แนวโน้ม NDVI"}
+  stat: slope (แนวโน้มต่อปี) | change (ปีท้าย−ปีแรก · ปีกลางขาดได้) | pct | mean | std | max_year | min_year | count_above / count_below (+ "threshold") · "min_years" ไม่บังคับ (ค่าเริ่ม = ต้องมีทุกปี) · 2 ปีเทียบกันใช้ change ก็ได้
+- mosaic (ต่อราสเตอร์หลายแผ่นเป็นไฟล์เดียว · CRS/จำนวนแบนด์เดียวกัน): {"dataset_ids":[3,4,5],"method":"first","name":"..."} · method first | last | min | max
+- vmerge (รวมเวกเตอร์หลายชั้น → GeoPackage): {"dataset_ids":[5,6],"dissolve":false,"dissolve_field":null,"name":"..."} · dissolve true + ไม่ใส่ฟิลด์ = รวมเป็นรูปเดียว"""
 
 MAX_STEPS = 8
 
@@ -307,6 +327,7 @@ def chat(messages, page=None):
     if not status()['connected']:
         raise AiError('ยังไม่ได้เชื่อมต่อ')
     p, key, model, mode = c['provider'], _key(c), c.get('model'), c.get('mode') or 'propose'
+    ai_tools.CURRENT_MODEL['m'] = model                       # โน้ตที่ AI เขียนระบุรุ่นที่เขียน
     msgs = _norm(messages)
     system = SYSTEM + (TOOLS_PROPOSE if mode == 'propose' else TOOLS_READ) + '\n\n' + _context() + (f'\nผู้ใช้อยู่ที่หน้า: {page}' if page else '')
     specs = ai_tools.specs(mode)

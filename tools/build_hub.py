@@ -337,6 +337,35 @@ def ckan_harvest(portal, fetch):
     return recs
 
 
+def zenodo_harvest(z, fetch):
+    """ชุดข้อมูลบน Zenodo (เวอร์ชันล่าสุดของ record) → รายการพร้อมไฟล์ดาวน์โหลดตรงทีละไฟล์ (เช่น ทีละปี)
+    คำอธิบาย = ที่ผู้เผยแพร่เขียนใน Zenodo (ไม่เขียนเอง) · ไฟล์ /content รองรับอ่านบางส่วน (range) → ตัดเฉพาะพื้นที่ศึกษาได้"""
+    g = fetch.get(f'https://zenodo.org/api/records/{z["record"]}/versions/latest', 'json')
+    body = g.get('body') or {}
+    md = body.get('metadata') or {}
+    if not md:
+        print(f'  Zenodo {z["record"]}: ดึงไม่ได้ ({g.get("status")})')
+        return []
+    pat = re.compile(z.get('files') or r'\.(tif|tiff)$', re.I)
+    files = sorted([f for f in body.get('files') or [] if pat.search(f['key'])], key=lambda f: f['key'])
+    resources = [dict(name=f['key'], format='GeoTIFF' if re.search(r'\.tiff?$', f['key'], re.I) else f['key'].rsplit('.', 1)[-1].upper(),
+                      url=f['links']['self'], size=f.get('size')) for f in files]
+    text = html.unescape(re.sub(r'<[^>]+>', ' ', md.get('description') or ''))
+    text = re.sub(r'[ \t]+', ' ', re.sub(r'\s*\n\s*', '\n', text)).strip()
+    creators = [c.get('name') for c in md.get('creators') or [] if c.get('name')]
+    lic = (md.get('license') or {}).get('id') or ''
+    page = body.get('links', {}).get('self_html') or f'https://zenodo.org/records/{body.get("id")}'
+    rec = dict(src='ckan', platform='Zenodo', id=str(body.get('id')), title=md.get('title') or z['record'], provider=', '.join(creators[:3]),
+               og=creators[:3], type='raster', type_raw='GeoTIFF', license=lic, lic='open' if lic.lower().startswith(('cc-by', 'cc0', 'odbl')) else 'check',
+               url=page, meta_url=f'https://zenodo.org/api/records/{body.get("id")}', keywords=[str(k) for k in md.get('keywords') or []][:20],
+               cats_src=z.get('cats') or [], updated=md.get('publication_date'), resources=resources[:80], n_res=len(resources),
+               cover=z.get('cover') or 'global', source_page=page, citation=f'DOI {body.get("doi")}' if body.get('doi') else None)
+    rec['desc'] = dict(text=text[:6000], fmt='text', source='คำอธิบายที่ผู้เผยแพร่เขียนใน Zenodo', source_url=page,
+                       license_note='ข้อความโดยผู้เผยแพร่') if text else None
+    print(f'  Zenodo {z["record"]} → {body.get("id")} {md.get("version") or ""}: {len(resources)} ไฟล์')
+    return [rec]
+
+
 def _orgs(rec):
     """หน่วยงานของชุด (ใช้กรอง): STAC = ผู้ผลิต/ผู้ให้สิทธิ์ (ไม่นับผู้โฮสต์) · อื่น = ช่องผู้ผลิตในแคตตาล็อก"""
     names = [p['name'] for p in (rec.get('providers') or []) if p.get('name') and set(p.get('roles') or []) - {'host'}]
@@ -388,6 +417,12 @@ def build(src, fetch):
             rec['key'] = re.sub(r'[^0-9a-zก-๙:._-]+', '-', ('ckan:' + pt['base'].split('//')[1].split('.')[0] + ':' + rec['id']).lower()).strip('-')
             recs.append(rec)
     print(f'  ชุดซ้ำข้ามพอร์ทัล (เก็บพอร์ทัลของหน่วยงาน + ลิงก์สำเนา): {mirrored}')
+    for z in cur.get('zenodo', []):                      # ชุดเผยแพร่บน Zenodo ที่ดาวน์โหลดตรงได้ (เช่น night light รายปี)
+        for rec in zenodo_harvest(z, fetch):
+            text = ' '.join([rec['title'], rec['provider'], ' '.join(rec['keywords'])])
+            rec['themes'] = themes_for(rec['cats_src'], text)
+            rec['key'] = f'zenodo:{z["record"]}'
+            recs.append(rec)
     for (kind, r, url, k), g in zip(jobs, got):
         body = g.get('body')
         rec = dict(platform={'pc': 'Microsoft Planetary Computer', 'gee': 'Google Earth Engine'}.get(kind, r.get('แพลตฟอร์ม') or ''),
@@ -460,6 +495,23 @@ def build(src, fetch):
     return recs, stats
 
 
+IMPORT_PAT = re.compile(r'\.(tif|tiff)(/content)?(\?|$)|\.(geo)?json(\?|$)', re.I)                     # แอปนำเข้า/ตัดพื้นที่เองได้
+FILE_PAT = re.compile(r'\.(tif|tiff|zip|gpkg|geojson|json|csv|xlsx?|nc|h5|kmz?|shp|parquet|7z)(/content)?(\?|$)', re.I)  # ลิงก์ไฟล์ตรง (กดแล้วโหลด)
+YEAR_PAT = re.compile(r'(?<!\d)(19[5-9]\d|20[0-4]\d)(?:0101)?(?!\d)')
+
+
+def knowledge(r):
+    """ความรู้สรุปต่อชุด (ให้ผู้ช่วย AI/ตัวกรองใช้): ช่วงปี · จำนวนไฟล์ที่แอปนำเข้าได้ · จำนวนลิงก์ไฟล์ตรง"""
+    res = [x for x in (r.get('resources') or []) if not x.get('key')]
+    yrs = sorted({int(m.group(1)) for x in res for m in [YEAR_PAT.search((x.get('name') or '') + ' ' + (x.get('url') or '').rsplit('/', 1)[-1])] if m})
+    for k in ('start', 'end'):                               # STAC (GEE/PC): ช่วงเวลาของ collection
+        if r.get(k) and r[k][:4].isdigit():
+            yrs.append(int(r[k][:4]))
+    yrs = sorted(set(yrs))
+    return dict(y=[yrs[0], yrs[-1]] if yrs else None, ni=sum(bool(IMPORT_PAT.search(x.get('url') or '')) for x in res) or None,
+                nf=sum(bool(FILE_PAT.search(x.get('url') or '')) for x in res) or None)
+
+
 def write(recs, stats):
     OUT.mkdir(parents=True, exist_ok=True)
     for f in OUT.glob('desc_*.json'):
@@ -477,7 +529,8 @@ def write(recs, stats):
                                                      providers=r.get('providers'), keywords=r.get('keywords'), resources=r.get('resources'),
                                                      source_page=r.get('source_page'), mirrors=r.get('mirrors'))
         has = bool(r.get('desc') and r['desc'].get('text'))
-        index.append({k: v for k, v in dict(
+        kn = knowledge(r)
+        index.append({k: v for k, v in dict(**kn,
             k=r['key'], t=r['title'], id=r.get('id'), p=r['platform'], s=r['src'], pr=r.get('provider'), ty=r['type'], tr=r.get('type_raw'),
             th=r['themes'], a=r.get('start'), b=r.get('end'), l=r.get('license'), lc=r['lic'], u=r['url'], m=r.get('meta_url'),
             bb=r.get('bbox'), cv=r['cover'], g=r.get('gsd'), cd=r.get('cadence'), dp=r.get('deprecated') or None, sh=sh, d=has or None,

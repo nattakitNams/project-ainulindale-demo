@@ -9,6 +9,7 @@
 - ทุกงานที่รันจากข้อเสนอ: บันทึก `requested_by` ใน params (ลง lineage) ว่าสั่งโดยผู้ช่วย AI รุ่นใด ยืนยันเมื่อไร
 """
 import json
+import re
 import secrets
 import threading
 import time
@@ -17,7 +18,7 @@ from . import db, palettes
 from .config import PORT, STATIC
 
 CLIENT = None                    # server ตั้งให้: lambda: app.test_client()
-JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download')
+JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download', 'calc', 'trend', 'mosaic', 'vmerge')
 PROPOSAL_TTL = 30 * 60
 _PROPOSALS, _lock = {}, threading.Lock()
 
@@ -131,8 +132,16 @@ def t_job_status(job_id):
     for j in _call('GET', '/api/jobs'):
         if j['id'] == int(job_id):
             res = j.get('result') or {}
-            return dict(id=j['id'], title=j['title'], status=j['status'], progress=j.get('progress'), message=j.get('message'),
-                        error=j.get('error'), output_dataset_id=res.get('dataset_id') if isinstance(res, dict) else None)
+            out = res.get('dataset_id') if isinstance(res, dict) else None
+            r = dict(id=j['id'], title=j['title'], status=j['status'], progress=j.get('progress'), message=j.get('message'),
+                     error=j.get('error'), output_dataset_id=out)
+            if out and j['status'] == 'done':                   # เปิดดูชุดผลลัพธ์ = สั่งเตรียมข้อมูล (สถิติ/พรีวิว) ถ้ายังไม่ทำ
+                try:
+                    d = _call('GET', f'/api/datasets/{out}')
+                    r.update(output_name=d['name'], output_value_type=d.get('value_type'), output_value_type_confirmed=bool(d.get('value_type_confirmed')))
+                except ToolError:
+                    pass
+            return r
     raise ToolError(f'ไม่พบงาน #{job_id}')
 
 
@@ -141,24 +150,89 @@ def t_list_jobs(limit=10):
             for j in _call('GET', '/api/jobs')[:int(limit or 10)]]
 
 
+def t_get_dataset_profile(dataset_id):
+    """ประวัติชุดข้อมูล: ไฟล์อะไร รูปแบบ มาจากไหน ชุดต้นทาง (พ่อแม่) ค่าที่ตั้ง ชุดที่ทำต่อ (ลูก) โน้ต"""
+    return _call('GET', f'/api/datasets/{int(dataset_id)}/profile')
+
+
+def t_write_dataset_note(dataset_id, text):
+    """โน้ตของผู้ช่วย AI ในประวัติชุดข้อมูล (ไม่แตะข้อมูล/ไฟล์ — ติดป้ายว่าเขียนโดย AI ผู้ใช้แก้/ลบได้)"""
+    d = db.get('datasets', int(dataset_id))
+    if d is None or d.get('trashed_at'):
+        raise ToolError(f'ไม่พบชุดข้อมูล #{dataset_id}')
+    t = str(text or '').strip()[:2000]
+    if not t:
+        raise ToolError('โน้ตว่าง')
+    db.update('datasets', d['id'], meta=dict(d['meta'], note_ai=dict(text=t, model=CURRENT_MODEL.get('m'), at=db.now())))
+    return dict(ok=True, dataset_id=d['id'])
+
+
+CURRENT_MODEL = {}                                          # ai.chat ตั้งชื่อรุ่นไว้ให้โน้ตของ AI ระบุได้ว่าใครเขียน
 _HUB = None
+_DESC = {}
+DL_PAT = re.compile(r'\.(tif|tiff)(/content)?(\?|$)|\.(geo)?json(\?|$)', re.I)     # ไฟล์ที่แอปดาวน์โหลด/ตัดพื้นที่เองได้
+
+
+def _hub():
+    global _HUB
+    if _HUB is None:
+        _HUB = json.loads((STATIC / 'hub' / 'index.json').read_text(encoding='utf-8'))['items']
+    return _HUB
+
+
+def _hub_desc(it):
+    sh = it.get('sh', 0)
+    if sh not in _DESC:
+        _DESC[sh] = json.loads((STATIC / 'hub' / f'desc_{sh:02d}.json').read_text(encoding='utf-8'))
+    return _DESC[sh].get(it['k']) or {}
+
+
+def _year(name):
+    m = re.search(r'(?<!\d)(19[5-9]\d|20[0-4]\d)(?:0101)?(?!\d)', name or '')
+    return int(m.group(1)) if m else None
+
+
+def t_get_hub_item(key):
+    """รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง + ไฟล์ที่ดาวน์โหลดเข้าคลังได้ (พร้อมปี) — ใช้เลือกปี/ไฟล์ก่อนเสนอดาวน์โหลด"""
+    it = next((x for x in _hub() if x['k'] == key), None)
+    if it is None:
+        raise ToolError(f'ไม่พบ {key} ใน Data hub — ใช้ key จาก search_data_hub')
+    d = _hub_desc(it)
+    res = []
+    for r in d.get('resources') or []:
+        u = r.get('url') or ''
+        ok = bool(DL_PAT.search(u)) and not r.get('key')
+        res.append(dict(name=r.get('name'), format=r.get('format'), year=_year(r.get('name') or u), url=u, size_mb=round(r['size'] / 1e6, 1) if r.get('size') else None,
+                        downloadable=ok))
+    dl = [r for r in res if r['downloadable']]
+    direct = [dict(name=r['name'], year=r['year'], format=r['format'], url=r['url']) for r in res
+              if not r['downloadable'] and re.search(r'\.(zip|gpkg|csv|xlsx?|nc|h5|kmz?|shp|parquet|7z)(/content)?(\?|$)', r['url'] or '', re.I)]
+    note = None
+    if not dl:
+        note = {'gee': 'อยู่บน Google Earth Engine — แอปดาวน์โหลดเองไม่ได้ (ต้องใช้บัญชี GEE ส่งออกเป็น GeoTIFF แล้วเพิ่มเข้าคลัง)',
+                'pc': 'อยู่บน Planetary Computer — แอปยังดาวน์โหลดเองไม่ได้'}.get(it.get('s'), 'ไม่มีไฟล์ที่แอปดาวน์โหลดเองได้ — เปิดลิงก์ต้นทางเพื่อดาวน์โหลดเองแล้วเพิ่มเข้าคลัง')
+    desc = ((d.get('desc') or {}).get('text') or '')
+    return dict(key=it['k'], title=it.get('t'), platform=it.get('p'), provider=it.get('pr'), coverage=it.get('cv'), license=it.get('l') or it.get('lc'),
+                url=it.get('u'), description=desc[:1500] + ('…' if len(desc) > 1500 else ''), description_source=(d.get('desc') or {}).get('source'),
+                years_available=sorted({r['year'] for r in dl if r['year']}) or it.get('y'),
+                downloadable_files=dl[:60], direct_links_app_cannot_import=direct[:40], other_files=len(res) - len(dl) - len(direct),
+                gee_id=it.get('id') if it.get('s') == 'gee' else None, note=note)
 
 
 def t_search_data_hub(query, limit=12):
     """ค้นรายชื่อแหล่งข้อมูลภายนอกใน Data hub (ชื่อ/ผู้ให้บริการ/คำสำคัญ)"""
-    global _HUB
-    if _HUB is None:
-        _HUB = json.loads((STATIC / 'hub' / 'index.json').read_text(encoding='utf-8'))['items']
     words = [w for w in (query or '').lower().split() if w]
     scored = []
-    for it in _HUB:
+    for it in _hub():
         hay = ' '.join([it.get('t', ''), it.get('pr', ''), it.get('k', ''), it.get('tr', ''), ' '.join(it.get('kw') or []), ' '.join(it.get('th') or [])]).lower()
         s = sum(hay.count(w) for w in words)
-        if s and all(w in hay for w in words[:3]):
-            scored.append((s + (3 if it.get('cv') == 'thailand' else 0), it))
+        if s and all(w in hay for w in words[:3]):          # ดันชุดที่มีไฟล์ให้แอปโหลดได้ + ครอบไทย ขึ้นก่อน (GEE/PC โหลดเองไม่ได้)
+            scored.append((s + (3 if it.get('cv') == 'thailand' else 0) + (4 if it.get('nr') and it.get('s') == 'ckan' else 0), it))
     scored.sort(key=lambda x: -x[0])
     return [dict(key=it['k'], title=it.get('t'), provider=it.get('pr'), platform=it.get('p'), type=it.get('tr'), coverage=it.get('cv'),
-                 license=it.get('lc'), url=it.get('u')) for _, it in scored[:int(limit or 12)]]
+                 license=it.get('lc'), years=it.get('y'), files_app_can_import=it.get('ni') or 0, direct_download_links=it.get('nf') or 0,
+                 page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None)
+            for _, it in scored[:int(limit or 12)]]
 
 
 # ---------- action → ข้อเสนอ ----------
@@ -276,6 +350,76 @@ def t_propose_create_study_area(name, source_dataset_id, field, values):
     return _propose('create_aoi', f'สร้างพื้นที่ศึกษา "{name}" จาก {d["name"]} ({field} = {", ".join(map(str, values[:5]))}{"…" if len(values) > 5 else ""})', body)
 
 
+_POOL = None
+
+
+def _inspect_quick(url, limit=25):
+    """อ่านหัวไฟล์ทางเน็ตแต่ไม่เกิน limit วินาที (เซิร์ฟเวอร์ช้า เช่น Zenodo บางช่วง ทยอยส่งข้อมูลจน timeout ของ GDAL ไม่ทำงาน) → None ถ้าไม่ทัน"""
+    global _POOL
+    import concurrent.futures as cf
+    from . import links
+    if _POOL is None:
+        _POOL = cf.ThreadPoolExecutor(4, thread_name_prefix='ai-inspect')
+    fut = _POOL.submit(links.inspect, url)
+    try:
+        return fut.result(timeout=limit)
+    except cf.TimeoutError:
+        return None
+
+
+def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value_type=None):
+    """ดาวน์โหลดไฟล์จาก Data hub เข้าคลัง (ตัดตามกรอบพื้นที่ศึกษา) — รับเฉพาะ URL ที่อยู่ในรายการไฟล์ของชุดนั้นใน Data hub
+    (AI ส่ง URL อื่นไม่ได้: กันดึงไฟล์จากที่ที่ไม่รู้จัก / คำสั่งแฝงในข้อมูล)"""
+    from . import links
+    item = t_get_hub_item(hub_key)
+    f = next((x for x in item['downloadable_files'] if x['url'] == file_url), None)
+    if f is None:
+        raise ToolError('URL นี้ไม่อยู่ในรายการไฟล์ที่ดาวน์โหลดได้ของชุดนี้ — เลือกจาก get_hub_item.downloadable_files')
+    if value_type not in (None, 'count', 'density', 'class'):
+        raise ToolError('value_type ต้องเป็น count / density / class')
+    aoi_name = None
+    if aoi_id:
+        aoi_name = next((a['name'] for a in t_list_study_areas() if a['id'] == int(aoi_id)), None)
+        if aoi_name is None:
+            raise ToolError(f'ไม่พบพื้นที่ศึกษา #{aoi_id}')
+    args = dict(hub_key=hub_key, title=item['title'], file=f, name=str(name)[:120], aoi_id=int(aoi_id) if aoi_id else None,
+                aoi_name=aoi_name, value_type=value_type, purpose=str(purpose)[:500], license=item.get('license'), source=item.get('url'))
+
+    def check():
+        info = _inspect_quick(file_url)                     # อ่านหัวไฟล์ทางเน็ต (ไม่โหลดทั้งไฟล์) · เซิร์ฟเวอร์ไม่รองรับ range → แค่ขนาดไฟล์
+        if info is None:
+            return dict(ok=False, error='เซิร์ฟเวอร์ตอบช้า อ่านหัวไฟล์ไม่ทันใน 25 วินาที — ยังดาวน์โหลดได้ (งานเบื้องหลังรอนานกว่านี้)')
+        return dict(ok=True, type=info.get('type'), crs=info.get('crs'), size=[info.get('width'), info.get('height')],
+                    res=info.get('res'), note=info.get('note'), range=info.get('range', True),
+                    file_mb=round(info['file_bytes'] / 1e6, 1) if info.get('file_bytes') else None)
+    t = f'ดาวน์โหลด "{name}" ← {f["name"]}' + (f' · ตัดตาม {aoi_name}' if aoi_name else ' · ทั้งไฟล์')
+    return _propose('download', t, args, check)
+
+
+def start_hub_import(hub_key, url, name, aoi_id=None, value_type=None, purpose=None, requested_by=None):
+    """นำเข้าไฟล์จาก Data hub (ใช้ร่วม: ผู้ช่วย AI หลังผู้ใช้ยืนยัน · ปุ่ม "นำเข้าคลัง" ในหน้า Data hub)
+    URL ต้องเป็นไฟล์ที่นำเข้าได้ของชุดนั้นใน Data hub เท่านั้น → เพิ่มลิงก์ → งานดาวน์โหลด (ตัดกรอบพื้นที่ศึกษา) → ชุดใหม่ในคลัง"""
+    from . import links
+    item = t_get_hub_item(hub_key)
+    f = next((x for x in item['downloadable_files'] if x['url'] == url), None)
+    if f is None:
+        raise ToolError('ไฟล์นี้ไม่อยู่ในรายการไฟล์ที่นำเข้าได้ของชุดนี้ใน Data hub')
+    if value_type not in (None, 'count', 'density', 'class'):
+        raise ToolError('value_type ต้องเป็น count / density / class')
+    try:
+        info = _inspect_quick(url)
+    except links.LinkError:
+        info = None
+    if info is None:                                         # หัวไฟล์อ่านไม่ทัน (เซิร์ฟเวอร์ช้า) → ให้งานดาวน์โหลดลองเองด้วยเวลารอที่นานกว่า
+        info = dict(type='cog' if re.search(r'\.tiff?(/content)?(\?|$)', url, re.I) else 'geojson', url=url, title=f['name'])
+    nm = (name or re.sub(r'\.(tiff?|geo)?json$|\.tiff?$', '', f['name'], flags=re.I))[:120]
+    lid = _call('POST', '/api/links', dict(info=info, name=f'{item["title"][:80]} · {f["name"]}'))['id']
+    jp = dict(link_id=lid, aoi_id=int(aoi_id) if aoi_id else None, name=nm, value_type=value_type, purpose=purpose, hub_key=hub_key,
+              requested_by=requested_by or dict(by='user', at=db.now()))
+    r = _call('POST', '/api/jobs', dict(kind='download', params=jp))
+    return dict(ok=True, job_id=r['job'], link_id=lid, message=f'เริ่มนำเข้า "{nm}" (งาน #{r["job"]}) — เสร็จแล้วจะเข้าคลังข้อมูล')
+
+
 REPORT_TEMPLATES = {'gov_l': 'ราชการ A4 แนวนอน', 'gov_p': 'ราชการ A4 แนวตั้ง', 'ocha': 'สากลงานมนุษยธรรม (OCHA)',
                     'journal': 'ภาพประกอบบทความวิชาการ', 'poster_a3': 'โปสเตอร์ A3 แนวตั้ง', 'dashboard': 'Dashboard / อินโฟกราฟิก A4'}
 
@@ -318,6 +462,12 @@ def execute(pid, model=None, params=None):
     a = p['args']
     if p['action'] == 'create_report':
         return dict(ok=True, report=a, message='เปิดตัวออกแบบรายงานพร้อมค่าที่ตั้งแล้ว — ตรวจแล้วกด "ส่งออก" เพื่อได้ PDF')
+    if p['action'] == 'download':                            # เพิ่มลิงก์เข้าคลัง → งานดาวน์โหลด (ตัดกรอบพื้นที่ศึกษา) → ชุดข้อมูลใหม่ในคลัง
+        vt = a.get('value_type')
+        if isinstance(params, dict) and 'value_type' in params and params['value_type'] in ('count', 'density', 'class', None):
+            vt = params['value_type']                          # ผู้ใช้เลือกประเภทค่าในการ์ดเอง
+        return start_hub_import(a['hub_key'], a['file']['url'], a['name'], a.get('aoi_id'), vt, a.get('purpose'),
+                                dict(by='ai_assistant', model=model, confirmed_at=db.now()))
     if p['action'] == 'run_job' and isinstance(params, dict):
         a = dict(a, params=_params(a['kind'], params))
         p['user_edited'] = True
@@ -351,13 +501,21 @@ TOOLS = [
      dict(dataset_id=I, method=dict(type='string', enum=['breaks', 'quantile', 'equal']), n=I, metric=dict(type='string', enum=['density', 'per_pixel', 'value']),
           breaks=dict(type='array', items=N)), ['dataset_id']),
     ('estimate_job', 'read', t_estimate_job, 'ตรวจค่าที่ตั้ง + ประเมินขนาดงานโดยไม่รัน (ใช้ก่อนเสนองาน)', dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S), ['kind', 'params_json']),
+    ('get_dataset_profile', 'read', t_get_dataset_profile, 'ประวัติชุดข้อมูล: ไฟล์อะไร รูปแบบ มาจากไหน ชุดต้นทาง (พ่อแม่) ค่าที่ตั้ง ชุดที่ทำต่อ (ลูก) โน้ต — ใช้ตอบคำถามที่มาของข้อมูล', dict(dataset_id=I), ['dataset_id']),
+    ('write_dataset_note', 'note', t_write_dataset_note,
+     'เขียนโน้ตสั้น ๆ ในประวัติชุดข้อมูล (2–5 ประโยค): เป็นข้อมูลอะไร หน่วย/ความหมายของค่า แหล่ง ปี วัตถุประสงค์ ข้อควรระวัง — ใช้หลังดาวน์โหลดหรือสร้างชุดใหม่เสร็จ (ไม่ต้องยืนยัน ไม่แตะข้อมูล)',
+     dict(dataset_id=I, text=S), ['dataset_id', 'text']),
     ('job_status', 'read', t_job_status, 'สถานะงาน + ชุดข้อมูลผลลัพธ์เมื่อเสร็จ', dict(job_id=I), ['job_id']),
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
-    ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย ฯลฯ)', dict(query=S, limit=I), ['query']),
+    ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — ค้นด้วยคำภาษาอังกฤษสั้น ๆ หลายครั้ง เช่น "population", "nighttime lights"', dict(query=S, limit=I), ['query']),
+    ('get_hub_item', 'read', t_get_hub_item, 'รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง, ปีที่มี, ไฟล์ที่แอปดาวน์โหลดเข้าคลังได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
     ('propose_set_value_type', 'action', t_propose_set_value_type, 'เสนอยืนยัน/เปลี่ยนประเภทค่าของราสเตอร์ (ผู้ใช้ต้องกดยืนยัน)',
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',
      dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S, title=S, purpose=S), ['kind', 'params_json', 'purpose']),
+    ('propose_download_data', 'action', t_propose_download_data,
+     'เสนอดาวน์โหลดไฟล์จาก Data hub เข้าคลัง ตัดตามกรอบพื้นที่ศึกษา (ผู้ใช้ต้องกดยืนยัน) — file_url ต้องมาจาก get_hub_item.downloadable_files · ใส่ value_type ถ้ารู้ความหมายแน่ชัด (เช่น WorldPop ppp = count, night light = density)',
+     dict(hub_key=S, file_url=S, name=S, purpose=S, aoi_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['hub_key', 'file_url', 'name', 'purpose']),
     ('propose_create_report', 'action', t_propose_create_report,
      'เสนอทำรายงานแผนที่ (เปิดตัวออกแบบรายงานพร้อมเทมเพลต/ชั้นข้อมูล/ข้อความ ผู้ใช้กดยืนยันแล้วส่งออก PDF เอง) — dataset_ids ปกติคือแผนที่ไบแวเรียตที่ทำเสร็จแล้ว',
      dict(dataset_ids=dict(type='array', items=I), template=dict(type='string', enum=list(REPORT_TEMPLATES)), title=S, subtitle=S, org=S, author=S,
@@ -371,7 +529,7 @@ BY_NAME = {t[0]: t for t in TOOLS}
 def specs(mode):
     out = []
     for name, lvl, _, desc, props, req in TOOLS:
-        if lvl == 'action' and mode != 'propose':
+        if lvl != 'read' and mode != 'propose':             # อ่านอย่างเดียว → ไม่มีเครื่องมือเสนองาน/เขียนโน้ต
             continue
         out.append(dict(name=name, description=desc, parameters=dict(type='object', properties=props, required=req)))
     return out
@@ -379,7 +537,7 @@ def specs(mode):
 
 def run(name, args, mode):
     t = BY_NAME.get(name)
-    if not t or (t[1] == 'action' and mode != 'propose'):
+    if not t or (t[1] != 'read' and mode != 'propose'):
         return dict(error=f'ไม่มีเครื่องมือ {name} (หรือปิดสิทธิ์เสนองานอยู่)')
     try:
         return t[2](**(args or {}))
