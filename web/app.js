@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.33';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.34';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -414,7 +414,7 @@ async function pageDataset(id) {
         ${m.count > 1 ? `<h3>แบนด์ที่ใช้</h3><select id="band">${Array.from({ length: m.count }, (_, i) => `<option ${i + 1 == d.band ? 'selected' : ''}>${i + 1}</option>`).join('')}</select>` : ''}
       </div>` : ''}
       ${isR && d.role !== 'map' ? '<div class="card" id="symPanel"></div>' : ''}
-      ${d.role === 'map' && isR ? '<div class="card" id="mapPal"></div>' : ''}
+      ${d.role === 'map' && isR ? '<div class="card" id="mapPal"></div><div class="card" id="bivStats"></div>' : ''}
       ${d.role === 'map' && !isR && d.lineage?.params?.x ? zonalLegend(d) : ''}
       ${isR ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--peach);color:var(--peach)"></span>ปรับความละเอียด / ตัดพื้นที่</h2></div>
         <div class="grid-form">
@@ -513,7 +513,7 @@ async function pageDataset(id) {
     $('#vgRun').onclick = () => runJob('vgrid', { dataset_ids: [id, ...$$('#vgMore input:checked').map(o => +o.value)], target_res: $('#vgRes').value, aoi_id: +$('#vgAoi').value || null });
     if ($('#hxRun')) hexCardBind(d);
     if (st.valid != null && d.role !== 'map') drawHist(id);
-    if (d.role === 'map') mapPalette(d);
+    if (d.role === 'map') { mapPalette(d); if (isR) bivStatsCard(d); }
   } else {
     const loadRz = async () => {
       try {
@@ -596,6 +596,39 @@ async function pageDataset(id) {
 }
 
 // ประวัติชุดข้อมูล: โน้ต (ผู้ใช้ / ผู้ช่วย AI) · ไฟล์อะไร · มาจากไหน · สร้างโดยงานอะไร (ชุดต้นทาง + ค่าที่ตั้ง) · ชุดที่ทำต่อ
+// สถิติความสัมพันธ์ของแผนที่ไบแวเรียต (ค่าชุดเดียวกับที่แผนที่ใช้) — คิดครั้งเดียว เก็บแคชในโฟลเดอร์ผลลัพธ์
+async function bivStatsCard(d, force = false) {
+  const el = $('#bivStats');
+  if (!el) return;
+  const head = `<div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>สถิติความสัมพันธ์</h2>`;
+  if (!force && !d._statsAsked) {
+    el.innerHTML = head + `<button class="sm" id="bsGo">${IC.pulse}วิเคราะห์</button></div><div class="small muted">ความสัมพันธ์ระหว่างแกน X กับ Y จากค่าจริงทุกพิกเซล (สุ่ม): สหสัมพันธ์, ตารางไขว้, ANOVA / Kruskal–Wallis, การเกาะกลุ่มเชิงพื้นที่ และกราฟ</div>`;
+    $('#bsGo').onclick = () => { d._statsAsked = true; bivStatsCard(d); };
+    return;
+  }
+  el.innerHTML = head + '</div><div class="small muted">กำลังสุ่มค่าและคำนวณ… (ไม่เกินราว 1 นาที)</div>';
+  let r;
+  try { r = await api(`${ENGINE}/api/datasets/${d.id}/bivstats`, { json: { force } }); }
+  catch (e) { el.innerHTML = head + `</div><div class="note err">${esc(e.message)}</div>`; return; }
+  const c = r.correlation, ct = r.crosstab, a = r.by_x_class, f4 = v => v == null ? '–' : fmt(v, Math.abs(v) < 0.01 && v !== 0 ? 4 : 3);
+  const pf = v => v == null ? '–' : v < 1e-4 ? '< 0.0001' : fmt(v, 4);
+  const img = n => `${ENGINE}/api/datasets/${d.id}/bivstats/${n}?t=${Date.now()}`;
+  el.innerHTML = head + `<button class="sm ghost" id="bsRe" title="สุ่มใหม่ / คิดใหม่">${IC.refresh}</button></div>
+    <div class="bs-int">${r.interpretation.map(x => `<div class="small">• <span translate="no">${esc(x)}</span></div>`).join('')}</div>
+    <div class="bs-imgs"><img src="${img('scatter.png')}" alt="กราฟกระจาย"><img src="${img('crosstab.png')}" alt="ตารางไขว้"><img src="${img('box.png')}" alt="กล่อง"></div>
+    <table class="kv tiny"><tr><td>ตัวอย่าง</td><td>${fmt(r.sample.n, 0)} พิกเซล · ${esc(r.sample.note)} · ${esc(r.resolution.split(' (')[0])}${r.aoi ? ' · ' + esc(r.aoi) : ''}</td></tr>
+      <tr><td>Pearson r</td><td>${f4(c.pearson_r)}${c.pearson_ci95 ? ` (95% CI ${f4(c.pearson_ci95[0])} – ${f4(c.pearson_ci95[1])})` : ''}${c.log_pearson_r != null ? ` · บน log1p ${f4(c.log_pearson_r)}` : ''}</td></tr>
+      <tr><td>Spearman ρ</td><td>${f4(c.spearman_rho)} · ${esc(c.strength)}</td></tr>
+      <tr><td>OLS Y = a + bX</td><td>${c.ols ? `b = ${f4(c.ols.slope)} · R² = ${f4(c.ols.r2)}` : '–'}</td></tr>
+      <tr><td>Moran's I (X / Y)</td><td>${f4(r.spatial.moran_x)} / ${f4(r.spatial.moran_y)} · n ประสิทธิผล ~${c.n_effective ? fmt(c.n_effective, 0) : '–'}</td></tr>
+      <tr><td>ค่า p</td><td>ปรับการเกาะกลุ่ม ${pf(c.p_adjusted)} <span class="muted">(สูตรปกติ ${pf(c.p_naive)} — เล็กเกินจริง)</span></td></tr>
+      <tr><td>ตารางไขว้</td><td>χ² = ${f4(ct.chi2)} (df ${ct.dof ?? '–'}) · Cramér's V = ${f4(ct.cramers_v)}</td></tr>
+      <tr><td>Y ตามชั้น X</td><td>ANOVA F = ${f4(a.anova?.F)} · η² = ${f4(a.anova?.eta2)} · Kruskal–Wallis H = ${f4(a.kruskal?.H)} · ε² = ${f4(a.kruskal?.epsilon2)}</td></tr></table>
+    ${r.warnings.map(w => `<div class="note warn small" style="margin-top:6px">${esc(w)}</div>`).join('')}
+    <div class="row" style="margin-top:8px"><a class="btn sm ghost" href="${img('biv_stats.csv')}" download>${IC.download}CSV</a><a class="btn sm ghost" href="${img('biv_stats.md')}" target="_blank">${IC.download}รายงาน .md</a></div>`;
+  $('#bsRe').onclick = () => bivStatsCard(d, true);
+}
+
 async function profileCard(d) {
   const el = $('#profBody'); if (!el) return;
   let p; try { p = await api(`${ENGINE}/api/datasets/${d.id}/profile`); } catch (e) { el.textContent = e.message; return; }

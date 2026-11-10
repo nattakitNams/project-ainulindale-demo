@@ -99,6 +99,8 @@ def t_get_dataset(dataset_id):
     if d.get('lineage'):
         lp = d['lineage'].get('params') or {}
         r['made_by'] = dict(kind=d['lineage'].get('kind'), params={k: lp[k] for k in list(lp)[:20] if k != 'colors'})
+    from . import knowledge
+    r['knowledge_topics'] = knowledge.match(' '.join([d['name'], str((m.get('satellite') or {}).get('collection') or ''), str(m.get('hub_key') or '')]))
     return r
 
 
@@ -173,11 +175,56 @@ _DESC = {}
 DL_PAT = re.compile(r'\.(tif|tiff)(/content)?(\?|$)|\.(geo)?json(\?|$)', re.I)     # ไฟล์ที่แอปดาวน์โหลด/ตัดพื้นที่เองได้
 
 
+_HUB_META = {}
+
+
 def _hub():
     global _HUB
     if _HUB is None:
-        _HUB = json.loads((STATIC / 'hub' / 'index.json').read_text(encoding='utf-8'))['items']
+        ix = json.loads((STATIC / 'hub' / 'index.json').read_text(encoding='utf-8'))
+        _HUB = ix['items']
+        _HUB_META.update(ix.get('meta') or {})
     return _HUB
+
+
+COVER_TH = dict(thailand='ประเทศไทย', asean='อาเซียน/ภูมิภาค', asia='เอเชีย', global_='ทั่วโลก', partial='บางส่วน', unknown='ไม่ทราบ')
+LIC_TH = dict(open='เปิด (ใช้/เผยแพร่ได้ อ้างอิงแหล่ง)', nc='ห้ามใช้เชิงพาณิชย์', check='ต้องตรวจเงื่อนไขเอง', restricted='มีข้อจำกัด')
+
+
+def _data_card(it, d, dl, direct, res):
+    """บัตรข้อมูลมาตรฐานของชุดใน Data hub — แยกหมวด/ตัวแปร/เวลา/พื้นที่/การเข้าถึง ให้ผู้ช่วยอ่านแล้วตอบผู้ใช้ได้ละเอียดและถูก"""
+    import datetime
+    from . import hub_access, knowledge, ops_sat
+    _hub()
+    th = {t['k']: t['th'] for t in _HUB_META.get('themes') or []}
+    lv, why = hub_access.access(it, set(ops_sat.BY_ID))
+    cid = (it.get('id') or '') if it.get('s') == 'pc' else ''
+    sat = next((c for c in ops_sat.COLLECTIONS if c['id'].lower() == cid.lower()), None)
+    how = ('ดึงเข้าแอปได้ทันที: งาน satellite collection="' + sat['id'] + '"') if sat else \
+        (f'นำเข้าคลังได้ {len(dl)} ไฟล์ (propose_download_data)' if dl else
+         f'GEE: ee.ImageCollection/Image("{it.get("id")}") — ต้องมีบัญชี ส่งออกเอง' if it.get('s') == 'gee' else
+         f'ลิงก์ไฟล์ตรง {len(direct)} ไฟล์ (แอปนำเข้ารูปแบบนี้เองไม่ได้)' if direct else 'ดาวน์โหลดเองจากหน้าเว็บต้นทาง')
+    vars_ = d.get('variables') or []
+    start, end = it.get('a'), it.get('b')
+    by_year = {}
+    for r in dl:
+        if r.get('year'):
+            by_year.setdefault(r['year'], []).append(r['name'])
+    return dict(
+        what=dict(title=it.get('t'), short=it.get('sd'), categories=[th.get(k, k) for k in it.get('th') or []], data_type=it.get('tr') or it.get('ty'),
+                  knowledge_topics=knowledge.match(' '.join([it.get('t') or '', it.get('k') or '', str(it.get('id') or ''), ' '.join(it.get('kw') or [])]))),
+        variables=dict(count=len(vars_), items=vars_[:40],
+                       note='ตัวแปร/แบนด์จาก metadata ต้นทาง: unit = หน่วย · scale/offset = ค่าจริง = DN × scale + offset · classes = รหัสชั้น' if vars_ else 'ต้นทางไม่ระบุตัวแปร — ดูคำอธิบาย/ไฟล์'),
+        time=dict(start=start, end=end or (('ต่อเนื่องถึงปัจจุบัน (' + str(datetime.date.today().year) + ')') if start else None), cadence=it.get('cd'),
+                  years_range=it.get('y'), years_with_files=sorted(by_year) or it.get('yl'), files_by_year={str(k): v for k, v in sorted(by_year.items())} or None,
+                  updated=it.get('up')),
+        space=dict(coverage=COVER_TH.get('global_' if it.get('cv') == 'global' else it.get('cv'), it.get('cv')), bbox=it.get('bb'),
+                   resolution_m=it.get('g'), note='resolution_m = gsd จาก metadata (ความละเอียดตามชื่อ)' if it.get('g') else None),
+        access=dict(level=lv, detail=why, how_to_get=how, satellite_collection=sat['id'] if sat else None, gee_id=it.get('id') if it.get('s') == 'gee' else None),
+        source=dict(provider=it.get('pr'), organisations=it.get('og'), platform=it.get('p'), page=it.get('u'), metadata=it.get('m'),
+                    license=it.get('l'), license_class=LIC_TH.get(it.get('lc'), it.get('lc')), citation=d.get('citation'),
+                    deprecated=bool(it.get('dp')), description_source=(d.get('desc') or {}).get('source')),
+        files=dict(importable=len(dl), direct_links=len(direct), other=len(res) - len(dl) - len(direct)))
 
 
 def _hub_desc(it):
@@ -210,9 +257,12 @@ def t_get_hub_item(key):
     note = None
     if not dl:
         note = {'gee': 'อยู่บน Google Earth Engine — แอปดาวน์โหลดเองไม่ได้ (ต้องใช้บัญชี GEE ส่งออกเป็น GeoTIFF แล้วเพิ่มเข้าคลัง)',
-                'pc': 'อยู่บน Planetary Computer — แอปยังดาวน์โหลดเองไม่ได้'}.get(it.get('s'), 'ไม่มีไฟล์ที่แอปดาวน์โหลดเองได้ — เปิดลิงก์ต้นทางเพื่อดาวน์โหลดเองแล้วเพิ่มเข้าคลัง')
+                'pc': 'อยู่บน Planetary Computer — ถ้าไม่อยู่ในเครื่องมือภาพดาวเทียม แอปดาวน์โหลดเองไม่ได้'}.get(it.get('s'), 'ไม่มีไฟล์ที่แอปดาวน์โหลดเองได้ — เปิดลิงก์ต้นทางเพื่อดาวน์โหลดเองแล้วเพิ่มเข้าคลัง')
     desc = ((d.get('desc') or {}).get('text') or '')
-    return dict(key=it['k'], title=it.get('t'), platform=it.get('p'), provider=it.get('pr'), coverage=it.get('cv'), license=it.get('l') or it.get('lc'),
+    card = _data_card(it, d, dl, direct, res)
+    if card['access']['satellite_collection']:
+        note = f'ดึงด้วยเครื่องมือภาพดาวเทียมได้ทันที (งาน satellite collection="{card["access"]["satellite_collection"]}") ไม่ต้องดาวน์โหลดไฟล์'
+    return dict(key=it['k'], title=it.get('t'), card=card, platform=it.get('p'), provider=it.get('pr'), coverage=it.get('cv'), license=it.get('l') or it.get('lc'),
                 url=it.get('u'), description=desc[:1500] + ('…' if len(desc) > 1500 else ''), description_source=(d.get('desc') or {}).get('source'),
                 years_available=sorted({r['year'] for r in dl if r['year']}) or it.get('y'),
                 downloadable_files=dl[:60], direct_links_app_cannot_import=direct[:40], other_files=len(res) - len(dl) - len(direct),
@@ -291,6 +341,7 @@ def t_search_data_hub(query, limit=12):
     res = [dict(key=it['k'], title=it.get('t'), provider=it.get('pr'), platform=it.get('p'), type=it.get('tr'), coverage=it.get('cv'),
                 license=it.get('lc'), years=it.get('y'), files_app_can_import=it.get('ni') or 0, direct_download_links=it.get('nf') or 0,
                 access=dict(level=lv, detail=why), page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None,
+                n_variables=it.get('nv'), resolution_m=it.get('g'), cadence=it.get('cd'), start=it.get('a'), end=it.get('b'), years_with_files=it.get('yl'),
                 satellite_collection=it['k'].split(':', 1)[1] if it.get('s') == 'pc' and it['k'].split(':', 1)[1] in sat else None)
            for _, it, lv, why in scored[:int(limit or 12)]]
     q = (query or '').lower()
@@ -353,6 +404,26 @@ def _ensure_folders(paths):
                 parent = r.get('id') or (r.get('folder') or {}).get('id')
         out[path] = parent
     return out
+
+
+def t_analyze_bivariate(dataset_id, force=False):
+    """สถิติความสัมพันธ์ของแผนที่ไบแวเรียต (ค่าชุดเดียวกับแผนที่) — คืนตัวเลขหลัก + การตีความ + คำเตือน"""
+    r = _call('POST', f'/api/datasets/{int(dataset_id)}/bivstats', dict(force=bool(force)))
+    if isinstance(r, dict) and r.get('error'):
+        raise ToolError(r['error'])
+    c = r['correlation']
+    return dict(map=r['name'], x=r['x'], y=r['y'], resolution=r['resolution'], aoi=r.get('aoi'), n=r['sample']['n'],
+                pearson_r=c['pearson_r'], pearson_ci95=c['pearson_ci95'], spearman_rho=c['spearman_rho'], log_pearson_r=c['log_pearson_r'],
+                ols=c['ols'], n_effective=c['n_effective'], p_adjusted=c['p_adjusted'], moran=r['spatial'],
+                cramers_v=r['crosstab']['cramers_v'], obs_exp=r['crosstab']['obs_exp'], anova=r['by_x_class']['anova'], kruskal=r['by_x_class']['kruskal'],
+                y_by_x_class=r['by_x_class']['classes'], interpretation=r['interpretation'], warnings=r['warnings'],
+                charts=[f'/api/datasets/{int(dataset_id)}/bivstats/{v}' for v in r['charts'].values()])
+
+
+def t_get_data_knowledge(topics=None, query=None):
+    """ความรู้ชนิดข้อมูล: วัดอะไร หน่วย การแปลงค่า (สูตรพร้อมใช้) ช่วงค่าปกติ เหมาะ/ไม่เหมาะ ข้อควรระวัง ความน่าเชื่อถือ + หลักการวิเคราะห์"""
+    from . import knowledge
+    return knowledge.get(topics, query)
 
 
 # ---------- แผนงานของบทสนทนา ----------
@@ -731,7 +802,7 @@ TOOLS = [
     ('job_status', 'read', t_job_status, 'สถานะงาน + ชุดข้อมูลผลลัพธ์เมื่อเสร็จ', dict(job_id=I), ['job_id']),
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
     ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — คำอังกฤษสั้น 1–2 คำต่อครั้ง ค้นหลายรอบ เช่น "population", "ghsl", "pm2.5" · ผลมี satellite_tool = ชุดที่ดึงได้ทันทีด้วยงาน satellite', dict(query=S, limit=I), ['query']),
-    ('get_hub_item', 'read', t_get_hub_item, 'รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง, ปีที่มี, ไฟล์ที่แอปดาวน์โหลดเข้าคลังได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
+    ('get_hub_item', 'read', t_get_hub_item, 'บัตรข้อมูลของชุดใน Data hub (card): หมวด · ตัวแปร/แบนด์ (หน่วย scale offset รหัสชั้น) · ช่วงเวลา/ความถี่/ปีที่มีไฟล์ · ความละเอียด/ขอบเขต · ต้องมีบัญชีไหม/วิธีได้มา · ผู้ผลิต/สัญญาอนุญาต/การอ้างอิง + ไฟล์ที่นำเข้าได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
     ('satellite_catalog', 'read', t_satellite_catalog, 'ภาพดาวเทียมที่ดึงได้ทันที (Planetary Computer, ไม่ต้องมีบัญชี): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, การใช้ที่ดิน, น้ำผิวดิน — แบนด์/ช่วงปี/ความละเอียด', {}, []),
     ('search_satellite', 'read', t_search_satellite, 'ค้นภาพดาวเทียมในพื้นที่+ช่วงวันที่ (+เมฆสูงสุด %) → จำนวนภาพ วันที่ เมฆ — ใช้ก่อนเสนองาน satellite',
      dict(collection=S, aoi_id=I, date_from=S, date_to=S, cloud_max=N), ['collection', 'aoi_id']),
@@ -741,6 +812,12 @@ TOOLS = [
      'เขียน/อัปเดตแผนงานของบทสนทนา (ผู้ใช้เห็นเป็นแผงในแชต · ส่งกลับให้คุณทุกรอบ) — เรียกเมื่อเริ่มงานหลายขั้น และทุกครั้งที่ขั้นเปลี่ยนสถานะ/ได้ชุดใหม่/ผู้ใช้ตัดสินใจอะไร · ส่งเฉพาะช่องที่เปลี่ยน',
      dict(goal=S, purpose=S, audience=S, steps_json=dict(type='string', description='JSON array [{"title","status":"todo|doing|done|blocked|skipped","outputs":[ids],"note"}] — ส่งทั้งรายการ'),
           decisions=dict(type='array', items=S), blockers=dict(type='array', items=S), folder_id=I), []),
+    ('get_data_knowledge', 'read', t_get_data_knowledge,
+     'คลังความรู้ข้อมูล: ข้อมูลชนิดนี้วัดอะไร หน่วย การแปลงค่า/calibration (สูตรใช้กับ calc ได้ทันที) ช่วงค่าปกติ เหมาะ/ไม่เหมาะ ข้อควรระวัง ความน่าเชื่อถือ + หลักการ (ประเภทค่า MAUP เวลา ไบแวเรียต การเลือกแหล่ง) — topics ดูจาก knowledge_topics ของชุดข้อมูล หรือใส่ query เป็นชื่อชุด',
+     dict(topics=dict(type='array', items=S), query=S), []),
+    ('analyze_bivariate', 'read', t_analyze_bivariate,
+     'สถิติความสัมพันธ์ของแผนที่ไบแวเรียต: Pearson/Spearman, OLS, ตารางไขว้ (χ², Cramér\'s V, obs/exp), ANOVA + Kruskal–Wallis ของ Y ตามชั้น X, Moran\'s I + p ที่ปรับการเกาะกลุ่ม + กราฟ — ใช้หลังไบแวเรียตเสร็จ หรือเมื่อผู้ใช้ถามว่าสองตัวแปรสัมพันธ์กันไหม',
+     dict(dataset_id=I, force=B), ['dataset_id']),
     ('list_folders', 'read', t_list_folders, 'โฟลเดอร์ในคลัง (id + path)', {}, []),
     ('propose_create_folders', 'action', t_propose_create_folders, 'เสนอสร้างโฟลเดอร์หลายชั้นในครั้งเดียว เช่น ["งานA/raw_data","งานA/output"] (ผู้ใช้ยืนยัน) — ผลลัพธ์ของงานถัดไปใส่ "folder_id" ใน params เพื่อเข้าโฟลเดอร์นั้นอัตโนมัติ',
      dict(paths=dict(type='array', items=S), purpose=S), ['paths']),

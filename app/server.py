@@ -9,7 +9,7 @@ import warnings
 from fractions import Fraction
 from pathlib import Path
 
-from flask import Flask, Response, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_file, send_from_directory
 from werkzeug.exceptions import HTTPException
 
 from . import aoi as aoimod
@@ -250,6 +250,25 @@ def ai_chat():
     from . import ai_plan
     r['plan'] = ai_plan.get(b.get('chat_id'))
     return jsonify(r)
+
+
+@app.route('/api/datasets/<int:did>/bivstats', methods=['POST'])
+def ds_bivstats(did):
+    from . import bivstats
+    b = request.get_json(silent=True) or {}
+    try:
+        return jsonify(bivstats.compute(did, force=bool(b.get('force'))))
+    except engine.EngineError as e:
+        raise ApiError(str(e))
+
+
+@app.route('/api/datasets/<int:did>/bivstats/<name>')
+def ds_bivstats_file(did, name):
+    from . import bivstats
+    try:
+        return send_file(bivstats.chart_path(did, name))
+    except engine.EngineError as e:
+        raise ApiError(str(e))
 
 
 @app.route('/api/ai/plan')

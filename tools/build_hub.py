@@ -237,6 +237,32 @@ def gsd_of(stac):
     return None
 
 
+def variables_of(stac):
+    """ตัวแปร/แบนด์ของชุด (ให้ผู้ช่วยรู้ว่าชุดนี้มีอะไร หน่วยอะไร ต้องคูณสเกลไหม) — จาก eo:bands / gee:schema / item_assets"""
+    s, out = stac.get('summaries') or {}, []
+    for b in s.get('eo:bands') or []:
+        if not isinstance(b, dict) or not b.get('name'):
+            continue
+        v = dict(name=b['name'], desc=(b.get('description') or '')[:160], unit=b.get('gee:units') or b.get('unit'),
+                 scale=b.get('gee:scale'), offset=b.get('gee:offset'), gsd=(b.get('gsd') or [None])[0] if isinstance(b.get('gsd'), list) else b.get('gsd'))
+        cls = b.get('gee:classes') or b.get('classification:classes')
+        if cls:
+            v['classes'] = '; '.join(f'{c.get("value")}={(c.get("description") or c.get("name") or "")[:40]}' for c in cls[:25])
+        out.append(v)
+    for b in s.get('gee:schema') or []:
+        if isinstance(b, dict) and b.get('name'):
+            out.append(dict(name=b['name'], desc=(b.get('description') or '')[:160], unit=b.get('units'), type=b.get('type'), field=True))
+    for k, a in (stac.get('item_assets') or {}).items():
+        if not isinstance(a, dict) or 'data' not in (a.get('roles') or []):
+            continue
+        rb = (a.get('raster:bands') or [{}])[0] if a.get('raster:bands') else {}
+        eb = (a.get('eo:bands') or [{}])[0] if a.get('eo:bands') else {}
+        out.append(dict(name=k, desc=(a.get('description') or a.get('title') or eb.get('description') or '')[:160], unit=rb.get('unit'),
+                        scale=rb.get('scale'), offset=rb.get('offset'), dtype=rb.get('data_type'), nodata=rb.get('nodata'),
+                        gsd=rb.get('spatial_resolution') or a.get('gsd')))
+    return [{k: x for k, x in v.items() if x not in (None, '', [])} for v in out[:60]]
+
+
 def interval_of(stac):
     i = stac.get('gee:interval')
     if isinstance(i, dict) and i.get('interval'):
@@ -442,6 +468,7 @@ def build(src, fetch):
                 rec['bbox'] = bbox_of(stac)
                 rec['gsd'] = gsd_of(stac)
                 rec['cadence'] = interval_of(stac)
+                rec['variables'] = variables_of(stac)
                 rec['providers'] = [dict(name=p.get('name'), url=p.get('url'), roles=p.get('roles')) for p in (stac.get('providers') or []) if p.get('name')][:6]
                 rec['deprecated'] = stac.get('gee:status') == 'deprecated' or bool(re.search(r'deprecated|will be retired|has been retired', stac.get('description') or '', re.I))
                 if stac.get('sci:citation'):
@@ -508,7 +535,8 @@ def knowledge(r):
         if r.get(k) and r[k][:4].isdigit():
             yrs.append(int(r[k][:4]))
     yrs = sorted(set(yrs))
-    return dict(y=[yrs[0], yrs[-1]] if yrs else None, ni=sum(bool(IMPORT_PAT.search(x.get('url') or '')) for x in res) or None,
+    fy = sorted({int(m.group(1)) for x in res for m in [YEAR_PAT.search((x.get('name') or '') + ' ' + (x.get('url') or '').rsplit('/', 1)[-1])] if m})
+    return dict(y=[yrs[0], yrs[-1]] if yrs else None, yl=fy if 1 < len(fy) <= 80 else None, nv=len(r.get('variables') or []) or None, ni=sum(bool(IMPORT_PAT.search(x.get('url') or '')) for x in res) or None,
                 nf=sum(bool(FILE_PAT.search(x.get('url') or '')) for x in res) or None)
 
 
@@ -527,7 +555,7 @@ def write(recs, stats):
         sh = i // SHARD
         shards.setdefault(sh, {})[r['key']] = dict(desc=r.get('desc'), citation=r.get('citation'), terms=r.get('terms'),
                                                      providers=r.get('providers'), keywords=r.get('keywords'), resources=r.get('resources'),
-                                                     source_page=r.get('source_page'), mirrors=r.get('mirrors'))
+                                                     source_page=r.get('source_page'), mirrors=r.get('mirrors'), variables=r.get('variables'))
         has = bool(r.get('desc') and r['desc'].get('text'))
         kn = knowledge(r)
         index.append({k: v for k, v in dict(**kn,

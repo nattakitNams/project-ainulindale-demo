@@ -605,3 +605,10 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .ai-plan li.st-done .ai-si { color: var(--mint); } .ai-plan li.st-doing .ai-si { color: var(--sky); } .ai-plan li.st-blocked .ai-si { color: var(--coral); }
 .ai-plan li.st-done > span:last-child { opacity: .75; }
 .ai-all { margin: 4px 0 10px; }
+
+/* สถิติไบแวเรียต */
+.bs-imgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin: 10px 0; }
+.bs-imgs img { width: 100%; border-radius: 10px; background: #fff; }
+.bs-int { display: grid; gap: 3px; margin-top: 4px; }
+
+.hub-vars td, .hub-vars th { padding: 4px 6px; vertical-align: top; }

@@ -326,6 +326,12 @@ async function hubDetail(it) {
           <div class="hub-desc">${d.text ? hubMd(d.text, d.fmt) : '<p class="muted">ยังไม่มีคำอธิบายจากต้นทาง — กด "ไปหน้าดาวน์โหลด" เพื่ออ่านที่เว็บผู้ผลิต</p>'}</div>
           ${d.text ? `<div class="tiny muted hub-attr">ที่มา: <a href="${esc(d.source_url)}" target="_blank" rel="noopener noreferrer">${esc(d.source)}</a> · ${esc(d.license_note || '')} · แอปไม่ได้เขียนหรือแก้ข้อความนี้</div>` : ''}
         </div>
+        ${(x.variables || []).length ? `<div class="card"><div class="card-head"><h2>ตัวแปร / แบนด์</h2><span class="chip">${x.variables.length}</span></div>
+          <div class="tiny muted" style="margin-bottom:6px">จาก metadata ต้นทาง · ค่าจริง = ค่าในไฟล์ × scale + offset</div>
+          <table class="small hub-vars"><thead><tr><th>ชื่อ</th><th>ความหมาย</th><th>หน่วย</th><th>scale / offset</th></tr></thead><tbody>${x.variables.slice(0, 40).map(v => `<tr><td class="mono" translate="no">${esc(v.name)}${v.field ? ' <span class="tiny muted">(ฟิลด์)</span>' : ''}</td>
+            <td translate="no">${esc(v.desc || '')}${v.classes ? `<div class="tiny muted">${esc(v.classes)}</div>` : ''}</td><td translate="no">${esc(v.unit || '')}</td>
+            <td class="mono">${v.scale != null ? '× ' + esc(v.scale) : ''}${v.offset ? ' + ' + esc(v.offset) : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}
+        ${it.yl ? `<div class="card"><div class="card-head"><h2>ปีที่มีไฟล์</h2><span class="chip">${it.yl.length} ปี</span></div><div class="small mono">${it.yl.join(' · ')}</div></div>` : ''}
         ${res.length ? `<div class="card"><div class="card-head"><h2>ไฟล์ / บริการในชุดนี้ <span class="muted small">${fmt(it.nr || res.length, 0)} รายการ${it.nr > res.length ? ` (แสดง ${res.length})` : ''}</span></h2></div>
           ${nImp ? `<div class="note info small" style="margin-top:0">นำเข้าคลังได้ ${fmt(nImp, 0)} ไฟล์ — กด "นำเข้าคลัง" แล้วเลือกพื้นที่ศึกษา แอปจะดาวน์โหลดเฉพาะส่วนที่ต้องการ (ถ้าเซิร์ฟเวอร์รองรับ) ตัดตามพื้นที่ แล้วเพิ่มเข้าคลังให้</div>` : ''}
           <div class="hub-links">${res.map((r, i) => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.size ? fmt(r.size / 1e6, 1) + ' MB' : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '), true,

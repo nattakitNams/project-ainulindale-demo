@@ -1,0 +1,73 @@
+Relationship between X and Y from the actual pixel values (sampled): correlation, cross-tabulation, ANOVA / Kruskal–Wallis, spatial autocorrelation and charts
+Area-level relationships ≠ individual-level relationships (ecological fallacy), and results depend on resolution/extent (MAUP) — compare several resolutions
+η² / ε² = share of Y's variance explained by the X classes (0.01 small · 0.06 medium · 0.14 large) · rely on Kruskal–Wallis when data are skewed
+Rows = Y classes (bottom→top) · columns = X classes (left→right) · obs/exp > 1 = this cell occurs more often than expected if X and Y were unrelated
+(statistically significant, but the effect size is almost zero — no practical meaning)
+
+From source metadata · real value = file value × scale + offset
+After accounting for spatial clustering, effective sample size ~
+Only gridded bivariate maps created in the app can be analysed
+) — Pearson is sensitive to extreme values; see Spearman ρ
+Share of pixels · × times what is expected if unrelated
+Sampling values and computing… (up to about 1 minute)
+The source datasets of this map have been deleted
+Cell occurring most above expectation = Y class
+Sampled from random tiles across the area
+No pixels have values on both axes
+(not significant at 0.05)
+" differ between classes of "
+(significant at 0.05)
+p (adjusted for clustering)
+Highly skewed data (skew X
+
+r 95% confidence interval
+Resample / recompute
+Pixel count (log)
+Relationship statistics
+adjusted for clustering
+
+
+Effective n ~
+Variables / bands
+times expected)
+and r on log1p
+too small)
+Effective n
+" effect size ε²
+
+OLS slope
+Y by X class
+fairly strong
+Years with files
+" are related
+r on log1p
+Scatter chart
+by class of
+pixels → p
+Report .md
+(normal formula
+Cross-tab
+Analyse
+n (sampled)
+p (normal)
+× X class
+Meaning
+on log1p
+almost none
+
+(field)
+moderate
+X class
+positively
+) instead
+Box
+Value "
+p-value
+negatively
+at a
+Unit
+tiles)
+weak
+small
+large
+strong
