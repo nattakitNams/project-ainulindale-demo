@@ -31,7 +31,7 @@ def wait_engine(sec=30):
             return True
         except requests.RequestException:
             time.sleep(1)
-    raise SystemExit(f'ติดต่อตัวประมวลผลที่ {ENGINE} ไม่ได้ — เปิดตัวประมวลผลทดสอบก่อน (ดู docs/DEVELOPER.md)')
+    raise SystemExit(f'ติดต่อตัวประมวลผลที่ {ENGINE} ไม่ได้ — เปิดตัวประมวลผลทดสอบก่อน (ดู README หัวข้อการทดสอบ)')
 
 
 def need(path, what):
