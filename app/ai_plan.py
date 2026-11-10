@@ -41,6 +41,8 @@ def update(cid, **kw):
             cur[k] = str(kw[k])[:500]
     if kw.get('decisions') is not None:
         cur['decisions'] = [str(x)[:200] for x in kw['decisions']][:20]
+    if kw.get('delivered') is not None:
+        cur['delivered'] = [str(x)[:160] for x in kw['delivered']][:40]
     if kw.get('blockers') is not None:
         cur['blockers'] = [str(x)[:300] for x in kw['blockers']][:10]
     if kw.get('folder_id') is not None:
@@ -60,10 +62,24 @@ def update(cid, **kw):
     return cur
 
 
+def all_():
+    """แผนของทุกบทสนทนา (ใหม่สุดก่อน) — ให้ผู้ช่วยตอบได้ว่าเคยทำอะไรไปแล้วในแชตก่อน ๆ"""
+    if not DIR.exists():
+        return []
+    out = []
+    for p in DIR.glob('*.json'):
+        try:
+            d = json.loads(p.read_text(encoding='utf-8'))
+        except ValueError:
+            continue
+        out.append(dict(d, chat_id=p.stem))
+    return sorted(out, key=lambda x: x.get('updated_at') or '', reverse=True)
+
+
 def as_text(plan):
     if not plan:
         return 'แผนงานของบทสนทนานี้: ยังไม่มี (สร้างด้วย update_plan เมื่อผู้ใช้ให้ทำงานที่มีหลายขั้น)'
-    L = ['แผนงานของบทสนทนานี้ (ข้อตกลงเหล่านี้ผู้ใช้ตอบแล้ว — ห้ามถามซ้ำ):']
+    L = ['แผนงานของบทสนทนานี้ — สิ่งที่ผู้ใช้ตอบแล้วห้ามถามซ้ำ · แต่ถ้าข้อความล่าสุดของผู้ใช้ขัดกับข้อตกลงใด ให้ทำตามข้อความล่าสุด แล้ว update_plan แก้ข้อตกลงนั้น:']
     if plan.get('goal'):
         L.append(f'เป้าหมาย: {plan["goal"]}')
     if plan.get('purpose'):
@@ -75,6 +91,8 @@ def as_text(plan):
     for i, s in enumerate(plan.get('steps') or [], 1):
         L.append(f'{i}. [{STATUS_TH.get(s["status"], s["status"])}] {s["title"]}' + (f' — {s["note"]}' if s.get('note') else '')
                  + (f' → ชุด {", ".join("#" + str(o) for o in s["outputs"])}' if s.get('outputs') else ''))
+    for x in plan.get('delivered') or []:
+        L.append(f'ส่งมอบแล้ว (ห้ามส่งซ้ำ/ห้ามแต่งชื่อใหม่ให้ของเดิม): {x}')
     for b in plan.get('blockers') or []:
         L.append(f'ติด: {b}')
     return '\n'.join(L)

@@ -249,7 +249,51 @@ def ai_chat():
     r = ai.chat(b.get('messages'), b.get('page'), b.get('chat_id'))
     from . import ai_plan
     r['plan'] = ai_plan.get(b.get('chat_id'))
+    _ai_log(b, r)
     return jsonify(r)
+
+
+def _ai_log(b, r):
+    """บันทึกบทสนทนาลง workspace/ai_logs/<chat_id>.jsonl (ในเครื่องเท่านั้น — ไม่มี API key) ใช้ตรวจย้อนหลังว่าผู้ช่วยตอบอะไร/เรียกเครื่องมืออะไร"""
+    import re as _re
+    cid = _re.sub(r'[^A-Za-z0-9_-]', '', str(b.get('chat_id') or ''))[:64]
+    if not cid:
+        return
+    try:
+        msgs = b.get('messages') or []
+        last = next((m for m in reversed(msgs) if m.get('role') in ('user', 'event')), {})
+        d = WORKSPACE / 'ai_logs'
+        d.mkdir(parents=True, exist_ok=True)
+        with open(d / f'{cid}.jsonl', 'a', encoding='utf-8') as f:
+            f.write(json.dumps(dict(t=db.now(), model=ai.cfg().get('model'), user=str(last.get('content') or '')[:4000], reply=str(r.get('reply') or '')[:20000],
+                                    tools=[u.get('tool') for u in r.get('used') or []], proposals=[p.get('action') for p in r.get('proposals') or []],
+                                    docs=[x.get('file') for x in r.get('docs') or []]), ensure_ascii=False) + '\n')
+    except Exception as e:                                   # บันทึกไม่ได้ ไม่ให้แชตล้ม
+        print('[ai log]', e)
+
+
+@app.route('/api/ai/docs')
+def ai_docs_list():
+    from . import ai_docs
+    return jsonify(docs=ai_docs.all_())
+
+
+@app.route('/api/ai/docs/<name>')
+def ai_docs_get(name):
+    from . import ai_docs
+    try:
+        p = ai_docs.path(name)
+    except FileNotFoundError:
+        raise ApiError('ไม่พบเอกสาร')
+    md = p.read_text(encoding='utf-8')
+    if request.args.get('raw'):
+        return Response(md, mimetype='text/markdown; charset=utf-8', headers={'Content-Disposition': f'attachment; filename*=UTF-8\'\'{_q(name)}'})
+    return Response(ai_docs.to_html(md, p.stem), mimetype='text/html; charset=utf-8')
+
+
+def _q(s):
+    from urllib.parse import quote
+    return quote(s)
 
 
 @app.route('/api/datasets/<int:did>/bivstats', methods=['POST'])

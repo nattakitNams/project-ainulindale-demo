@@ -95,7 +95,7 @@ const AIDock = (() => {
       try {
         const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
         if (r.plan !== undefined) plan = r.plan;
-        hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note,
+        hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [],
           proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
       } catch (e) { hist.push({ role: 'error', content: e.message }); }
       busy = false; save(); drawMsgs();
@@ -265,7 +265,7 @@ const AIDock = (() => {
     try {
       const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
       if (r.plan !== undefined) plan = r.plan;
-      hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
+      hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [], proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
     } catch (e) { hist.push({ role: 'error', content: e.message }); }
     busy = false; save(); drawMsgs();
   }
@@ -302,6 +302,8 @@ const AIDock = (() => {
         : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
           + (x.used?.length ? `<div class="ai-used tiny muted">ตรวจข้อมูล: ${[...new Set(x.used.map(u => u.tool))].join(', ')}${x.used.some(u => u.error) ? ' · บางคำขอผิดพลาด' : ''}</div>` : '')
           + (x.note ? `<div class="ai-used tiny muted">${esc(x.note)}</div>` : '')
+          + (x.docs || []).map(d => `<div class="ai-doc">${IC.pdf}<div><b translate="no">${esc(d.title)}</b><div class="tiny muted">เอกสาร v${d.version} · ${d.lines} บรรทัด${d.tables ? ` · ${d.tables} ตาราง` : ''}</div></div>
+              <a class="btn sm" href="${ENGINE}${d.url}" target="_blank" rel="noopener">เปิด</a><a class="btn sm ghost" href="${ENGINE}${d.url}?raw=1">${IC.download}.md</a></div>`).join('')
           + (x.proposals || []).map((p, pi) => propCard(p, mi, pi)).join('')
           + ((x.proposals || []).filter(p => p.state === 'pending').length > 1 ? `<button class="sm primary ai-all" data-all="${mi}">${IC.check}ยืนยันทั้งหมด (${x.proposals.filter(p => p.state === 'pending').length})</button>` : '')).join('')
       + (busy ? '<div class="ai-msg assistant typing"><i></i><i></i><i></i></div>' : '');

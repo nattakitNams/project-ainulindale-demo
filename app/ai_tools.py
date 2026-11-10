@@ -426,11 +426,34 @@ def t_get_data_knowledge(topics=None, query=None):
     return knowledge.get(topics, query)
 
 
+def t_save_document(title, markdown):
+    """บันทึกงานเขียนยาว (แคตาล็อก ตาราง ระเบียบวิธี ร่างรายงาน) เป็นเอกสาร — ชื่อเดิม = เวอร์ชันใหม่"""
+    from . import ai_docs
+    try:
+        m = ai_docs.save(title, markdown, CURRENT_CHAT.get('id'))
+    except ValueError as e:
+        raise ToolError(str(e))
+    return dict(ok=True, document=dict(title=m['title'], file=m['file'], version=m['version'], lines=m['lines'], tables=m['tables'],
+                                       url=f'/api/ai/docs/{m["file"]}'),
+                hint='ในแชตตอบแค่สรุปสั้น (≤ 8 บรรทัด) ว่าเอกสารมีอะไร/เปลี่ยนอะไร — ผู้ใช้เปิดเอกสารจากการ์ดได้')
+
+
+def t_list_past_work(limit=8):
+    """งานในบทสนทนาก่อน ๆ: แผนงาน (เป้าหมาย ข้อตกลง ขั้นตอน สิ่งที่ส่งมอบ) + เอกสารที่เขียนไว้ + โน้ตชุดข้อมูลล่าสุด"""
+    from . import ai_docs, ai_plan
+    plans = [dict(chat_id=p['chat_id'], current=p['chat_id'] == CURRENT_CHAT.get('id'), updated_at=p.get('updated_at'), goal=p.get('goal'),
+                  purpose=p.get('purpose'), decisions=p.get('decisions'), delivered=p.get('delivered'),
+                  steps=[f'[{s["status"]}] {s["title"]}' + (f' → #{",#".join(map(str, s["outputs"]))}' if s.get('outputs') else '') for s in p.get('steps') or []],
+                  blockers=p.get('blockers')) for p in ai_plan.all_()[:int(limit or 8)]]
+    docs = [dict(title=d['title'], file=d['file'], version=d['version'], updated_at=d['updated_at'], url=f'/api/ai/docs/{d["file"]}') for d in ai_docs.all_()[:20]]
+    return dict(plans=plans, documents=docs, note='ประวัติข้อความแชตเก่าเก็บในเบราว์เซอร์ ผู้ช่วยไม่เห็น — แต่เห็นแผนงาน/เอกสาร/โน้ตเหล่านี้')
+
+
 # ---------- แผนงานของบทสนทนา ----------
 CURRENT_CHAT = {'id': None}
 
 
-def t_update_plan(goal=None, purpose=None, audience=None, steps_json=None, decisions=None, blockers=None, folder_id=None):
+def t_update_plan(goal=None, purpose=None, audience=None, steps_json=None, decisions=None, blockers=None, folder_id=None, delivered=None):
     """เขียน/อัปเดตแผนงานของบทสนทนานี้ (เก็บถาวร แสดงให้ผู้ใช้เห็น) — ส่งเฉพาะช่องที่เปลี่ยน"""
     import json as _json
     from . import ai_plan
@@ -442,7 +465,8 @@ def t_update_plan(goal=None, purpose=None, audience=None, steps_json=None, decis
             raise ToolError('steps_json ต้องเป็น JSON: [{"title":"…","status":"todo|doing|done|blocked|skipped","outputs":[69],"note":"…"}]')
     if not CURRENT_CHAT['id']:
         raise ToolError('บทสนทนานี้ไม่มีรหัส (หน้าเว็บรุ่นเก่า) — รีเฟรชหน้าเว็บ')
-    plan = ai_plan.update(CURRENT_CHAT['id'], goal=goal, purpose=purpose, audience=audience, steps=steps, decisions=decisions, blockers=blockers, folder_id=folder_id)
+    plan = ai_plan.update(CURRENT_CHAT['id'], goal=goal, purpose=purpose, audience=audience, steps=steps, decisions=decisions, blockers=blockers, folder_id=folder_id,
+                          delivered=delivered)
     return dict(ok=True, plan=plan)
 
 
@@ -811,7 +835,11 @@ TOOLS = [
     ('update_plan', 'note', t_update_plan,
      'เขียน/อัปเดตแผนงานของบทสนทนา (ผู้ใช้เห็นเป็นแผงในแชต · ส่งกลับให้คุณทุกรอบ) — เรียกเมื่อเริ่มงานหลายขั้น และทุกครั้งที่ขั้นเปลี่ยนสถานะ/ได้ชุดใหม่/ผู้ใช้ตัดสินใจอะไร · ส่งเฉพาะช่องที่เปลี่ยน',
      dict(goal=S, purpose=S, audience=S, steps_json=dict(type='string', description='JSON array [{"title","status":"todo|doing|done|blocked|skipped","outputs":[ids],"note"}] — ส่งทั้งรายการ'),
-          decisions=dict(type='array', items=S), blockers=dict(type='array', items=S), folder_id=I), []),
+          decisions=dict(type='array', items=S), blockers=dict(type='array', items=S), folder_id=I,
+          delivered=dict(type='array', items=S, description='ทุกสิ่งที่ส่งมอบแล้ว (ชื่อตัวชี้วัด/เอกสาร/แผนที่) — ส่งทั้งรายการ')), []),
+    ('save_document', 'note', t_save_document, 'บันทึกงานเขียนยาวเป็นเอกสาร (markdown: ตาราง แคตาล็อก ระเบียบวิธี ร่างรายงาน) — ใช้แทนการพิมพ์ยาวในแชตทุกครั้งที่เกิน ~25 บรรทัดหรือมีตารางใหญ่ · ชื่อเดิม = อัปเดตเวอร์ชัน',
+     dict(title=S, markdown=S), ['title', 'markdown']),
+    ('list_past_work', 'read', t_list_past_work, 'งานในบทสนทนาก่อน ๆ (แผนงาน ข้อตกลง สิ่งที่ส่งมอบ เอกสาร) — ใช้เมื่อผู้ใช้ถามถึงแชตเก่า/งานที่เคยทำ หรือเริ่มแชตใหม่ที่ต่อจากงานเดิม', dict(limit=I), []),
     ('get_data_knowledge', 'read', t_get_data_knowledge,
      'คลังความรู้ข้อมูล: ข้อมูลชนิดนี้วัดอะไร หน่วย การแปลงค่า/calibration (สูตรใช้กับ calc ได้ทันที) ช่วงค่าปกติ เหมาะ/ไม่เหมาะ ข้อควรระวัง ความน่าเชื่อถือ + หลักการ (ประเภทค่า MAUP เวลา ไบแวเรียต การเลือกแหล่ง) — topics ดูจาก knowledge_topics ของชุดข้อมูล หรือใส่ query เป็นชื่อชุด',
      dict(topics=dict(type='array', items=S), query=S), []),
