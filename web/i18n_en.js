@@ -2165,6 +2165,7 @@ window.I18N_EN = {
 "ค้นหาชื่อชั้นข้อมูล": "Search layer name",
 "พาเลทไบแวเรียต": "Bivariate palette",
 "— แทนสีทุกรหัสตามตาราง 2 มิติ": "— recolours every code from the 2-D grid",
+"ถ้ารวมไว้เพื่อแปลงเป็นราสเตอร์แบบมี/ไม่มี (presence) ไม่ต้องรวมรูป — ผลพิกเซลเท่ากัน และเร็วกว่ามาก (รวมรูปชุดใหญ่ เช่น น้ำท่วมทั้งปี 28 ล้านจุดยอด ใช้ ~2 นาที)": "If you merge only to rasterize as presence (yes/no), skip dissolving — the pixels come out the same and it is much faster (dissolving a large set, e.g. a full year of floods with 28 million vertices, takes ~2 minutes)",
 "สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ": "Share of pixel area covered by shapes, 0–1 (e.g. building area percentage) · pixels split 10× finer to count",
 "ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)": "that covers the most area in that pixel (pixels split 10× finer to count — slower)",
 "raster อ้างอิง — พิกเซลจะตรงกับชุดนี้ (ใช้ไบแวเรียตต่อได้ทันที)": "Reference raster — pixels will match this dataset (ready for bivariate)",

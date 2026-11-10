@@ -10,6 +10,7 @@ trend  — ราสเตอร์ N ปี (ชุด + ปี) → ต่อ�
 """
 import ast
 import math
+import time
 from fractions import Fraction
 from pathlib import Path
 
@@ -332,39 +333,83 @@ def _vmerge_inputs(p):
     return dss
 
 
-def fast_union(geoms):
+def _pool_run(fn, items, weights, report, label, t0):
+    """รันขนาน 8 เธรด + รายงานความคืบหน้าทุก ~2 วิ แม้ยังไม่มีชิ้นไหนเสร็จ (บอกว่ายังทำงานอยู่ ไม่ได้ค้าง)
+    weights = น้ำหนักต่อชิ้น (จำนวนจุดยอด) → % ตามปริมาณงานจริง ไม่ใช่ตามจำนวนชิ้น"""
+    from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+    tot = float(sum(weights)) or 1.0
+    res, done_w, n_done = [None] * len(items), 0.0, 0
+    with ThreadPoolExecutor(8) as ex:
+        fut = {ex.submit(fn, it): k for k, it in enumerate(items)}
+        pend = set(fut)
+        while pend:
+            fin, pend = wait(pend, timeout=2.0, return_when=FIRST_COMPLETED)
+            for f in fin:
+                k = fut[f]
+                res[k] = f.result()
+                done_w += weights[k]
+                n_done += 1
+            report(done_w / tot, f'{label} {n_done:,}/{len(items):,} ({done_w / tot:.0%} ของจุดยอด) · {time.time() - t0:.0f} วิ')
+    return res
+
+
+def fast_union(geoms, prog=None, log=None):
     """รวมรูป (dissolve) แบบเร็ว — ผลเท่า union_all ทั้งก้อน
     เดิม geopandas.dissolve = union_all ของทุกรูปพร้อมกัน → GEOS ต้อง overlay ทั้งชุด (flood_2016: 45,633 ส่วน 5 ล้านจุดยอด = 141–189 วิ)
     ใหม่: (1) ซ่อมเฉพาะรูปที่ไม่ valid: make_valid(method='structure') ขนาน 8 เธรด — ไม่ใช้ buffer(0) เพราะรูปไขว้ตัวเอง (bow-tie) หายครึ่ง
     (2) แตกเป็นรูปเดี่ยว
     (3) STRtree หาคู่ที่แตะ/ซ้อนกัน → กราฟ → connected components (4) union เฉพาะในกลุ่ม (ขนาน 8 เธรด) กลุ่มเดี่ยวไม่ต้องทำ
-    (5) กลุ่มต่างกันไม่แตะกันแน่นอน → ประกอบเป็น MultiPolygon ได้เลย (≈ 4 วิ)"""
-    from concurrent.futures import ThreadPoolExecutor
+    (5) กลุ่มต่างกันไม่แตะกันแน่นอน → ประกอบเป็น MultiPolygon ได้เลย
+    prog(สัดส่วน 0–1, ข้อความ) ถูกเรียกทุก ~2 วิ · log(ข้อความ) สรุปแต่ละขั้นพร้อมเวลา
+    น้ำหนักขั้น (วัดจาก flood_2017 28 ล้านจุดยอด): ตรวจ valid 10% · ซ่อม 55% · ดัชนี/กลุ่ม 5% · union 30%"""
     from scipy.sparse import coo_matrix
     from scipy.sparse.csgraph import connected_components
+    prog = prog or (lambda f, m: None)
+    log = log or (lambda m: None)
+    t0 = time.time()
     v = np.asarray(geoms, dtype=object).copy()
     v = v[~shapely.is_missing(v)]
-    bad = np.nonzero(~shapely.is_valid(v))[0]
+    nv = shapely.get_num_coordinates(v)
+    prog(0.0, f'ตรวจความถูกต้องของรูป {len(v):,} รูป ({int(nv.sum()):,} จุดยอด)')
+    ch = np.array_split(np.arange(len(v)), max(1, min(64, len(v) // 50)))      # ตรวจ valid เป็นช่วง ขนาน + รายงานได้
+    ok = _pool_run(lambda ix: shapely.is_valid(v[ix]), ch, [int(nv[ix].sum()) for ix in ch], lambda f, m: prog(0.10 * f, m), 'ตรวจรูป', t0)
+    bad = np.nonzero(~np.concatenate(ok))[0] if ok else np.zeros(0, int)
+    log(f'ตรวจรูป {len(v):,} รูป {int(nv.sum()):,} จุดยอด → เสีย {len(bad):,} รูป ({int(nv[bad].sum()):,} จุดยอด) · {time.time() - t0:.1f} วิ')
     if len(bad):
-        bad = bad[np.argsort(-shapely.get_num_coordinates(v[bad]))]      # รูปใหญ่เริ่มก่อน → เธรดไม่รอกันท้าย
-        with ThreadPoolExecutor(8) as ex:
-            v[bad] = list(ex.map(lambda g: shapely.make_valid(g, method='structure', keep_collapsed=False), v[bad]))
+        bad = bad[np.argsort(-nv[bad])]                         # รูปใหญ่เริ่มก่อน → เธรดไม่รอกันท้าย
+        t1 = time.time()
+        v[bad] = _pool_run(lambda g: shapely.make_valid(g, method='structure', keep_collapsed=False), list(v[bad]), nv[bad].tolist(),
+                           lambda f, m: prog(0.10 + 0.55 * f, m), 'ซ่อมรูปที่เสีย', t0)
+        log(f'ซ่อมรูปที่เสีย {len(bad):,} รูป · {time.time() - t1:.1f} วิ')
     parts = shapely.get_parts(v)
     parts = parts[shapely.get_type_id(parts) == 3]              # เก็บเฉพาะ polygon (เส้น/จุดที่เกิดจากการซ่อมทิ้ง)
     if not len(parts):
         return shapely.MultiPolygon()
-    i, j = shapely.STRtree(parts).query(parts, predicate='intersects')
+    t1 = time.time()
+    prog(0.65, f'หารูปที่แตะ/ซ้อนกัน ({len(parts):,} ส่วน) · {time.time() - t0:.0f} วิ')
+    tree = shapely.STRtree(parts)
+    pv = shapely.get_num_coordinates(parts)
+    ch = np.array_split(np.arange(len(parts)), max(1, min(256, len(parts) // 200)))
+
+    def pairs(ix):
+        a_, b_ = tree.query(parts[ix], predicate='intersects')
+        return ix[a_], b_
+    pr = _pool_run(pairs, ch, [int(pv[ix].sum()) for ix in ch], lambda f, m: prog(0.65 + 0.05 * f, m), 'หารูปที่แตะ/ซ้อนกัน', t0)
+    i = np.concatenate([x[0] for x in pr]) if pr else np.zeros(0, int)
+    j = np.concatenate([x[1] for x in pr]) if pr else np.zeros(0, int)
     n = len(parts)
     _, lab = connected_components(coo_matrix((np.ones(len(i)), (i, j)), shape=(n, n)), directed=False)
     order = np.argsort(lab, kind='stable')
     groups = np.split(order, np.cumsum(np.bincount(lab))[:-1])
     groups.sort(key=len, reverse=True)                          # กลุ่มใหญ่เริ่มก่อน → เธรดไม่รอกันท้าย
-
-    def one(idx):
-        return parts[idx[0]] if len(idx) == 1 else shapely.union_all(parts[idx])
-    with ThreadPoolExecutor(8) as ex:
-        res = list(ex.map(one, groups))
-    out = shapely.get_parts(np.array(res, dtype=object))
+    multi = [g for g in groups if len(g) > 1]
+    log(f'{n:,} ส่วน → {len(groups):,} กลุ่ม (ต้อง union {len(multi):,} กลุ่ม ใหญ่สุด {len(groups[0]):,} ส่วน) · {time.time() - t1:.1f} วิ')
+    t1 = time.time()
+    res = _pool_run(lambda idx: shapely.union_all(parts[idx]), multi, [int(pv[g].sum()) for g in multi],
+                    lambda f, m: prog(0.70 + 0.30 * f, m), 'รวมกลุ่ม', t0) if multi else []
+    log(f'union {len(multi):,} กลุ่ม · {time.time() - t1:.1f} วิ · รวมทั้งหมด {time.time() - t0:.1f} วิ')
+    single = [parts[g[0]] for g in groups if len(g) == 1]
+    out = shapely.get_parts(np.array(res + single, dtype=object))
     return shapely.multipolygons(out[shapely.get_type_id(out) == 3])
 
 
@@ -384,6 +429,7 @@ def op_vmerge(job, P, log):
         g['source'] = d['name']
         gdfs.append(g)
         P(0.6 * (i + 1) / len(dss), f'อ่าน {i + 1}/{len(dss)}: {d["name"]} ({len(g):,} feature)')
+        log(f'อ่าน {i + 1}/{len(dss)}: {d["name"]} {len(g):,} feature')
     out = gpd.GeoDataFrame(pd.concat(gdfs, ignore_index=True), crs=crs)
     if p.get('dissolve'):
         f = p.get('dissolve_field') or None
@@ -392,10 +438,14 @@ def op_vmerge(job, P, log):
         if f:
             keys = list(out.groupby(f, sort=True, dropna=False).groups.items())
             first = out.drop(columns='geometry').groupby(f, sort=True, dropna=False).first().reset_index()
-            geo = [fast_union(out.geometry.values[np.asarray(out.index.get_indexer(ix))]) for _, ix in keys]
+            geo = []
+            for k, (key, ix) in enumerate(keys):
+                pre = f'กลุ่ม {k + 1}/{len(keys)} ({f}={key}): '
+                geo.append(fast_union(out.geometry.values[np.asarray(out.index.get_indexer(ix))],
+                                      lambda fr, m, k=k, pre=pre: P(0.6 + 0.15 * (k + fr) / len(keys), pre + m), lambda m, pre=pre: log(pre + m)))
             out = gpd.GeoDataFrame(first, geometry=geo, crs=crs)
         else:
-            out = gpd.GeoDataFrame(out.drop(columns='geometry').iloc[:1].reset_index(drop=True), geometry=[fast_union(out.geometry.values)], crs=crs)
+            out = gpd.GeoDataFrame(out.drop(columns='geometry').iloc[:1].reset_index(drop=True), geometry=[fast_union(out.geometry.values, lambda fr, m: P(0.6 + 0.15 * fr, 'รวมรูป: ' + m), log)], crs=crs)
         P(0.75, 'รวมรูปเสร็จ')
         log(f'รวมรูป (dissolve) {"ตามฟิลด์ " + f if f else "ทั้งหมด"} → {len(out):,} รูป')
     out_dir = Path(job['out_dir'])

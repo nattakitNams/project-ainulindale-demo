@@ -1,3 +1,4 @@
 Search layer name
 Bivariate palette
 — recolours every code from the 2-D grid
+If you merge only to rasterize as presence (yes/no), skip dissolving — the pixels come out the same and it is much faster (dissolving a large set, e.g. a full year of floods with 28 million vertices, takes ~2 minutes)

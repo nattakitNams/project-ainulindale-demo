@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.40';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.41';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2265,6 +2265,7 @@ async function pageTools(q) {
       <div class="small muted" style="margin-bottom:10px">รวม shapefile / GeoPackage / GeoJSON หลายชั้นเป็นชั้นเดียว (GeoPackage) — แปลงพิกัดตามชั้นแรก · เพิ่มคอลัมน์ <span class="mono">source</span> บอกว่ามาจากชั้นไหน · ฟิลด์ที่ไม่ตรงกันเว้นว่าง</div>
       ${checklist(vs, 'vmL')}
       <div class="grid-form" style="margin-top:12px"><label class="field"><span>รวมรูป (dissolve)</span><select id="vmD"><option value="">ไม่รวม — เก็บทุกรูปตามเดิม</option><option value="all">รวมเป็นรูปเดียว</option><option value="field">รวมตามฟิลด์…</option></select></label>
+        <div class="tiny muted full">ถ้ารวมไว้เพื่อแปลงเป็นราสเตอร์แบบมี/ไม่มี (presence) ไม่ต้องรวมรูป — ผลพิกเซลเท่ากัน และเร็วกว่ามาก (รวมรูปชุดใหญ่ เช่น น้ำท่วมทั้งปี 28 ล้านจุดยอด ใช้ ~2 นาที)</div>
         <label class="field hide" id="vmFF"><span>ฟิลด์</span><input type="text" id="vmF" placeholder="เช่น prov_code หรือ source"></label>
         <label class="field"><span>ชื่อผลลัพธ์</span><input type="text" id="vmName" placeholder="เช่น ขอบเขตรวม"></label></div>
       <button id="vmRun" class="primary" style="margin-top:12px">${IC.play}รวมเวกเตอร์</button></div>`;
