@@ -654,6 +654,43 @@ def rasterize_grid(p, vds):
     return engine.lattice_grid(bb, crs, res, geo, origin), mode
 
 
+def _split_big(gdf, max_v=20000):
+    """รูปเดียวที่ใหญ่มาก (จุดยอดเกิน max_v) → ตัดเป็นชิ้นตามครึ่งกรอบซ้ำ ๆ จนเล็กพอ (ชิ้นติดกันพอดี ผล rasterize เท่าเดิม)"""
+    nv = shapely.get_num_coordinates(gdf.geometry.values)
+    if not len(gdf) or nv.max() <= max_v:
+        return gdf
+    rows = []
+
+    def cut(g, depth=0):
+        if g.is_empty:
+            return
+        if shapely.get_num_coordinates(g) <= max_v or depth > 16:
+            rows.append(g)
+            return
+        x0, y0, x1, y1 = g.bounds
+        if x1 - x0 >= y1 - y0:
+            xm = (x0 + x1) / 2
+            parts = (shapely.clip_by_rect(g, x0, y0, xm, y1), shapely.clip_by_rect(g, xm, y0, x1, y1))
+        else:
+            ym = (y0 + y1) / 2
+            parts = (shapely.clip_by_rect(g, x0, y0, x1, ym), shapely.clip_by_rect(g, x0, ym, x1, y1))
+        for q in parts:
+            cut(q, depth + 1)
+    gdf = gdf.assign(_ord=np.arange(len(gdf)))
+    big = np.flatnonzero(nv > max_v)
+    out = [gdf.iloc[np.flatnonzero(nv <= max_v)]]
+    for i in big:
+        rows.clear()
+        cut(gdf.geometry.iloc[i])
+        piece = gdf.iloc[[i] * len(rows)].copy()
+        piece[gdf.geometry.name] = rows
+        out.append(piece)
+    import geopandas as gpd
+    import pandas as pd
+    res = gpd.GeoDataFrame(pd.concat(out, ignore_index=True), geometry=gdf.geometry.name, crs=gdf.crs)
+    return res.sort_values('_ord', kind='stable').drop(columns='_ord').reset_index(drop=True)   # คงลำดับเดิม (feature หลังทับ feature ก่อน)
+
+
 def op_rasterize(job, P, log):
     import pyogrio
     from rasterio.features import rasterize
@@ -703,6 +740,13 @@ def op_rasterize(job, P, log):
         odt, onod, vt = 'uint8', 255, 'class'
     else:
         odt, onod, vt = 'int32', -2147483648, 'class'
+    # แตก MultiPolygon เป็นส่วนย่อย + ดัชนีเชิงพื้นที่ → แต่ละไทล์ rasterize เฉพาะส่วนที่ทับ
+    # (เดิม: feature เดียวหลายหมื่นส่วน เช่น น้ำท่วมที่รวมรูปแล้ว 3.3 ล้านจุดยอด ถูก rasterize ทั้งก้อนทุกไทล์ — 3.8 วิ/ไทล์ → 0.002 วิ)
+    nf = len(gdf)
+    gdf = gdf.explode(index_parts=False).reset_index(drop=True)
+    gdf = _split_big(gdf)
+    if len(gdf) != nf:
+        log(f'แตกเป็น {len(gdf):,} ส่วนย่อยเพื่อให้แต่ละไทล์ประมวลผลเฉพาะส่วนที่ทับ')
     sidx = gdf.sindex
     out_dir = Path(job['out_dir'])
     base = export.slug(p.get('name') or f"{vds['name']}_{mode}", 60)

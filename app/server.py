@@ -1608,6 +1608,13 @@ def main():
         sys.exit(0)
     db.init()
     jobs.start_dispatcher()
+    try:
+        from . import recipes
+        n = recipes.recover()
+        if n:
+            print(f'สูตรงานที่ค้างจากรอบก่อน {n} รายการ → ตั้งเป็น "ถูกขัดจังหวะ"')
+    except Exception as e:
+        print('[recipes recover]', e)
     basedata.seed_background()                            # ขอบเขตการปกครอง GISTDA (เบื้องหลัง · ออฟไลน์ = ลองใหม่ครั้งหน้า)
     print(f'{APP_NAME} {APP_VERSION}')
     print(f'workspace: {WORKSPACE}')

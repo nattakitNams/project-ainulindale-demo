@@ -1,0 +1,13 @@
+Output area = the selected study area — inside the area but outside the vector shapes = 0 · outside the area (e.g. sea, neighbouring countries) = no data
+Output area = the bounding box of this vector — to cross with nationwide data (e.g. population), choose the study area
+Output area = the full extent of the selected raster — outside the vector shapes = 0 (crosses with that dataset over its whole area)
+The engine was closed while this step was running — run the recipe again (finished steps already have their datasets)
+sub-parts so each tile only processes the parts it overlaps
+interrupted (engine was closed)
+items → set to "interrupted"
+Recipes left over from the previous session
+Clip to study area
+Output area
+Recipe not found
+Document not found
+metres

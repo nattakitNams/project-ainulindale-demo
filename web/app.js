@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.36';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.37';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -441,11 +441,10 @@ async function pageDataset(id) {
           <label class="field rzRef"><span>ความละเอียด</span><select id="rzRes"></select></label>
           <label class="field rzOwn"><span>ระบบพิกัด</span><select id="rzCrs"><option value="">ของไฟล์นี้ (${esc((m.crs_name || '').split(' · ')[0])})</option><option value="EPSG:32647">UTM โซน 47N (EPSG:32647)</option><option value="EPSG:32648">UTM โซน 48N (EPSG:32648)</option><option value="EPSG:4326">WGS 84 องศา (EPSG:4326)</option></select></label>
           <label class="field rzOwn"><span>ความละเอียด <b id="rzUnit"></b></span><select id="rzResSel"></select><input type="number" id="rzResOwn" class="hide" min="0" step="any" value="30" placeholder="พิมพ์ความละเอียด" style="margin-top:6px"></label>
-          <div class="field full"><span>ขอบเขตผลลัพธ์</span><select id="rzExt"></select></div>
+          <div class="field full"><span>พื้นที่ผลลัพธ์</span><select id="rzExt"></select></div>
           <label class="field"><span>วิธีแปลง</span><select id="rzMode"><option value="presence">มี / ไม่มี (1 / 0)</option><option value="attribute">ค่าจากฟิลด์</option><option value="majority">ค่าจากฟิลด์ — ที่กินพื้นที่มากสุดในพิกเซล</option><option value="fraction">สัดส่วนพื้นที่ที่ทับ (0–1)</option></select></label>
           <label class="field rzF"><span>ฟิลด์ที่ใช้เป็นค่า</span><select id="rzField"><option value="">— เลือกฟิลด์ —</option>${m.fields.map(f => { const num = /int|float|double|real/i.test(f.type); return `<option value="${esc(f.name)}" data-num="${num ? 1 : 0}">${esc(f.name)} · ${num ? 'ตัวเลข' : 'ข้อความ'}</option>`; }).join('')}<option value="__index__">ลำดับ feature (1, 2, 3…)</option></select></label>
           <label class="field"><span>พิกเซลไหนนับ</span><select id="rzRule"><option value="center">จุดกึ่งกลางพิกเซลอยู่ในรูป</option><option value="touch">แตะรูปนิดเดียวก็นับ (all touched)</option></select></label>
-          <label class="field full"><span>พื้นที่ศึกษา</span><select id="rzAoi">${aoiOpts}</select></label>
         </div>
         <div class="note info small" id="rzHelp" style="margin:8px 0"></div>
         <button id="rzRun" class="primary">${IC.raster}แปลง</button>
@@ -544,8 +543,6 @@ async function pageDataset(id) {
     const rzExtDefault = () => { if (!rzExtTouched) $('#rzExt').value = rzGrid === 'ref' ? $('#rzRef').value : ''; };
     $('#rzExt').onchange = () => {
       rzExtTouched = true;
-      const a = $('#rzExt').value.startsWith('aoi:') ? $('#rzExt').value.slice(4) : null;
-      if (a && !$('#rzAoi').value) $('#rzAoi').value = a;          // ขอบเขต = พื้นที่ศึกษา → ตัดตามรูปนั้นด้วย (นอกเขต เช่น ทะเล = ไม่มีข้อมูล)
       rzSync();
     };
     const rzSync = () => {
@@ -563,10 +560,10 @@ async function pageDataset(id) {
         majority: `พิกเซลได้ค่าของ ${fld}ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)${txt ? ' · ข้อความแปลงเป็นรหัส + _codes.csv' : ''}`,
         fraction: 'สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ',
       })[md] + '<br><span class="tiny">' + ($('#rzExt').value.startsWith('aoi:')
-        ? 'ขอบเขตผลลัพธ์ = กรอบของพื้นที่ศึกษาที่เลือก — ในพื้นที่ศึกษานอกรูปเวกเตอร์ได้ 0 · นอกพื้นที่ศึกษา = ไม่มีข้อมูล (ตั้งในช่อง "พื้นที่ศึกษา")'
+        ? 'พื้นที่ผลลัพธ์ = พื้นที่ศึกษาที่เลือก — ในพื้นที่นอกรูปเวกเตอร์ได้ 0 · นอกพื้นที่ (เช่น ทะเล เพื่อนบ้าน) = ไม่มีข้อมูล'
         : $('#rzExt').value
-        ? 'ขอบเขตผลลัพธ์ = ทั้งผืนของ raster ที่เลือก — นอกรูปเวกเตอร์ได้ 0 (ไบแวเรียตกับชุดนั้นได้ครบทั้งพื้นที่)'
-        : 'ขอบเขตผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือกพื้นที่ศึกษา "ประเทศไทย" หรือ raster ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน') + '</span>';
+        ? 'พื้นที่ผลลัพธ์ = ทั้งผืนของ raster ที่เลือก — นอกรูปเวกเตอร์ได้ 0 (ไบแวเรียตกับชุดนั้นได้ครบทั้งพื้นที่)'
+        : 'พื้นที่ผลลัพธ์ = กรอบของเวกเตอร์ชุดนี้ — ถ้าจะไบแวเรียตกับข้อมูลทั้งประเทศ (เช่น ประชากร) ให้เลือกพื้นที่ศึกษา "ประเทศไทย" หรือ raster ชุดนั้น ไม่งั้นแผนที่จะได้แค่ส่วนที่ทับกัน') + '</span>';
     };
     $$('#rzGrid button').forEach(b => b.onclick = () => { if (b.disabled) return; rzGrid = b.dataset.g; if (rzGrid === 'ref' && !$('#rzRes').options.length) loadRz(); rzExtDefault(); rzSync(); });
     $('#rzRef').onchange = () => { loadRz(); rzExtDefault(); rzSync(); };
@@ -586,8 +583,9 @@ async function pageDataset(id) {
       if ((md === 'attribute' || md === 'majority') && !$('#rzField').value) return toast('เลือกฟิลด์ที่จะใช้เป็นค่าก่อน', true);
       const g = rzGrid === 'ref' ? { grid: 'ref', ref_dataset_id: +$('#rzRef').value, target_res: $('#rzRes').value } : { grid: 'own', crs: $('#rzCrs').value || null, target_res: $('#rzResOwn').value };
       if (!(+g.target_res > 0) && !String(g.target_res).includes('/')) return toast('ใส่ความละเอียด', true);
-      const ev = $('#rzExt').value, ext = ev.startsWith('aoi:') ? { extent_aoi_id: +ev.slice(4) } : { extent_dataset_id: +ev || null };
-      runJob('rasterize', { dataset_id: id, ...g, ...ext, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value, aoi_id: +$('#rzAoi').value || null });
+      // ช่องเดียว: พื้นที่ศึกษา = ขอบเขต + ตัดตามรูป (เดิมสองช่องทำหน้าที่ซ้อนกัน) · raster = ครอบทั้งผืนชุดนั้น · ว่าง = กรอบเวกเตอร์
+      const ev = $('#rzExt').value, ext = ev.startsWith('aoi:') ? { extent_aoi_id: +ev.slice(4), aoi_id: +ev.slice(4) } : { extent_dataset_id: +ev || null, aoi_id: null };
+      runJob('rasterize', { dataset_id: id, ...g, ...ext, mode: md, field: md === 'presence' || md === 'fraction' ? null : $('#rzField').value, rule: $('#rzRule').value });
     };
   }
   initMap(d);

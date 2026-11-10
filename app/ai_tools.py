@@ -169,7 +169,22 @@ def t_write_dataset_note(dataset_id, text):
     return dict(ok=True, dataset_id=d['id'])
 
 
-CURRENT_MODEL = {}                                          # ai.chat ตั้งชื่อรุ่นไว้ให้โน้ตของ AI ระบุได้ว่าใครเขียน
+class _PerRequest(threading.local):
+    """dict ต่อเธรด (Flask threaded=True: แต่ละคำขอคนละเธรด) — เดิมเป็นตัวแปรร่วม แชตสองแท็บพร้อมกันอาจเขียนแผนผิดบทสนทนา"""
+    def __init__(self):
+        self.d = {}
+
+    def __getitem__(self, k):
+        return self.d[k]
+
+    def __setitem__(self, k, v):
+        self.d[k] = v
+
+    def get(self, k, default=None):
+        return self.d.get(k, default)
+
+
+CURRENT_MODEL = _PerRequest()                                # ai.chat ตั้งชื่อรุ่นไว้ให้โน้ตของ AI ระบุได้ว่าใครเขียน
 _HUB = None
 _DESC = {}
 DL_PAT = re.compile(r'\.(tif|tiff)(/content)?(\?|$)|\.(geo)?json(\?|$)', re.I)     # ไฟล์ที่แอปดาวน์โหลด/ตัดพื้นที่เองได้
@@ -483,7 +498,7 @@ def t_propose_recipe(title, purpose, steps_json, raw_folder_id=None, output_fold
 
 
 # ---------- แผนงานของบทสนทนา ----------
-CURRENT_CHAT = {'id': None}
+CURRENT_CHAT = _PerRequest()
 
 
 def t_update_plan(goal=None, purpose=None, audience=None, steps_json=None, decisions=None, blockers=None, folder_id=None, delivered=None):

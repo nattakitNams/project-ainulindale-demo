@@ -245,9 +245,25 @@ def _run(rid, call, hub_import, review):
     _save(r)
 
 
+def recover():
+    """ตัวประมวลผลถูกปิดระหว่างรันสูตร → เธรดหายไปด้วย · ตั้งสถานะให้ชัด (ไม่ค้าง "กำลังรัน" ตลอดไป) — เรียกตอนเปิดเซิร์ฟเวอร์"""
+    n = 0
+    for r in all_(limit=200):
+        if r.get('status') in ('queued', 'running'):
+            for s in r['steps']:
+                if s['status'] == 'running':
+                    s['status'], s['error'] = 'failed', 'ตัวประมวลผลถูกปิดระหว่างรันขั้นนี้ — สั่งสูตรใหม่ (ขั้นที่เสร็จแล้วมีชุดผลลัพธ์อยู่แล้ว)'
+                elif s['status'] == 'todo':
+                    s['status'] = 'skipped'
+            r['status'], r['finished_at'] = 'interrupted', db.now()
+            _save(r)
+            n += 1
+    return n
+
+
 def summary_text(r):
     """สรุปผลส่งกลับแชต (ให้ผู้ช่วยตัวเก่งอ่านครั้งเดียว)"""
-    L = [f'สูตรงาน "{r["title"]}" {dict(done="เสร็จ", failed="หยุดเพราะมีขั้นล้มเหลว", cancelled="ยกเลิก").get(r["status"], r["status"])}']
+    L = [f'สูตรงาน "{r["title"]}" {dict(done="เสร็จ", failed="หยุดเพราะมีขั้นล้มเหลว", cancelled="ยกเลิก", interrupted="ถูกขัดจังหวะ (ตัวประมวลผลถูกปิด)").get(r["status"], r["status"])}']
     for s in r['steps']:
         line = f'- {s["id"]} {s["title"]} [{s["kind"]}]: {s["status"]}' + (f' → ชุด #{s["output"]}' if s.get('output') else '') + (f' · ผิดพลาด: {s["error"]}' if s.get('error') else '')
         rv = s.get('review') or {}

@@ -534,6 +534,8 @@ def knowledge(r):
     for k in ('start', 'end'):                               # STAC (GEE/PC): ช่วงเวลาของ collection
         if r.get(k) and r[k][:4].isdigit():
             yrs.append(int(r[k][:4]))
+    if r.get('start') and not r.get('end') and r['start'][:4].isdigit():   # ยังผลิตต่อเนื่อง → ถึงปีปัจจุบัน (เดิมขึ้นปีเริ่มปีเดียว เช่น ERA5 "1979")
+        yrs.append(date.today().year)
     yrs = sorted(set(yrs))
     fy = sorted({int(m.group(1)) for x in res for m in [YEAR_PAT.search((x.get('name') or '') + ' ' + (x.get('url') or '').rsplit('/', 1)[-1])] if m})
     return dict(y=[yrs[0], yrs[-1]] if yrs else None, yl=fy if 1 < len(fy) <= 80 else None, nv=len(r.get('variables') or []) or None, ni=sum(bool(IMPORT_PAT.search(x.get('url') or '')) for x in res) or None,
