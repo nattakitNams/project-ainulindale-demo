@@ -13,7 +13,8 @@ from pathlib import Path
 from . import db
 
 KIND_TH = {'bivariate': 'ไบแวเรียต (กริด)', 'hexbiv': 'ไบแวเรียตหกเหลี่ยม', 'resample': 'ปรับความละเอียด / ตัดพื้นที่', 'rasterize': 'แปลงเวกเตอร์เป็นราสเตอร์',
-           'hex': 'แปลงเป็นหกเหลี่ยม', 'vgrid': 'กริดเวกเตอร์', 'change': 'เปรียบเทียบ 2 ช่วงเวลา', 'download': 'ดาวน์โหลดจากลิงก์', 'zonal': 'ไบแวเรียตรายพื้นที่'}
+           'hex': 'แปลงเป็นหกเหลี่ยม', 'vgrid': 'กริดเวกเตอร์', 'change': 'เปรียบเทียบ 2 ช่วงเวลา', 'download': 'ดาวน์โหลดจากลิงก์', 'zonal': 'ไบแวเรียตรายพื้นที่',
+           'calc': 'สูตรคำนวณ', 'trend': 'อนุกรมเวลา', 'mosaic': 'รวมราสเตอร์', 'vmerge': 'รวมเวกเตอร์', 'satellite': 'ภาพดาวเทียม (Planetary Computer)'}
 VT_TH = {'count': 'จำนวนนับ (รวมแล้วผลรวมไม่หาย)', 'density': 'ค่าต่อเนื่อง (เฉลี่ยถ่วงพื้นที่)', 'class': 'ชั้น/รหัส (majority)'}
 METRIC_TH = {'density': 'ความหนาแน่น (ต่อ ตร.กม.)', 'per_pixel': 'ค่าต่อพิกเซล', 'value': 'ค่าตามไฟล์'}
 METHOD_TH = {'quantile': 'ควอนไทล์', 'equal': 'ช่วงเท่ากัน', 'breaks': 'กำหนดเกณฑ์เอง', 'degurba': 'DEGURBA'}
@@ -82,6 +83,10 @@ def settings(kind, p):
         rows.append(('ปี', ', '.join(f"{it.get('year')}: #{(_name(it.get('dataset_id')) or {}).get('id')} {(_name(it.get('dataset_id')) or {}).get('name')}" for it in p.get('items') or [])))
     if kind == 'mosaic':
         rows.append(('ส่วนที่ซ้อนกัน', {'first': 'ใช้ไฟล์แรกที่มีค่า', 'last': 'ใช้ไฟล์หลังสุด', 'min': 'ค่าต่ำสุด', 'max': 'ค่าสูงสุด'}.get(p.get('method', 'first'))))
+    if kind == 'satellite':
+        rows.append(('ภาพ', f"{p.get('collection')} · แบนด์ {', '.join(p.get('bands') or [])} · {p.get('date_from') or '…'} ถึง {p.get('date_to') or '…'}"
+                     + (f" · เมฆ ≤ {p['cloud_max']}%" if p.get('cloud_max') is not None else '') + f" · รวมแบบ {p.get('pick')}"))
+        rows.append(('ความละเอียด', f"ระดับไทล์ {p.get('zoom')} (≈ {round(180 / 512 / 2 ** int(p.get('zoom') or 9) * 111320):,} ม.)"))
     if kind == 'vmerge' and p.get('dissolve'):
         rows.append(('รวมรูป', f"ตามฟิลด์ {p['dissolve_field']}" if p.get('dissolve_field') else 'รวมเป็นรูปเดียว'))
     if p.get('dataset_ids'):
@@ -148,7 +153,10 @@ def build(did):
                               parents=[dict(_name(i['dataset_id']) or {}, value_type_used=i.get('value_type')) for i in lin.get('inputs') or [] if i.get('dataset_id')],
                               settings=settings(lin.get('operation'), lin.get('params') or {}),
                               summary={k: v for k, v in (lin.get('stats_summary') or {}).items() if isinstance(v, (int, float, str)) and k != 'grid'},
-                              warnings=lin.get('warnings') or [])
+                              warnings=lin.get('warnings') or [],
+                              # ค่าดิบให้ผู้ช่วยตรวจงาน (review_output) — UI ใช้ settings/summary ด้านบน
+                              raw=dict(params={k: v for k, v in (lin.get('params') or {}).items() if k not in ('mosaic_search', 'colors')},
+                                       summary={k: v for k, v in (lin.get('stats_summary') or {}).items() if k != 'grid'}))
     elif src or (lin and lin.get('operation') == 'download'):
         origin.append(('ดาวน์โหลดจาก', (src or {}).get('url') or (lin or {}).get('params', {}).get('url')))
         if src and src.get('downloaded_at'):

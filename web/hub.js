@@ -142,10 +142,30 @@ function hubFilter() {
   return list;
 }
 
+// ต้องมีบัญชี/โทเคนไหม — กติกาเดียวกับ app/hub_access.py (แก้ที่หนึ่งต้องแก้อีกที่)
+const HUB_SAT = ['sentinel-2-l2a', 'landsat-c2-l2', 'sentinel-1-rtc', 'alos-palsar-mosaic', 'modis-13Q1-061', 'cop-dem-glo-30', 'esa-worldcover', 'io-lulc-annual-v02', 'jrc-gsw'];
+const HUB_ACC_HOST = {
+  'eogdata.mines.edu': ['account', 'บัญชี EOG (Colorado School of Mines)'], 'earthexplorer.usgs.gov': ['account', 'บัญชี USGS EROS'],
+  'search.earthdata.nasa.gov': ['account', 'บัญชี NASA Earthdata'], 'oceancolor.gsfc.nasa.gov': ['account', 'บัญชี NASA Earthdata'],
+  'search.asf.alaska.edu': ['account', 'บัญชี NASA Earthdata (ASF)'], 'dataspace.copernicus.eu': ['account', 'บัญชี Copernicus Data Space'],
+  'marine.copernicus.eu': ['account', 'บัญชี Copernicus Marine'], 'www.emdat.be': ['account', 'บัญชี EM-DAT'],
+  'globalfishingwatch.org': ['account', 'บัญชี Global Fishing Watch'], 'glad.earthengine.app': ['account', 'บัญชี Google Earth Engine (ไฟล์ดิบ) / ดูบนเว็บได้'],
+  'firms.modaps.eosdis.nasa.gov': ['key', 'MAP_KEY ของ FIRMS (ขอฟรีด้วยอีเมล)'], 'opentopography.org': ['key', 'API key ของ OpenTopography (สมัครฟรี)'],
+};
+const HUB_ACC = { app: ['ดึงเข้าแอปได้', 'ok'], open: ['ไม่ต้องมีบัญชี', ''], account: ['ต้องมีบัญชี', 'warn'], key: ['ต้องใช้ API key', 'warn'] };
+function hubAccess(it) {
+  if (it.s === 'gee') return ['account', 'บัญชี Google Earth Engine (ลงทะเบียนฟรี) — ไม่มีไฟล์ตรง ต้องส่งออกจาก GEE เอง'];
+  if (it.s === 'pc') return HUB_SAT.includes(it.k.split(':')[1]) ? ['app', 'ดึงเข้าแอปได้เลย (เครื่องมือ → ภาพดาวเทียม) ไม่ต้องมีบัญชี'] : ['open', 'ไม่ต้องมีบัญชี — Planetary Computer ออกโทเคนชั่วคราวให้อัตโนมัติ'];
+  if (it.ni) return ['app', 'มีไฟล์ที่แอปนำเข้าคลังได้เอง'];
+  let h = ''; try { h = new URL(it.u).host.toLowerCase(); } catch { }
+  return HUB_ACC_HOST[h] || ['open', 'เปิด — ดาวน์โหลดจากหน้าเว็บได้โดยไม่ต้องล็อกอิน (ตรวจเงื่อนไขการใช้ก่อน)'];
+}
+const hubAccChip = it => { const [k, why] = hubAccess(it), [t, c] = HUB_ACC[k]; return `<span class="chip ${c}" title="${esc(why)}">${k === 'account' || k === 'key' ? IC.lock : ''}${t}</span>`; };
+
 function hubCard(it) {
   const L = HUB_LC[it.lc];
   return `<a class="hub-card" href="#/hub/${encodeURIComponent(it.k)}">
-    <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}${it.ni ? `<span class="chip ok" title="มีไฟล์ที่แอปนำเข้าคลังได้เอง">นำเข้าได้ ${it.ni}</span>` : ''}</div>
+    <div class="hub-top"><b translate="no">${esc(it.t)}</b>${it.dp ? '<span class="chip warn">เลิกใช้แล้ว</span>' : ''}${it.ni ? `<span class="chip ok" title="มีไฟล์ที่แอปนำเข้าคลังได้เอง">นำเข้าได้ ${it.ni}</span>` : hubAccChip(it)}</div>
     <div class="small muted"><span translate="no">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))}</span>${it.og || it.pr ? ' · ' : ''}<span class="hub-src s-${it.s}" translate="no">${esc(it.p)}</span></div>
     <div class="hub-meta tiny">${[hubType(it.ty), hubYears(it) || (it.y ? (it.y[0] === it.y[1] ? `ปี ${it.y[0]}` : `${it.y[0]}–${it.y[1]}`) : '') || (it.up ? 'อัปเดต ' + it.up : ''), hubGsd(it.g), it.cd, it.nr ? it.nr + ' ไฟล์/บริการ' : '', HUB_COVER[it.cv]].filter(Boolean).map(esc).join(' · ')}</div>
     <div class="hub-th">${it.th.slice(0, 3).map(k => `<span>${esc(hubThName(hubTheme(k)) || k)}</span>`).join('')}
@@ -297,6 +317,8 @@ async function hubDetail(it) {
   v.innerHTML = `<p style="margin:0 0 10px"><a href="#/hub">← Data hub</a></p>`
     + head(`<span translate="no">${esc(it.p)}</span>` + (it.dp ? ' · <span style="color:var(--butter)">เลิกใช้แล้ว</span>' : ''), `<span translate="no">${esc(it.t)}</span>`, `<span translate="no">${esc(it.sd || '')}</span>`,
       `<a class="btn primary" href="${esc(it.u)}" target="_blank" rel="noopener noreferrer">${IC.download}ไปหน้าดาวน์โหลด</a>`)
+    + (() => { const [k, why] = hubAccess(it), sat = it.s === 'pc' && HUB_SAT.includes(it.k.split(':')[1]);
+      return `<div class="note ${k === 'account' || k === 'key' ? 'warn' : 'info'} small" style="margin-bottom:12px">${hubAccChip(it)} ${esc(why)}${sat ? ` · <a href="#/tools?t=sat" onclick="TOOLS.sat={collection:'${it.k.split(':')[1]}',zoom:9,cloud_max:20}">เปิดเครื่องมือดึงภาพ →</a>` : ''}</div>`; })()
     + `<div class="cols2 hub-detail">
       <div>
         <div class="card"><div class="card-head"><h2>คำอธิบาย</h2></div>

@@ -1100,6 +1100,9 @@ def _confirmed_raster(did):
 def validate_job(kind, p):
     """ตรวจค่าที่ตั้ง + ประเมินขนาดผลลัพธ์ก่อนรัน"""
     warns = []
+    if kind == 'satellite':
+        from . import ops_sat
+        return ops_sat.estimate(p)
     if kind in ('calc', 'trend', 'mosaic', 'vmerge'):
         from . import ops_tools
         if kind in ('calc', 'trend'):
@@ -1253,6 +1256,23 @@ def estimate():
         return jsonify(ok=False, error=str(e))
 
 
+@app.route('/api/satellite/catalog')
+def sat_catalog():
+    from . import ops_sat
+    return jsonify(collections=ops_sat.COLLECTIONS, zooms=ops_sat.zoom_options(), source='Microsoft Planetary Computer', home='https://planetarycomputer.microsoft.com/catalog')
+
+
+@app.route('/api/satellite/search', methods=['POST'])
+def sat_search():
+    from . import ops_sat
+    p = request.get_json(force=True)
+    try:
+        _, g = ops_sat._aoi(p)
+        return jsonify(ops_sat.search(p, list(g.bounds), limit=500))
+    except engine.EngineError as e:
+        raise ApiError(str(e))
+
+
 @app.route('/api/jobs', methods=['POST'])
 def create_job():
     b = request.get_json(force=True)
@@ -1281,6 +1301,10 @@ def create_job():
         title = p.get('name') or f'แปลงเป็นหกเหลี่ยม {res}: ' + ', '.join(db.get('datasets', int(i))['name'] for i in p['dataset_ids'][:3]) + aoi_txt
     elif kind == 'hexbiv':
         title = (p.get('name') or 'ไบแวเรียตหกเหลี่ยม') + f' · {res}{aoi_txt}'
+    elif kind == 'satellite':
+        from . import ops_sat
+        c = ops_sat.BY_ID[p['collection']]
+        title = p.get('name') or f'ภาพดาวเทียม: {c["name"].split(" (")[0]} {", ".join(p.get("bands") or c["default"])} · {p.get("date_from") or ""}–{p.get("date_to") or ""} · {res}{aoi_txt}'
     elif kind == 'calc':
         title = p.get('name') or f'คำนวณ: {p.get("expr", "")[:50]} · {res}{aoi_txt}'
     elif kind == 'trend':

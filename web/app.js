@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.31';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.32';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1641,7 +1641,7 @@ async function pageAoi(qs) {
 const KIND = { prepare: ['เตรียมข้อมูล', 'db', 'var(--muted)'], resample: ['ปรับความละเอียด', 'layers', 'var(--peach)'], bivariate: ['ไบแวเรียต', 'map', 'var(--rose)'],
   rasterize: ['แปลงเป็นราสเตอร์', 'raster', 'var(--sky)'], vgrid: ['กริดเวกเตอร์', 'grid', 'var(--mint)'],
   hex: ['แปลงเป็นหกเหลี่ยม', 'hex', 'var(--lav)'], hexbiv: ['ไบแวเรียตหกเหลี่ยม', 'hex', 'var(--rose)'],
-  calc: ['สูตรคำนวณ', 'calc', 'var(--sky)'], trend: ['อนุกรมเวลา', 'pulse', 'var(--peach)'], mosaic: ['รวมราสเตอร์', 'layers', 'var(--mint)'], vmerge: ['รวมเวกเตอร์', 'vector', 'var(--mint)'] };
+  calc: ['สูตรคำนวณ', 'calc', 'var(--sky)'], trend: ['อนุกรมเวลา', 'pulse', 'var(--peach)'], mosaic: ['รวมราสเตอร์', 'layers', 'var(--mint)'], vmerge: ['รวมเวกเตอร์', 'vector', 'var(--mint)'], satellite: ['ภาพดาวเทียม', 'globe', 'var(--sky)'] };
 const fmtDur = s => s == null ? '–' : s < 60 ? `${Math.max(1, Math.round(s))} วินาที` : s < 3600 ? `${Math.floor(s / 60)} นาที ${Math.round(s % 60)} วินาที` : `${Math.floor(s / 3600)} ชม. ${Math.round(s % 3600 / 60)} นาที`;
 const JOB_ST = { queued: 'รอคิว', running: 'กำลังทำ', cancelling: 'กำลังยกเลิก', done: 'เสร็จ', failed: 'ล้มเหลว', cancelled: 'ยกเลิกแล้ว' };
 const JOB_CLS = { done: 'ok', failed: 'err', cancelled: 'warn', running: 'raster', queued: '' };
@@ -1965,7 +1965,7 @@ const CALC_PRESETS = [
 ];
 const TREND_STATS = { slope: 'แนวโน้มต่อปี (ความชันถดถอยเชิงเส้น)', change: 'เปลี่ยนแปลง (ปีท้าย − ปีแรก)', pct: 'เปลี่ยนแปลง % (เทียบปีแรก)', mean: 'ค่าเฉลี่ยทุกปี',
   std: 'ส่วนเบี่ยงเบนมาตรฐาน (ความผันผวน)', max_year: 'ปีที่ค่าสูงสุด', min_year: 'ปีที่ค่าต่ำสุด', count_above: 'จำนวนปีที่ค่า > เกณฑ์ (เช่น ความถี่น้ำท่วม)', count_below: 'จำนวนปีที่ค่า < เกณฑ์' };
-const TOOLS = { tab: 'calc' };
+const TOOLS = { tab: 'sat' };
 async function pageTools(q) {
   const [all, aois, fr] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), api(ENGINE + '/api/folders').catch(() => ({ folders: [] }))]);
   if (q.get('t')) TOOLS.tab = q.get('t');
@@ -1974,7 +1974,7 @@ async function pageTools(q) {
   const okR = rs.filter(d => d.value_type_confirmed);
   const opt = d => `<option value="${d.id}">#${d.id} ${esc(d.name)} · ${esc((d.meta.res_label || '').split(' (')[0])}${(d.meta.count || 1) > 1 ? ` · ${d.meta.count} แบนด์` : ''}${d.value_type ? ' · ' + esc(VT_SHORT[d.value_type] || '') : ''}</option>`;
   const aoiSel = id => `<label class="field"><span>พื้นที่ศึกษา</span><select id="${id}"><option value="">ทั้งขอบเขตที่ข้อมูลทับกัน</option>${aoiOptions(aois)}</select></label>`;
-  const T = [['calc', 'สูตรคำนวณ'], ['trend', 'อนุกรมเวลา / ตรวจการเปลี่ยนแปลง'], ['mosaic', 'รวมราสเตอร์'], ['vmerge', 'รวมเวกเตอร์']];
+  const T = [['sat', 'ภาพดาวเทียม / SAR'], ['calc', 'สูตรคำนวณ'], ['trend', 'อนุกรมเวลา / ตรวจการเปลี่ยนแปลง'], ['mosaic', 'รวมราสเตอร์'], ['vmerge', 'รวมเวกเตอร์']];
   const v = $('#view');
   v.innerHTML = head('Tools', 'เครื่องมือข้อมูล', 'คำนวณด้วยสูตร (NDVI ฯลฯ) · เทียบอนุกรมเวลาหลายปี · ต่อไฟล์ราสเตอร์ · รวมชั้นเวกเตอร์ — ผลลัพธ์เข้าคลังพร้อมประวัติไฟล์ต้นทาง')
     + `<div class="seg" id="tTabs" style="margin-bottom:14px">${T.map(([k, t]) => `<button data-k="${k}" class="${TOOLS.tab === k ? 'on' : ''}">${t}</button>`).join('')}</div><div id="tBody"></div>`;
@@ -1997,7 +1997,57 @@ async function pageTools(q) {
   const wireCheck = id => { $('#' + id + 'Q').oninput = e => { const t = e.target.value.trim().toLowerCase(); $$(`#${id} .tool-it`).forEach(x => x.classList.toggle('hide', !!t && !x.dataset.n.includes(t))); }; };
   const checked = id => $$(`#${id} input:checked`).map(x => +x.value);
 
-  if (TOOLS.tab === 'calc') {
+  if (TOOLS.tab === 'sat') {
+    const cat = await api(ENGINE + '/api/satellite/catalog');
+    const st = TOOLS.sat || (TOOLS.sat = { collection: 'sentinel-2-l2a', bands: null, zoom: 9, date_from: '', date_to: '', cloud_max: 20, pick: '' });
+    const today = new Date(), iso = d => d.toISOString().slice(0, 10);
+    if (!st.date_to) { st.date_to = iso(today); st.date_from = iso(new Date(today - 90 * 864e5)); }
+    const KIND_T = { optical: 'ภาพแสง', sar: 'เรดาร์ SAR', index: 'ดัชนี', dem: 'ความสูง', class: 'การใช้ที่ดิน' };
+    body.innerHTML = `<div class="cols2"><div class="card" style="max-width:920px">
+      <div class="small muted" style="margin-bottom:10px">ค้นภาพตามพื้นที่ + ช่วงวันที่ + เมฆ แล้วให้เซิร์ฟเวอร์ของ Microsoft Planetary Computer ทำภาพรวม (mosaic) ส่งมาเฉพาะผลลัพธ์ — เร็วกว่าโหลดภาพทั้งแผ่นหลายสิบเท่า · <b>ไม่ต้องมีบัญชี/โทเคน</b></div>
+      <div class="grid-form">
+        <label class="field full"><span>ข้อมูล</span><select id="saC">${Object.entries(KIND_T).map(([k, t]) => `<optgroup label="${t}">${cat.collections.filter(c => c.kind === k).map(c => `<option value="${c.id}">${esc(c.name)} · ${esc(c.years)}</option>`).join('')}</optgroup>`).join('')}</select></label>
+        <div class="field full"><span>แบนด์</span><div id="saB" class="row" style="flex-wrap:wrap;gap:6px 14px"></div><div class="tiny muted" id="saNote"></div></div>
+        <label class="field"><span>ตั้งแต่</span><input type="date" id="saF" value="${esc(st.date_from)}"></label>
+        <label class="field"><span>ถึง</span><input type="date" id="saT" value="${esc(st.date_to)}"></label>
+        <label class="field" id="saCF"><span>เมฆไม่เกิน (%)</span><input type="number" min="0" max="100" id="saCl" value="${esc(st.cloud_max)}"></label>
+        <label class="field"><span>รวมหลายภาพแบบ</span><select id="saP"><option value="">ค่าแนะนำ</option><option value="median">ค่ามัธยฐาน (ตัดเมฆ/สัญญาณรบกวน)</option><option value="first">ภาพเมฆน้อยสุดก่อน</option><option value="mean">ค่าเฉลี่ย</option><option value="highest">ค่าสูงสุด</option><option value="lowest">ค่าต่ำสุด</option></select></label>
+        <label class="field"><span>ความละเอียด</span><select id="saZ">${cat.zooms.map(z => `<option value="${z.zoom}">${esc(z.label)}</option>`).join('')}</select></label>
+        ${aoiSel('saA').replace('<option value="">ทั้งขอบเขตที่ข้อมูลทับกัน</option>', '')}
+        <label class="field full"><span>ชื่อผลลัพธ์</span><input type="text" id="saN" placeholder="เช่น Sentinel-2 ม.ค.–มี.ค. 2568 กรุงเทพฯ"></label></div>
+      <div class="row" style="margin-top:12px"><button id="saS">${IC.target}ค้นภาพ</button><button id="saR" class="primary">${IC.download}ดึงเข้าคลัง</button></div>
+      <div id="saOut" class="small" style="margin-top:10px"></div></div>
+      <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>Project Palantir</h2></div>
+        <div class="small">แอปวิเคราะห์ดัชนีพืชพรรณ 22 แบบจาก Sentinel-2 (NDVI, EVI, SAVI, GCI …) วาดแปลงแล้วได้ผลทันที — ต้นแบบของวิธีดึงภาพในหน้านี้</div>
+        <div class="row" style="margin-top:10px"><a class="btn sm" href="https://project-palantir.streamlit.app" target="_blank" rel="noopener">${IC.ext}เปิด Palantir</a></div>
+        <div class="tiny muted" style="margin-top:8px">ในแอปนี้: ดึง Sentinel-2 แบนด์ที่ต้องใช้ → แท็บ "สูตรคำนวณ" ใส่สูตรดัชนี (มีสำเร็จรูป NDVI/NDWI/NDBI) → ไขว้กับข้อมูลอื่น / อนุกรมเวลา</div></div></div>`;
+    const coll = () => cat.collections.find(c => c.id === $('#saC').value);
+    const drawBands = () => {
+      const c = coll(), sel = st.collection === c.id && st.bands ? st.bands : c.default;
+      $('#saB').innerHTML = Object.entries(c.bands).map(([b, t]) => `<label class="small" title="${esc(t)}"><input type="checkbox" value="${esc(b)}" ${sel.includes(b) ? 'checked' : ''}> <b class="mono">${esc(b)}</b> <span class="muted">${esc(t)}</span></label>`).join('');
+      $('#saNote').textContent = [c.note, `ต้นทาง ${c.native_m} ม. · ถ่ายซ้ำ ${c.revisit} · ${c.license}`].filter(Boolean).join(' · ');
+      $('#saCF').classList.toggle('hide', !c.cloud);
+    };
+    $('#saC').value = st.collection; $('#saZ').value = st.zoom;
+    if (!$('#saA').value) $('#saA').selectedIndex = 0;
+    $('#saC').onchange = () => { st.collection = $('#saC').value; st.bands = null; drawBands(); };
+    drawBands();
+    const params = () => {
+      const c = coll(), bands = $$('#saB input:checked').map(x => x.value);
+      Object.assign(st, { collection: c.id, bands, zoom: +$('#saZ').value, date_from: $('#saF').value, date_to: $('#saT').value, cloud_max: $('#saCl').value, pick: $('#saP').value });
+      return { collection: c.id, bands, zoom: st.zoom, date_from: st.date_from || null, date_to: st.date_to || null, cloud_max: c.cloud && st.cloud_max !== '' ? +st.cloud_max : null,
+        pick: st.pick || null, aoi_id: +$('#saA').value || null, name: $('#saN').value.trim() || null };
+    };
+    $('#saS').onclick = async () => {
+      $('#saOut').innerHTML = '<span class="muted">กำลังค้น…</span>';
+      try {
+        const r = await api(ENGINE + '/api/satellite/search', { json: params() });
+        $('#saOut').innerHTML = r.n ? `<b>${fmt(r.n, 0)}${r.more ? '+' : ''} ภาพ</b> · ${esc(r.first)} – ${esc(r.last)}${r.cloud ? ` · เมฆ ${fmt(r.cloud.min, 0)}–${fmt(r.cloud.max, 0)}% (มัธยฐาน ${fmt(r.cloud.median, 0)}%)` : ''}
+          <div class="tiny muted" style="margin-top:4px">วันที่มีภาพ: ${r.dates.map(esc).join(', ')}</div>` : '<span class="err">ไม่พบภาพ — ขยายช่วงวันที่ หรือเพิ่มเกณฑ์เมฆ</span>';
+      } catch (e) { $('#saOut').innerHTML = `<span class="err">${esc(e.message)}</span>`; }
+    };
+    $('#saR').onclick = () => runJob('satellite', params(), done);
+  } else if (TOOLS.tab === 'calc') {
     const st = TOOLS.calc || (TOOLS.calc = { expr: CALC_PRESETS[0].e, vars: CALC_PRESETS[0].v.map(k => ({ k, id: '', band: '' })) });
     body.innerHTML = `<div class="card" style="max-width:920px">
       <div class="grid-form"><label class="field full"><span>สูตรสำเร็จรูป</span><select id="cpPre"><option value="">— เขียนสูตรเอง —</option>${CALC_PRESETS.map(p => `<option value="${p.k}">${p.t} · ${esc(p.e)}</option>`).join('')}</select></label></div>

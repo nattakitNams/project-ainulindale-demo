@@ -21,6 +21,13 @@ def exact_res(res, geographic):
         f = Fraction(round(v * den), den)
         if f > 0 and abs(float(f) - v) <= REL_TOL * v:
             return f
+    # กริดไทล์ WGS84 (ภาพดาวเทียมจากบริการไทล์) ขนาดพิกเซล = 180°/(512·2^z) → เศษส่วนฐานสองแท้
+    # ตัวส่วนใหญ่จับค่าสุ่มได้ง่าย → ยอมรับเฉพาะที่ตรงเกือบเป๊ะ (float แทนเศษส่วนฐานสองได้แม่นอยู่แล้ว)
+    for k in range(9, 21):
+        den = 2 ** k
+        f = Fraction(round(v * den), den)
+        if f > 0 and abs(float(f) - v) <= 1e-12 * v:
+            return f
     return None
 
 

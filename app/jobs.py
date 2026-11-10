@@ -12,7 +12,7 @@ from .config import DIRS, ROOT
 
 OUT_BASE = dict(resample='derived', bivariate='maps', rasterize='derived', vgrid='derived',
                 download='database', zonal='maps', change='derived', sensitivity='maps', hex='derived', hexbiv='maps',
-                calc='derived', trend='derived', mosaic='derived', vmerge='derived')
+                calc='derived', trend='derived', mosaic='derived', vmerge='derived', satellite='database')
 _lock = threading.Lock()
 _procs = {}
 

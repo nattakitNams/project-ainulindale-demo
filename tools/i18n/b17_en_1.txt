@@ -1,0 +1,157 @@
+Search imagery by area + date range + cloud, then Microsoft Planetary Computer's servers build the mosaic and send only the result — tens of times faster than downloading whole scenes
+Date range spans 25 Jan 2022 — Sentinel-2 images after that date have +1000 added (baseline 04.00), so the composite mixes both · for indices, split the range
+App analysing 22 vegetation indices from Sentinel-2 (NDVI, EVI, SAVI, GCI …) — draw a field and get results instantly — the prototype for the imagery fetching on this page
+then choose a study area; the app downloads only the needed part (if the server supports it), clips to the area and adds it to the library
+Clipped to the study area bounds · servers without partial reads download the whole file first · see progress in the Jobs tab
+Reflectance ×10000 (uint16) · images from 25 Jan 2022 have +1000 · NDVI = (B08−B04)/(B08+B04)
+Linear backscatter (gamma0) · dB = 10·log10(value) · flood: VV dB below about −18
+e.g. people/pixel = count · index/density = continuous · class code = class
+No images match (date range/cloud/area) — widen the date range or raise the cloud limit
+No data in the area (all tiles empty) — try a longer date range or a higher cloud limit
+Google Earth Engine account (free sign-up) — no direct files, export from GEE yourself
+enter an index formula (NDVI/NDWI/NDBI presets) → cross with other data / time series
+Open — download from the web page without signing in (check the terms of use first)
+Reflectance = DN × 0.0000275 − 0.2 · temperature (K) = DN × 0.00341802 + 149
+L-band penetrates the canopy better than C-band (Sentinel-1) · convert DN to dB
+Resolution (zoom) must be between 5 (≈ 1.2 km) and 12 (≈ 10 m)
+No account needed — Planetary Computer issues a temporary token automatically
+Choose an area (study area) — imagery is fetched by area only
+Composite method must be median / first / mean / highest / lowest
+Fetch into the app directly (Tools → Satellite imagery), no account needed
+Esri/Impact Observatory LULC 10 m annual (9 classes)
+Google Earth Engine account (raw files) / viewable on the web
+JRC Global Surface Water (water frequency 1984–2021)
+Guessed from the file name — check it matches the meaning of the data
+In this app: fetch the Sentinel-2 bands you need → tab
+Copernicus (open) · terrain correction by Catalyst
+ESA WorldCover 10 m (land cover, 11 classes)
+m) — no extra detail, but a bigger file
+No images — widen the date range or raise the cloud limit
+Sentinel-1 RTC (SAR radar 10 m, sees through clouds)
+Sentinel-2 L2A (colour/infrared 10–20 m)
+) — lower the resolution or choose a smaller area
+Copernicus DEM 30 m (terrain elevation)
+VV (surface roughness, calm water = very low)
+Thermal (land surface temperature) — Landsat 8/9
+Not set (confirm later on the dataset page)
+e.g. Sentinel-2 Jan–Mar 2025 Bangkok
+ALOS PALSAR annual (L-band radar 25 m)
+OpenTopography API key (free sign-up)
+Landsat 8/9 C2 L2 (30 m + thermal)
+EOG account (Colorado School of Mines)
+FIRMS MAP_KEY (free by email)
+Scene classification (cloud/shadow/water) · 20 m
+Satellite imagery (Planetary Computer)
+Median (removes clouds/noise)
+MODIS NDVI/EVI 16-day (250 m)
+Class code (1 water … 11 rangeland)
+Class code (10 tree cover … 80 water)
+Has files the app can import itself
+1982–present (Landsat 4–9)
+Copernicus Data Space account
+min (depends on internet speed)
+Global Fishing Watch account
+NASA Earthdata account (ASF)
+Finer than the source data (
+Near infrared (NIR) 10 m
+Creating the mosaic failed (
+value ÷ 10000 = actual index
+Copernicus Marine account
+Import to library from Data hub
+Open the imagery tool →
+Copernicus/JRC (open)
+2011–2015 (single release)
+VH (vegetation/volume)
+Blue 10 m
+NASA Earthdata account
+No account/token needed
+Unknown collection "
+Near infrared (NIR)
+Green 10 m
+Red edge 1 · 20 m
+Red edge 2 · 20 m
+Red edge 3 · 20 m
+Pixel quality (cloud)
+Months with water
+pixels · tiles with imagery
+% water recurrence
+% of time with water
+Copernicus (open)
+Image search failed (
+Whole file (no clip)
+Least cloudy image first
+1984–2021 (summary)
+Transition type
+HV (forest/biomass)
+Narrow NIR · 20 m
+API key required
+USGS EROS account
+Building overviews…
+Choose 1–8 bands
+Red 10 m
+tiles, too many (≤
+NASA (public domain)
+SWIR 1 · 20 m
+SWIR 2 · 20 m
+USGS (public domain)
+Change
+Ever water (1/0)
+Max cloud (%)
+No account needed
+2000–present
+2014–present
+2015–present
+Fetch into app
+Importable to library
+Composite multiple images by
+Open Palantir
+~8 days (8+9)
+Land cover
+Elevation (m)
+EM-DAT account
+m · revisit
+tiles, too many
+Tiles without imagery
+Fetch to library
+Account required
+Satellite imagery
+Dates with imagery
+failed (
+% (median
+SAR radar
+has no band
+) · bands
+Searching…
+Mean
+Tile level
+files — press
+Recommended
+Sample
+Has data
+tiles · ~
+(mean
+~12 days
+Searching imagery…
+Fetching tile
+From
+Blue
+s/tile
+" — available
+16 days
+~5 days
+Search imagery
+Source
+Optical
+Composite
+Index
+images (
+Has imagery
+Annual
+Green
+cloud ≤
+To
+images
+m)
+cloud
+Red
+

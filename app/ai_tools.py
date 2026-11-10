@@ -18,7 +18,7 @@ from . import db, palettes
 from .config import PORT, STATIC
 
 CLIENT = None                    # server ตั้งให้: lambda: app.test_client()
-JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download', 'calc', 'trend', 'mosaic', 'vmerge')
+JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download', 'calc', 'trend', 'mosaic', 'vmerge', 'satellite')
 PROPOSAL_TTL = 30 * 60
 _PROPOSALS, _lock = {}, threading.Lock()
 
@@ -229,9 +229,16 @@ def t_search_data_hub(query, limit=12):
         if s and all(w in hay for w in words[:3]):          # ดันชุดที่มีไฟล์ให้แอปโหลดได้ + ครอบไทย ขึ้นก่อน (GEE/PC โหลดเองไม่ได้)
             scored.append((s + (3 if it.get('cv') == 'thailand' else 0) + (4 if it.get('nr') and it.get('s') == 'ckan' else 0), it))
     scored.sort(key=lambda x: -x[0])
+    from . import hub_access, ops_sat
+    sat = set(ops_sat.BY_ID)
+
+    def acc(it):
+        lv, why = hub_access.access(it, sat)
+        return dict(level=lv, detail=why)
     return [dict(key=it['k'], title=it.get('t'), provider=it.get('pr'), platform=it.get('p'), type=it.get('tr'), coverage=it.get('cv'),
                  license=it.get('lc'), years=it.get('y'), files_app_can_import=it.get('ni') or 0, direct_download_links=it.get('nf') or 0,
-                 page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None)
+                 access=acc(it), page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None,
+                 satellite_collection=it['k'].split(':', 1)[1] if it.get('s') == 'pc' and it['k'].split(':', 1)[1] in sat else None)
             for _, it in scored[:int(limit or 12)]]
 
 
@@ -488,6 +495,81 @@ def reject(pid):
         _PROPOSALS.pop(pid, None)
 
 
+
+# ---------- ภาพดาวเทียม (Planetary Computer) ----------
+def t_satellite_catalog():
+    """คอลเลกชันภาพดาวเทียมที่ดึงได้ (ไม่ต้องมีบัญชี) + แบนด์ + ช่วงปี + ความละเอียด (zoom)"""
+    from . import ops_sat
+    return dict(collections=[dict(id=c['id'], name=c['name'], kind=c['kind'], years=c['years'], revisit=c['revisit'], native_m=c['native_m'],
+                                  cloud_filter=c['cloud'], default_bands=c['default'], bands=c['bands'], note=c['note'], license=c['license'])
+                             for c in ops_sat.COLLECTIONS],
+                zoom_options=ops_sat.zoom_options(), auth='ไม่ต้องมีบัญชี/โทเคน')
+
+
+def t_search_satellite(collection, aoi_id, date_from=None, date_to=None, cloud_max=None):
+    r = _call('POST', '/api/satellite/search', dict(collection=collection, aoi_id=aoi_id, date_from=date_from, date_to=date_to, cloud_max=cloud_max))
+    if isinstance(r, dict) and r.get('error'):
+        raise ToolError(r['error'])
+    return r
+
+
+# ---------- ประเมินผลงานตัวเอง ----------
+def t_review_output(dataset_id, expectation=None):
+    """ตรวจผลลัพธ์: ครอบพื้นที่ครบไหม ค่าสมเหตุสมผลไหม มีคำเตือนจากงานไหม → ข้อสังเกต + สิ่งที่ควรแก้"""
+    import math
+    d = _call('GET', f'/api/datasets/{int(dataset_id)}')
+    prof = _call('GET', f'/api/datasets/{int(dataset_id)}/profile')
+    m, st = d.get('meta') or {}, d.get('stats') or {}
+    mb = prof.get('made_by') or {}
+    raw = mb.get('raw') or {}
+    summ, params = raw.get('summary') or mb.get('summary') or {}, raw.get('params') or {}
+    checks = []
+
+    def ck(ok, item, detail=''):
+        checks.append(dict(ok=bool(ok), item=item, detail=detail))
+    if d['kind'] == 'raster':
+        if not st:
+            ck(False, 'สถิติ', 'ยังคำนวณสถิติไม่เสร็จ — รอสักครู่แล้วตรวจใหม่')
+        else:
+            lo, hi, valid = st.get('min'), st.get('max'), st.get('valid') or 0
+            tot = (m.get('width') or 0) * (m.get('height') or 0)
+            ck(valid > 0, 'มีข้อมูล', f'{valid:,} พิกเซลมีค่า จาก {tot:,} ({valid / tot:.0%} ของกรอบ)' if tot else '')
+            ck(lo is not None and hi is not None and hi > lo, 'ค่าไม่คงที่', f'ช่วงค่า {lo} – {hi}')
+            aid = params.get('aoi_id')
+            if aid and m.get('geographic') and m.get('transform') and valid:
+                a = next((x for x in t_list_study_areas() if x['id'] == int(aid)), None)
+                b = m.get('bounds') or [0, 0, 0, 0]
+                r = abs(m['transform'][0])
+                km2 = valid * (r * 111.32) ** 2 * math.cos(math.radians((b[1] + b[3]) / 2))
+                if a and a.get('area_km2'):
+                    cov = km2 / a['area_km2']
+                    ck(cov > 0.9, 'ครอบพื้นที่ศึกษา', f'มีค่า ≈ {km2:,.0f} ตร.กม. = {cov:.0%} ของ "{a["name"]}" ({a["area_km2"]:,.0f} ตร.กม.)'
+                       + ('' if cov > 0.9 else ' — ขาดบางส่วน (ภาพไม่ครบ/เมฆ/ข้อมูลไม่ทับกัน)'))
+            n = (d.get('name') or '').lower() + ' ' + str(params.get('expr') or '')
+            if lo is not None and hi is not None and (any(k in n for k in ('ndvi', 'ndwi', 'ndbi', 'evi')) or ('(' in n and '-' in n and '+' in n and '/' in n)):
+                good = lo >= -1.0001 and hi <= 1.0001
+                ck(good, 'ช่วงดัชนี −1…1', f'{lo} – {hi}' + ('' if good else ' — เกินช่วง: แบนด์อาจผิดลำดับ/ยังไม่แปลงสเกล/มี offset'))
+            if d.get('value_type') == 'count' and st.get('sum') is not None:
+                ck(True, 'ผลรวม', f'{st["sum"]:,.0f}')
+    if m.get('satellite') or mb.get('operation') == 'satellite':
+        tw, tt = summ.get('tiles_with_data'), summ.get('tiles')
+        if tt:
+            ck(tw == tt, 'ไทล์มีภาพครบ', f'{tw}/{tt}' + ('' if tw == tt else ' — ส่วนที่ไม่มีภาพ: ขยายช่วงวันที่หรือเพิ่มเกณฑ์เมฆ'))
+        cl = summ.get('cloud') or {}
+        if cl:
+            ck((cl.get('median') or 0) <= 30, 'เมฆ', f'ภาพที่ใช้ เมฆ {cl.get("min", 0):.0f}–{cl.get("max", 0):.0f}% (มัธยฐาน {cl.get("median", 0):.0f}%)')
+        if summ.get('first'):
+            ck(True, 'ช่วงภาพ', f'{summ.get("images")}{"+ (นับถึงขีดจำกัด)" if summ.get("images_more") else ""} ภาพ {summ.get("first")} – {summ.get("last")}')
+        for b, x in (summ.get('bands') or {}).items():
+            ck(x.get('valid_pixels', 0) > 0, f'แบนด์ {b}', f'{x.get("min")} – {x.get("max")} (เฉลี่ย {x.get("mean"):.4g})' if x.get('mean') is not None else 'ว่าง')
+        if summ.get('collection') == 'sentinel-2-l2a' and (summ.get('first') or '') < '2022-01-25' < (summ.get('last') or ''):
+            ck(False, 'Sentinel-2 offset', 'ภาพคร่อม 25 ม.ค. 2565 — ค่าหลังวันนั้นบวก 1000 ปนกัน')
+    for w in mb.get('warnings') or []:
+        ck(False, 'คำเตือนจากงาน', w)
+    return dict(dataset=dict(id=d['id'], name=d['name'], kind=d['kind'], value_type=d.get('value_type')), expectation=expectation,
+                purpose=params.get('purpose'), checks=checks, problems=[c for c in checks if not c['ok']],
+                made_by=dict(operation=mb.get('operation'), settings=mb.get('settings')))
+
 # ---------- ทะเบียนเครื่องมือ (schema เรียบง่าย ใช้ได้ทั้ง Anthropic / OpenAI / Gemini) ----------
 S, I, N, B = dict(type='string'), dict(type='integer'), dict(type='number'), dict(type='boolean')
 TOOLS = [
@@ -509,6 +591,11 @@ TOOLS = [
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
     ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — ค้นด้วยคำภาษาอังกฤษสั้น ๆ หลายครั้ง เช่น "population", "nighttime lights"', dict(query=S, limit=I), ['query']),
     ('get_hub_item', 'read', t_get_hub_item, 'รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง, ปีที่มี, ไฟล์ที่แอปดาวน์โหลดเข้าคลังได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
+    ('satellite_catalog', 'read', t_satellite_catalog, 'ภาพดาวเทียมที่ดึงได้ทันที (Planetary Computer, ไม่ต้องมีบัญชี): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, การใช้ที่ดิน, น้ำผิวดิน — แบนด์/ช่วงปี/ความละเอียด', {}, []),
+    ('search_satellite', 'read', t_search_satellite, 'ค้นภาพดาวเทียมในพื้นที่+ช่วงวันที่ (+เมฆสูงสุด %) → จำนวนภาพ วันที่ เมฆ — ใช้ก่อนเสนองาน satellite',
+     dict(collection=S, aoi_id=I, date_from=S, date_to=S, cloud_max=N), ['collection', 'aoi_id']),
+    ('review_output', 'read', t_review_output, 'ประเมินผลงานตัวเอง: ตรวจชุดผลลัพธ์ (ครอบพื้นที่ครบไหม ช่วงค่าสมเหตุสมผลไหม ภาพ/เมฆ คำเตือนของงาน) — เรียกทุกครั้งหลังงานเสร็จ ก่อนสรุปให้ผู้ใช้',
+     dict(dataset_id=I, expectation=S), ['dataset_id']),
     ('propose_set_value_type', 'action', t_propose_set_value_type, 'เสนอยืนยัน/เปลี่ยนประเภทค่าของราสเตอร์ (ผู้ใช้ต้องกดยืนยัน)',
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',
