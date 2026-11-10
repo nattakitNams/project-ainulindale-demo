@@ -48,5 +48,13 @@ R.check('feature เดียว ' + f'{len(getattr(mp, "geoms", [mp])):,} ส�
 with rasterio.open(j['result']['output']) as d:
     a = d.read(1)
     ref = rasterize([(mp, 1)], out_shape=a.shape, transform=d.transform, fill=0, dtype='uint8')
+d = api(f'/api/datasets/{j["result"]["dataset_id"]}')
+st = d.get('stats') or {}
+s.get(f'{ENGINE}/api/datasets/{d["id"]}/tile/9/398/236.png')
+prep = [x for x in api('/api/jobs') if x['kind'] == 'prepare' and x['title'].endswith(d['name'])]
+nod = d['meta'].get('nodata')
+want_valid = int((a != nod).sum()) if nod is not None else a.size
+R.check('สถิติจากตอนเขียน = นับจากไฟล์จริง และไม่มีงานเตรียมข้อมูลซ้ำ', st.get('from_writer') and st['valid'] == want_valid and not prep,
+        f"valid {st.get('valid')} vs {want_valid} · nodata={nod} · งานเตรียม {len(prep)}")
 R.check('ผลเท่ากับ rasterize ทั้งก้อนแบบเดิมทุกพิกเซล', np.array_equal(a, ref), f'ต่าง {int((a != ref).sum()):,} จาก {a.size:,} · มี {int((a == 1).sum()):,}')
 sys.exit(R.done())

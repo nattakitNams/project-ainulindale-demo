@@ -34,12 +34,13 @@ def ds(i):
     return api(f'/api/datasets/{i}')[1]
 
 
-c, a = api('/api/folders', dict(name='น้ำท่วม 2567'))
+FNAME = f'น้ำท่วม 2567 ({int(time.time())})'               # ชื่อไม่ซ้ำต่อรอบ — รอบที่หยุดกลางทางทิ้งโฟลเดอร์ไว้ได้
+c, a = api('/api/folders', dict(name=FNAME))
 A = a['id']
 c, b = api('/api/folders', dict(name='ภาคกลาง', parent_id=A))
 Bf = b['id']
 check('สร้างโฟลเดอร์ + โฟลเดอร์ย่อย', A and Bf and b['folder']['parent_id'] == A)
-c, e = api('/api/folders', dict(name='น้ำท่วม 2567'))
+c, e = api('/api/folders', dict(name=FNAME))
 check('ชื่อซ้ำในที่เดียวกัน → ปฏิเสธ', c == 400, e.get('error'))
 c, e = api(f'/api/folders/{A}', dict(parent_id=Bf), 'PATCH')
 check('ย้ายโฟลเดอร์เข้าลูกตัวเอง → ปฏิเสธ', c == 400, e.get('error'))

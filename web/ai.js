@@ -311,6 +311,7 @@ const AIDock = (() => {
     setTimeout(tick, 2000);
   }
 
+  let shownN = 0, shownH = null, shownM = null;                                                       // จำนวนข้อความที่แสดงไปแล้ว (แยกคำตอบใหม่ออกจากการวาดซ้ำ)
   function drawMsgs() {
     const m = dock().querySelector('.ai-msgs');
     if (!m) return;
@@ -321,10 +322,11 @@ const AIDock = (() => {
       <ol>${(plan.steps || []).map(s => `<li class="st-${s.status}"><span class="ai-si">${SI[s.status] || '○'}</span><span translate="no">${esc(s.title)}${s.note ? ` <span class="tiny muted">— ${esc(s.note)}</span>` : ''}${(s.outputs || []).map(o => ` <a href="#/ds/${o}" class="tiny">#${o}</a>`).join('')}</span></li>`).join('')}</ol>
       ${(plan.decisions || []).length ? `<div class="tiny muted" translate="no">ตกลงแล้ว: ${plan.decisions.map(esc).join(' · ')}</div>` : ''}
       ${(plan.blockers || []).map(b => `<div class="tiny warn-t" translate="no">ติด: ${esc(b)}</div>`).join('')}</details>` : '';
+    const keep = m.scrollTop, grew = hist.length > shownN;
     m.innerHTML = planHtml + (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เริ่มจากบอกว่าจะทำแผนที่ไปเพื่ออะไร ใครดู — เช่น "อยากรู้ว่าพื้นที่ไหนคนอยู่หนาแน่นและน้ำท่วมซ้ำบ่อย เพื่อเสนอผู้บริหารจัดลำดับพื้นที่ช่วยเหลือทั้งประเทศ"<br>${st.mode === 'propose' ? 'ผู้ช่วยจะถามสิ่งที่ยังไม่ชัด ออกแบบการวิเคราะห์ตามวัตถุประสงค์ แล้วเสนองานให้กดยืนยัน' : 'ผู้ช่วยจะแนะนำการวิเคราะห์และการตั้งค่าตามวัตถุประสงค์'}</div>`)
       + hist.map((x, mi) => x.role === 'event'
         ? `<div class="ai-msg event">${x.recipe && x.steps ? `<div>${esc(x.content.split('\n')[0])}</div><ol class="ai-steps tiny">${x.steps.map(st => `<li class="st-${st.s}"><span class="ai-si">${ST_IC[st.s] || '○'}</span> <span translate="no">${esc(st.t)}</span>${st.o ? ` <a href="#/ds/${st.o}">#${st.o}</a>` : ''}${st.e ? ` <span class="warn-t">${esc(st.e)}</span>` : ''}</li>`).join('')}</ol>` : esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
-        : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
+        : `<div class="ai-msg ${x.role}" data-mi="${mi}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
           + (x.used?.length ? `<div class="ai-used tiny muted">ตรวจข้อมูล: ${[...new Set(x.used.map(u => u.tool))].join(', ')}${x.used.some(u => u.error) ? ' · บางคำขอผิดพลาด' : ''}</div>` : '')
           + (x.note ? `<div class="ai-used tiny muted">${esc(x.note)}</div>` : '')
           + (x.usage?.calls ? `<div class="ai-used tiny muted" title="โทเคนที่ส่ง/รับในคำตอบนี้ — ส่วนที่แคชคิดราคาถูกกว่ามาก">โทเคน: ส่ง ${fmt(x.usage.input, 0)}${x.usage.cached ? ` (แคช ${fmt(x.usage.cached, 0)})` : ''} · ตอบ ${fmt(x.usage.output, 0)} · ${x.usage.calls} รอบ</div>` : '')
@@ -346,7 +348,16 @@ const AIDock = (() => {
     });
     const pd = m.querySelector('.ai-plan');
     if (pd) pd.ontoggle = () => ls.set('ainu-ai-plan-open', pd.open);
-    m.scrollTop = m.scrollHeight;
+    // คำตอบใหม่ → เลื่อนให้หัวคำตอบอยู่บนสุด (อ่านจากต้นข้อความ ไม่ต้องเลื่อนขึ้นเอง) · ผู้ใช้เพิ่งส่ง/รอคำตอบ → ล่างสุด
+    // อัปเดตอื่น (ยืนยันข้อเสนอ แผนงาน งานเสร็จ) → คงตำแหน่งเดิม
+    const firstNew = grew && shownH === hist && shownM === m ? hist.findIndex((x, i) => i >= shownN && x.role === 'assistant') : -1;
+    if (shownH !== hist || shownM !== m) m.scrollTop = m.scrollHeight;                 // เปิด/สลับแชต → ไปข้อความล่าสุด
+    else if (busy || (grew && hist[hist.length - 1]?.role === 'user')) m.scrollTop = m.scrollHeight;
+    else if (firstNew >= 0) {
+      const el = m.querySelector(`[data-mi="${firstNew}"]`);
+      m.scrollTop = el ? el.getBoundingClientRect().top - m.getBoundingClientRect().top + m.scrollTop - 8 : m.scrollHeight;
+    } else m.scrollTop = keep;
+    shownN = hist.length; shownH = hist; shownM = m;
   }
 
   // ---------- การ์ดในหน้า "ระบบ" ----------

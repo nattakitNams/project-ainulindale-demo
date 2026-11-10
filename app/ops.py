@@ -273,6 +273,16 @@ class OutWriter:
         if dtype.startswith('float'):
             self.prof['predictor'] = 3
         self.ds = None if self.inmem else self._open()
+        # สถิติระหว่างเขียน (ค่าผ่านมือเราอยู่แล้ว) → ไม่ต้องให้งาน "เตรียมข้อมูล" อ่านไฟล์ทั้งไฟล์ซ้ำหลังสร้างเสร็จ
+        # (แผนที่ 9 ม. ทั้งประเทศ 17,700 ล้านพิกเซล อ่านซ้ำ ~6 นาที) · รูปแบบเดียวกับ op_prepare (valid sum min max hist_int pct + ค่าสุ่ม)
+        self.total = H * Wd
+        self.isint = np.dtype(dtype).kind in 'iu'
+        self.acc = dict(n=0, s=0.0, mn=math.inf, mx=-math.inf, written=0)
+        self.hist = {} if self.isint else None
+        self.rate = min(1.0, SAMPLE_N * 8 / max(self.total, 1))
+        self.rng = np.random.default_rng(0)
+        self.sv, self.sr = [], []
+        self.stats = None
 
     def _open(self):
         ds = rasterio.open(self.path, 'w', **self.prof)
@@ -280,14 +290,71 @@ class OutWriter:
             ds.write_colormap(1, self.colormap)
         return ds
 
+    def _account(self, r0, a):
+        a = np.asarray(a)
+        ok = np.isfinite(a) if a.dtype.kind == 'f' else np.ones(a.shape, bool)
+        if self.nodata is not None:
+            ok &= a != self.nodata
+        self.acc['written'] += a.size
+        v = a[ok]
+        if not v.size:
+            return
+        vv = v.astype('float64')
+        self.acc['n'] += v.size
+        self.acc['s'] += float(vv.sum())
+        self.acc['mn'], self.acc['mx'] = min(self.acc['mn'], float(vv.min())), max(self.acc['mx'], float(vv.max()))
+        if self.hist is not None:
+            u, cnt = np.unique(v, return_counts=True)
+            for x, k in zip(u.tolist(), cnt.tolist()):
+                self.hist[x] = self.hist.get(x, 0) + k
+            if len(self.hist) > 4096:
+                self.hist = None
+        k = self.rng.binomial(v.size, self.rate) if self.rate < 1 else v.size
+        if k:
+            sel = self.rng.choice(v.size, size=min(k, v.size), replace=False)
+            self.sv.append(vv[sel])
+            self.sr.append((np.nonzero(ok)[0][sel] + r0).astype('int32'))
+
+    def _finish_stats(self):
+        """ช่องที่ไม่ได้เขียน (ไทล์ว่างที่ข้าม) = nodata ถ้ามี nodata · ถ้าไม่ตั้ง nodata อ่านเป็น 0 = มีค่า 0"""
+        from . import db as _db
+        a = self.acc
+        if a['written'] > self.total:                              # เขียนทับพื้นที่เดิมซ้ำ → นับซ้ำ ไม่เชื่อ ให้งานเตรียมข้อมูลคิดใหม่จากไฟล์
+            return
+        if self.nodata is None:
+            un = self.total - a['written']
+            if un > 0:
+                a['n'] += un
+                a['mn'], a['mx'] = min(a['mn'], 0.0), max(a['mx'], 0.0)
+                if self.hist is not None:
+                    self.hist[0] = self.hist.get(0, 0) + un
+                k = self.rng.binomial(un, self.rate) if self.rate < 1 else un
+                if k:
+                    self.sv.append(np.zeros(k))
+                    self.sr.append(self.rng.integers(0, self.grid.out_shape[0], k).astype('int32'))
+        sv = np.concatenate(self.sv) if self.sv else np.zeros(0)
+        sr = np.concatenate(self.sr) if self.sr else np.zeros(0, 'int32')
+        if sv.size > SAMPLE_N:
+            keep = self.rng.choice(sv.size, SAMPLE_N, replace=False)
+            sv, sr = sv[keep], sr[keep]
+        n = a['n']
+        self.stats = dict(valid=n, nodata=self.total - n, sum=a['s'], min=a['mn'] if n else None, max=a['mx'] if n else None,
+                          mean=a['s'] / n if n else None, hist_int=sorted(self.hist.items()) if self.hist and len(self.hist) <= 4096 else None,
+                          sample_n=int(sv.size), pct={str(q): float(np.quantile(sv, q / 100)) for q in (1, 2, 5, 25, 50, 75, 95, 98, 99)} if sv.size else {},
+                          computed_at=_db.now(), from_writer=True)
+        self._sample = (sv, sr)
+        WRITER_STATS[str(self.path)] = (self.stats, self._sample)
+
     def write(self, r0, c0, a):
         r0, c0 = r0 - self.r_off, c0 - self.c_off
+        self._account(r0, a)
         if self.inmem:
             self.arr[r0:r0 + a.shape[0], c0:c0 + a.shape[1]] = a
         else:
             self.ds.write(a.astype(self.dtype), 1, window=Window(c0, r0, a.shape[1], a.shape[0]))
 
     def close(self, resampling, P=None):
+        self._finish_stats()
         if self.inmem:
             self.ds = self._open()
             self.ds.write(self.arr, 1)
@@ -341,9 +408,20 @@ def parallel_tiles(tiles, fn, nth):
                 q.append((nxt[0], nxt[1], ex.submit(fn, *nxt[1])))
 
 
+WRITER_STATS = {}                                             # path → (stats, (ค่าสุ่ม, แถว)) จาก OutWriter — register_output ใช้แทนงานเตรียมข้อมูล
+
+
 def register_output(path, name, value_type, job_id, role, read_meta=True, kind='raster'):
     from . import catalog, folders
     did = catalog.register_derived(path, name, value_type, job_id, role, kind)
+    got = WRITER_STATS.pop(str(Path(path)), None)
+    if got and kind == 'raster':                                  # สถิติจากตอนเขียน → ไม่ต้องอ่านไฟล์ซ้ำ (prepare_if_needed เห็นว่าครบแล้ว)
+        st, (sv, sr) = got
+        sp = DIRS['cache'] / 'samples' / f'ds{did}.npz'
+        sp.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(sp, v=sv, r=sr)
+        d = db.get('datasets', did)
+        db.update('datasets', did, stats=dict(st, sample_path=str(sp)), preview_key=preview_key(d, preview_factor(d['meta'])))
     j = db.get('jobs', job_id) if job_id else None
     fid = folders.input_folder(j['params']) if j else None          # ผลลัพธ์เข้าโฟลเดอร์เดียวกับข้อมูลต้นทาง
     if fid:

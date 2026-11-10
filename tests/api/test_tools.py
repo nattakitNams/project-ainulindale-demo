@@ -73,6 +73,14 @@ with rasterio.open(r['output']) as f:
     a = f.read(1)
 want = ((nir - red) / (nir + red)).astype('float32')
 R.check('NDVI จากแบนด์ 4/3 ตรงกับคำตอบทุกพิกเซล', a.shape == want.shape and np.allclose(a, want, atol=1e-6), f'max diff {np.abs(a - want).max():.2e}')
+d = api(f'/api/datasets/{r["dataset_id"]}')
+st = d.get('stats') or {}
+s.get(f'{ENGINE}/api/datasets/{r["dataset_id"]}/tile/8/200/120.png')          # เปิดดูแผนที่ = จุดที่เคยสั่งงานเตรียมข้อมูล
+prep = [j for j in api('/api/jobs') if j['kind'] == 'prepare' and j['title'].endswith(d['name'])]
+R.check('สถิติได้ตั้งแต่ตอนเขียนไฟล์ (ค่าตรงกับไฟล์จริง) → ไม่มีงาน "เตรียมข้อมูล" อ่านไฟล์ซ้ำ',
+        st.get('from_writer') and st['valid'] == a.size and abs(st['sum'] - float(a.astype('float64').sum())) < 1e-3 * a.size and
+        abs(st['min'] - float(a.min())) < 1e-6 and abs(st['max'] - float(a.max())) < 1e-6 and st['sample_n'] > 0 and not prep,
+        f"valid {st.get('valid')} · งานเตรียม {len(prep)}")
 
 bad = [api('/api/estimate', dict(kind='calc', params=dict(expr=e, vars=dict(A=dict(dataset_id=img)), target_res=src)))
        for e in ('__import__("os").system("x")', 'A.real', 'B + 1', 'open(1)')]
@@ -156,4 +164,24 @@ R.check('รวมเวกเตอร์ → 5 feature + คอลัมน์
 vd = run('vmerge', dict(dataset_ids=[v1, v2], dissolve=True, name='dissolved_test'))
 g = gpd.read_file(vd['output'])
 R.check('dissolve → 1 รูป', len(g) == 1 and abs(g.geometry.union_all().area - 0.05) < 1e-9, f'{len(g)} · {len(g.geometry)}')
+# รูปซ้อน/แตะกันหลายกลุ่ม + รูปเสีย (bow-tie) → รวมแบบกลุ่มที่แตะกัน ต้องเท่ากับ union_all ทั้งก้อน
+import shapely  # noqa: E402
+rng2 = np.random.default_rng(5)
+boxes = [shapely.box(x, y, x + rng2.uniform(.005, .03), y + rng2.uniform(.005, .03)) for x, y in zip(rng2.uniform(100, 100.5, 3000), rng2.uniform(13, 13.5, 3000))]
+bow = shapely.Polygon([(101, 13), (101.1, 13.1), (101.1, 13), (101, 13.1), (101, 13)])
+fs = [dict(type='Feature', properties=dict(grp=i % 3), geometry=shapely.geometry.mapping(b)) for i, b in enumerate(boxes + [bow])]
+(TMP / 'many1.geojson').write_text(json.dumps(dict(type='FeatureCollection', features=fs[::2])), encoding='utf-8')
+(TMP / 'many2.geojson').write_text(json.dumps(dict(type='FeatureCollection', features=fs[1::2])), encoding='utf-8')
+vmn = [add(TMP / 'many1.geojson', None), add(TMP / 'many2.geojson', None)]
+t0 = time.time()
+vx = run('vmerge', dict(dataset_ids=vmn, dissolve=True, name='many_dissolved'))
+gx = gpd.read_file(vx['output'])
+ref = shapely.union_all(shapely.make_valid(np.array(boxes + [bow])))
+sd = shapely.symmetric_difference(gx.geometry.iloc[0], ref).area
+R.check('dissolve รูปซ้อนหลายพันรูป + รูปเสีย = union_all ทั้งก้อน (ต่าง < 1e-9 ของพื้นที่)', len(gx) == 1 and gx.geometry.iloc[0].is_valid and sd < 1e-9 * ref.area,
+        f'{time.time() - t0:.1f} วิ · พื้นที่ {gx.geometry.iloc[0].area:.6f} vs {ref.area:.6f}')
+vf = run('vmerge', dict(dataset_ids=vmn, dissolve=True, dissolve_field='grp', name='many_by_grp'))
+gf = gpd.read_file(vf['output'])
+okf = len(gf) == 3 and all(abs(r.geometry.area - shapely.union_all(shapely.make_valid(np.array([f for i, f in enumerate(boxes + [bow]) if i % 3 == r.grp]))).area) < 1e-9 for r in gf.itertuples())
+R.check('dissolve ตามฟิลด์ → 1 รูปต่อค่า พื้นที่ตรงทุกกลุ่ม', okf, f'{len(gf)} กลุ่ม {sorted(gf.grp.tolist())}')
 sys.exit(R.done())

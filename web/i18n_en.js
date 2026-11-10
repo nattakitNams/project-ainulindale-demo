@@ -2162,6 +2162,7 @@ window.I18N_EN = {
 "ไม่พบสูตรงาน": "Recipe not found",
 "ไม่พบเอกสาร": "Document not found",
 "เมตร": "metres",
+"ค้นหาชื่อชั้นข้อมูล": "Search layer name",
 "สัดส่วนพื้นที่พิกเซลที่ถูกรูปทับ 0–1 (เช่น ร้อยละพื้นที่อาคาร) · แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ": "Share of pixel area covered by shapes, 0–1 (e.g. building area percentage) · pixels split 10× finer to count",
 "ที่กินพื้นที่มากที่สุดในพิกเซลนั้น (แตกพิกเซลละเอียดขึ้น 10 เท่าเพื่อนับ — ช้ากว่า)": "that covers the most area in that pixel (pixels split 10× finer to count — slower)",
 "raster อ้างอิง — พิกเซลจะตรงกับชุดนี้ (ใช้ไบแวเรียตต่อได้ทันที)": "Reference raster — pixels will match this dataset (ready for bivariate)",

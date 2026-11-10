@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.38';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.39';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1162,18 +1162,32 @@ function aoiOptions(aois, { val = a => a.id, text = a => `${esc(a.name)} · ${fm
     + (u.length ? `<optgroup label="พื้นที่ศึกษาที่สร้างเอง" data-user="1">${u.map(o).join('')}</optgroup>` : '');
 }
 
-// ตัวเลือกชุดข้อมูลแบบค้นหาชื่อ + กรองโฟลเดอร์ (รวมโฟลเดอร์ย่อย) — กรองตัวเลือกใน <select> เดิม ค่าที่เลือกอยู่ไม่หาย
+// ตัวเลือกชุดข้อมูลแบบดรอปดาวน์ค้นหาได้: กดแล้วเปิดกล่อง (ค้นหาชื่อ/#id + กรองโฟลเดอร์ รวมโฟลเดอร์ย่อย) → คลิก/Enter เลือก
+//   <select> เดิมยังอยู่ (ซ่อน) เป็นที่เก็บค่า → โค้ดเดิมที่อ่าน sel.value / ฟัง change ใช้ได้เหมือนเดิม
 //   blank = ข้อความตัวเลือกค่าว่าง (null = ไม่มีตัวเลือกว่าง) · extra = ตัวเลือกคงที่ (HTML) ต่อจากค่าว่าง · group = หัวหมวดของชุดข้อมูล
 function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extra = '', group = null) {
   const pathName = id => { const o = []; let f = FOL.find(x => x.id === id); while (f) { o.unshift(f.name); f = FOL.find(x => x.id === f.parent_id); } return o.join(' / '); };
   const sub = id => { const s = new Set([id]); let grew = true; while (grew) { grew = false; FOL.forEach(f => { if (s.has(f.parent_id) && !s.has(f.id)) { s.add(f.id); grew = true; } }); } return s; };
   const box = document.createElement('div');
-  box.className = 'dsp';
-  box.innerHTML = (FOL.length ? '<select class="dsp-f" title="โฟลเดอร์"></select>' : '')
-    + '<input type="search" class="dsp-q" placeholder="ค้นหาชื่อชุดข้อมูล หรือ #id">';
+  box.className = 'cbx';
+  box.innerHTML = `<button type="button" class="cbx-btn"><span class="cbx-t"></span><span class="cbx-c">▼</span></button>
+    <div class="cbx-pop hide"><div class="cbx-bar">${FOL.length ? '<select class="dsp-f" title="โฟลเดอร์"></select>' : ''}<input type="search" class="dsp-q" placeholder="ค้นหาชื่อชุดข้อมูล หรือ #id" autocomplete="off"></div>
+    <div class="cbx-list" role="listbox"></div></div>`;
   sel.before(box);
+  sel.classList.add('hide');
+  const btn = box.querySelector('.cbx-btn'), pop = box.querySelector('.cbx-pop'), lst = box.querySelector('.cbx-list'), tx = box.querySelector('.cbx-t');
   const q = box.querySelector('.dsp-q'), fs = box.querySelector('.dsp-f');
-  // โฟลเดอร์แบบเปิดทีละชั้น: เห็นเฉพาะโฟลเดอร์ชั้นบน → เลือกแล้วค่อยเห็นโฟลเดอร์ย่อยของมัน (กรองรวมโฟลเดอร์ย่อยทั้งหมด)
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const label = () => {
+    const o = sel.options[sel.selectedIndex];
+    tx.textContent = o ? o.textContent : (blank || '— เลือก —');
+    tx.classList.toggle('muted', !o || !o.value);
+    btn.disabled = sel.disabled;
+  };
+  // ตั้งค่าจากโค้ด (sel.value = …) หรือสร้างตัวเลือกใหม่ → ป้ายบนปุ่มตามทันที
+  Object.defineProperty(sel, 'value', { configurable: true, get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); label(); } });
+  new MutationObserver(label).observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
+  sel.addEventListener('change', label);
   const byName = (a, b) => a.name.localeCompare(b.name, 'th');
   const drawFolders = fv => {
     if (!fs) return;
@@ -1183,10 +1197,19 @@ function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extr
     fs.innerHTML = `<option value="">ทุกโฟลเดอร์</option>`
       + (cur ? (par ? `<option value="${par.id}" translate="no">↑ ${esc(pathName(par.id))}</option>` : '')
         + `<option value="${cur.id}" translate="no">▾ ${esc(pathName(cur.id))}</option>` : `<option value="root">นอกโฟลเดอร์ (ชั้นนอกสุด)</option>`)
-      + kids.map(f => `<option value="${f.id}" translate="no">${cur ? '    ' : ''}${esc(f.name)}${nk(f)}</option>`).join('');
+      + kids.map(f => `<option value="${f.id}" translate="no">${cur ? '    ' : ''}${esc(f.name)}${nk(f)}</option>`).join('');
     fs.value = fv;
   };
   drawFolders('');
+  let hi = -1;
+  const items = () => [...lst.querySelectorAll('.cbx-it:not(.dis)')];
+  const mark = i => {
+    const it = items();
+    hi = Math.max(0, Math.min(i, it.length - 1));
+    it.forEach((x, k) => x.classList.toggle('on', k === hi));
+    it[hi]?.scrollIntoView({ block: 'nearest' });
+  };
+  const it = o => `<div class="cbx-it${o.disabled ? ' dis' : ''}${o.value === sel.value && o.value ? ' cur' : ''}" data-v="${esc(o.value)}" translate="no">${esc(o.textContent)}</div>`;
   const apply = () => {
     const t = q.value.trim().toLowerCase(), fv = fs ? fs.value : '', cur = sel.value;
     drawFolders(fv);
@@ -1194,12 +1217,56 @@ function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extr
     const show = list.filter(d => String(d.id) === cur || ((!inF || inF.has(d.folder_id || null)) && (!t || d.name.toLowerCase().includes(t) || ('#' + d.id).includes(t))));
     const body = show.map(optFn).join('') + (show.length > (show.some(d => String(d.id) === cur) ? 1 : 0) ? '' : '<option disabled>ไม่พบชุดข้อมูลที่ตรงเงื่อนไข</option>');
     sel.innerHTML = (blank != null ? `<option value="">${blank}</option>` : '') + extra + (group ? `<optgroup label="${group}">${body}</optgroup>` : body);
-    sel.value = cur;
+    desc.set.call(sel, cur);
+    // รายการในกล่องสร้างจาก <option> (ข้อความเดียวกับตัวเลือกเดิม) · หัวหมวดจาก <optgroup>
+    lst.innerHTML = [...sel.children].map(n => n.tagName === 'OPTGROUP'
+      ? `<div class="cbx-g">${esc(n.label)}</div>` + [...n.children].map(it).join('') : it(n)).join('');
+    label();
+    mark(Math.max(0, items().findIndex(x => x.dataset.v === cur)));
   };
+  const outside = e => { if (!box.contains(e.target)) close(); };
+  const close = () => { pop.classList.add('hide'); document.removeEventListener('mousedown', outside); };
+  const open = () => {
+    if (sel.disabled) return;
+    q.value = '';
+    apply();
+    pop.classList.remove('hide');
+    document.addEventListener('mousedown', outside);
+    q.focus();
+  };
+  const choose = v => {
+    const ch = v !== sel.value;
+    desc.set.call(sel, v);
+    label(); close(); btn.focus();
+    if (ch) sel.dispatchEvent(new Event('change', { bubbles: true }));
+  };
+  btn.onclick = () => pop.classList.contains('hide') ? open() : close();
+  btn.onkeydown = e => { if (['ArrowDown', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); } };
+  lst.onmousedown = e => { const x = e.target.closest('.cbx-it'); if (x && !x.classList.contains('dis')) { e.preventDefault(); choose(x.dataset.v); } };
   q.oninput = apply;
-  if (fs) fs.onchange = apply;
-  if (!sel.options.length) apply();               // <select> ว่าง → สร้างตัวเลือกครั้งแรก
+  if (fs) fs.onchange = () => { apply(); q.focus(); };
+  q.onkeydown = e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); mark(hi + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(hi - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); const x = items()[hi]; if (x) choose(x.dataset.v); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); }
+  };
+  if (!sel.options.length) apply(); else label();        // <select> ว่าง → สร้างตัวเลือกครั้งแรก
 }
+
+// ช่องค้นหาในรายการติ๊กเลือก (กล่อง "เพิ่มชั้นข้อมูล"): <input class="cl-q"> วางก่อน .checklist → กรองตามชื่อ ซ่อนหัวหมวดที่ไม่เหลือรายการ
+document.addEventListener('input', e => {
+  if (!e.target.classList?.contains('cl-q')) return;
+  const t = e.target.value.trim().toLowerCase(), cl = e.target.nextElementSibling;
+  let head = null, any = false;
+  const flush = () => { if (head) head.classList.toggle('hide', !any); };
+  [...cl.children].forEach(n => {
+    if (n.tagName === 'LABEL') { const ok = !t || n.textContent.toLowerCase().includes(t); n.classList.toggle('hide', !ok); any ||= ok; }
+    else { flush(); head = n; any = false; }
+  });
+  flush();
+});
+const CL_Q = '<input type="search" class="cl-q" placeholder="ค้นหาชื่อชั้นข้อมูล" autocomplete="off" style="width:100%;margin-bottom:8px">';
 
 async function pageBiv() {
   const [all, aois, , fr] = await Promise.all([api(ENGINE + '/api/datasets'), api(ENGINE + '/api/aoi'), loadPals(), api(ENGINE + '/api/folders').catch(() => ({ folders: [] }))]);
@@ -2483,7 +2550,7 @@ async function pageViewer() {
       ds.map(d => row((d.kind === 'link' ? 'lk:' : 'ds:') + d.id, d.name, d.kind === 'link' ? d.meta.type_label : d.kind === 'raster' ? (d.meta.res_label || '').split(' (')[0] : `${fmt(d.meta.features, 0)} feature`)).join('')).join('')
       + [['พื้นที่ศึกษาพื้นฐาน', aois.filter(a => a.builtin)], ['พื้นที่ศึกษาที่สร้างเอง', aois.filter(a => !a.builtin)]].map(([t, xs]) => xs.length
         ? `<div class="tiny muted" style="margin:8px 0 2px">${t}</div>` + xs.map(a => row('aoi:' + a.id, a.name, `${fmt(a.area_km2, 0)} ตร.กม.`)).join('') : '').join('');
-    const pick = await ui.open('เพิ่มชั้นข้อมูล', `<div class="checklist" style="max-height:52vh">${html}</div>`,
+    const pick = await ui.open('เพิ่มชั้นข้อมูล', `${CL_Q}<div class="checklist" style="max-height:52vh">${html}</div>`,
       [{ label: 'ยกเลิก', cls: 'ghost', value: () => null }, { label: 'เพิ่ม', cls: 'primary', value: () => $$('#mBody input:checked:not(:disabled)').map(i => i.value) }]);
     if (!pick || !pick.length) return;
     pick.forEach((k, i) => {
@@ -3049,7 +3116,7 @@ async function pageReport(qs) {
       $('#rpAdd').onclick = async () => {
         const have = new Set(m.layers.map(l => l.key));
         const items = [...all.map(d => [(d.kind === 'link' ? 'lk:' : 'ds:') + d.id, d.name, d.kind === 'link' ? d.meta.type_label : (d.role === 'map' ? 'แผนที่' : d.kind)]), ...aois.map(a => ['aoi:' + a.id, a.name, 'พื้นที่ศึกษา'])];
-        const pick = await ui.open('เพิ่มชั้นข้อมูล', `<div class="checklist" style="max-height:52vh">${items.map(([k, n, t]) => `<label><input type="checkbox" value="${esc(k)}" ${have.has(k) ? 'checked disabled' : ''}><span>${esc(n)} <span class="tiny muted">${esc(t)}</span></span></label>`).join('')}</div>`,
+        const pick = await ui.open('เพิ่มชั้นข้อมูล', `${CL_Q}<div class="checklist" style="max-height:52vh">${items.map(([k, n, t]) => `<label><input type="checkbox" value="${esc(k)}" ${have.has(k) ? 'checked disabled' : ''}><span>${esc(n)} <span class="tiny muted">${esc(t)}</span></span></label>`).join('')}</div>`,
           [{ label: 'ยกเลิก', cls: 'ghost', value: () => null }, { label: 'เพิ่ม', cls: 'primary', value: () => $$('#mBody input:checked:not(:disabled)').map(i => i.value) }]);
         if (!pick?.length) return;
         pick.forEach((k, i) => {
