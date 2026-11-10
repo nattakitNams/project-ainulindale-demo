@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.39';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.40';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -676,6 +676,18 @@ async function symPanel(d, o = {}) {
   const legend = s => o.viewer ? o.onStyle?.(s) : setMapLegend(s);
   const isCount = d.value_type === 'count';
   const items = () => sty.type === 'paletted' ? (sty.entries ||= []) : (sty.stops ||= []);
+  // แผนที่ไบแวเรียต: เลือกพาเลท 2 มิติ (nX×nY) ได้ตรงนี้ — รหัส = ชั้นY × nX + ชั้นX + 1 → สีที่ตำแหน่ง รหัส−1 ของพาเลท
+  let biv = null;
+  if (d.role === 'map') {
+    try {
+      const L = d.lineage || (await api(`${ENGINE}/api/datasets/${d.id}`)).lineage;
+      const bp = L?.params;
+      if (bp?.x?.n && bp?.y?.n) {
+        biv = { nx: +bp.x.n, ny: +bp.y.n };
+        if (!PALS.builtin.length) await loadPals();
+      }
+    } catch { }
+  }
   const preview = () => {
     clearTimeout(pvTimer);
     pvTimer = setTimeout(async () => {
@@ -691,7 +703,7 @@ async function symPanel(d, o = {}) {
     el.innerHTML = (o.viewer
       ? `<div class="card-head"><h2 style="font-size:15px;min-width:0"><span class="dot" style="background:var(--butter);color:var(--butter)"></span><span class="vname" title="${esc(d.name)}">สัญลักษณ์ · ${esc(d.name)}</span></h2>
         <div class="row">${override ? '<span class="chip ok">ปรับเฉพาะแผนที่นี้</span>' : '<span class="chip">ตามชุดข้อมูล</span>'}<button class="sm ghost" id="sClose" title="ปิด">✕</button></div></div>`
-      : `<div class="card-head"><h2><span class="dot" style="background:var(--butter);color:var(--butter)"></span>สัญลักษณ์ <span class="tiny muted">Symbology</span></h2>
+      : `<div class="card-head"><h2><span class="dot" style="background:var(--butter);color:var(--butter)"></span>สัญลักษณ์ <span class="tiny muted th-only">Symbology</span></h2>
       <div class="row">${saved ? '<span class="chip ok">บันทึกแล้ว</span>' : '<span class="chip">ค่าเริ่มต้น</span>'}<a class="btn sm ghost" href="${ENGINE}/api/datasets/${d.id}/style.qml" title="ไฟล์สไตล์สำหรับ QGIS">${IC.download}.qml</a></div></div>`) + `
       <div class="grid-form">
         <label class="field full"><span>Render type</span><select id="sType">${Object.entries(RTYPE).map(([k, t]) => `<option value="${k}" ${k === T ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
@@ -701,6 +713,7 @@ async function symPanel(d, o = {}) {
         ${T !== 'gray' ? `<div class="field full"><span>Color ramp</span><div class="ramp-pick"><button type="button" id="rampBtn" class="ramp-btn"><i style="background:${rampCss(sty.ramp || 'viridis', sty.invert)}"></i><span>${esc(sty.ramp || 'viridis')}</span>▾</button>
           <label class="row small"><input type="checkbox" id="sInv" ${sty.invert ? 'checked' : ''}> กลับด้าน</label>
           <div class="ramp-list hide" id="rampList">${Object.keys(STATE.ramps).map(k => `<div data-r="${esc(k)}"><i style="background:${rampCss(k)}"></i>${esc(k)}</div>`).join('')}</div></div></div>` : ''}
+        ${biv && T === 'paletted' ? `<div class="field full"><span>พาเลทไบแวเรียต ${biv.nx}×${biv.ny} <span class="tiny muted">— แทนสีทุกรหัสตามตาราง 2 มิติ</span></span><div class="pals" id="sBivPal"></div></div>` : ''}
         ${T === 'pseudocolor' ? `
           <label class="field"><span>Min</span><input type="number" step="any" id="sMin" value="${sty.min ?? ''}"></label>
           <label class="field"><span>Max</span><input type="number" step="any" id="sMax" value="${sty.max ?? ''}"></label>
@@ -751,6 +764,11 @@ async function symPanel(d, o = {}) {
         if (!await reclass()) { sty.type = 'gray'; draw(); }
       });
     }
+    if ($('#sBivPal')) palGallery($('#sBivPal'), biv.nx, biv.ny, sty.biv_pal || null, pp => {
+      sty.biv_pal = pp.key;
+      items().forEach(e => { const c = pp.colors[Math.round(+e.value) - 1]; if (c) e.color = c; });
+      draw(); preview();
+    });
     $('#sInv') && ($('#sInv').onchange = () => { sty.invert = $('#sInv').checked; sty.type === 'gray' ? (draw(), preview()) : recolor(); });
     ['#sMin', '#sMax'].forEach(k => $(k) && ($(k).onchange = () => { sty.min = num('#sMin'); sty.max = num('#sMax'); if (sty.type === 'gray') { draw(); preview(); } }));
     $('#sInterp') && ($('#sInterp').onchange = () => { sty.interp = $('#sInterp').value; reclass(); });
@@ -2523,7 +2541,9 @@ async function pageViewer() {
   mp.on('click', async e => {
     const { lat } = e.latlng, lng = e.latlng.wrap().lng;
     if (mark) mp.removeLayer(mark);
-    mark = L.circleMarker(e.latlng, { radius: 6, color: '#f6e3a1', weight: 2, fillOpacity: 0 }).addTo(mp);
+    // หมุดอยู่ pane ของตัวเองเหนือทุกชั้น (ชั้นข้อมูลแต่ละชั้นมี pane z-index 402+ ส่วน overlayPane ปกติ = 400 → หมุดเคยจมใต้ชั้น)
+    if (!mp.getPane('vMark')) { const pn = mp.createPane('vMark'); pn.style.zIndex = '690'; pn.style.pointerEvents = 'none'; }
+    mark = L.circleMarker(e.latlng, { pane: 'vMark', interactive: false, radius: 7, color: '#f6e3a1', weight: 2.5, fillOpacity: 0 }).addTo(mp);
     const vis = layers.filter(l => l.visible && ['raster', 'vector'].includes(l.kind));
     if (!vis.length) { $('#vPt').innerHTML = '<span class="muted">ไม่มีชั้นข้อมูล (raster/vector) ที่เปิดอยู่</span>'; return; }
     $('#vPt').innerHTML = `<div class="mono muted">${lat.toFixed(6)}, ${lng.toFixed(6)}</div><div class="tiny muted">กำลังอ่านค่า…</div>`;

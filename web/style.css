@@ -64,6 +64,8 @@ main { padding: 30px 38px 60px; max-width: 1560px; width: 100%; }
 /* หัวหน้า */
 .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 22px; flex-wrap: wrap; }
 .eyebrow { font-size: 11.5px; letter-spacing: 1.8px; text-transform: uppercase; color: var(--lav); font-weight: 600; }
+/* หัวข้ออังกฤษตัวเล็กเหนือหัวข้อไทย — โหมดอังกฤษหัวข้อหลักแปลเป็นอังกฤษแล้ว จะซ้ำกัน → ซ่อน */
+html[lang="en"] .eyebrow, html[lang="en"] .th-only { display: none; }
 h1 { font-size: 30px; line-height: 1.2; font-weight: 650; margin: 4px 0 2px; letter-spacing: -.2px; }
 h1 .edit { opacity: .4; margin-left: 6px; cursor: pointer; display: inline-block; vertical-align: middle; } h1 .edit:hover { opacity: 1; }
 h1 .edit svg { width: 20px; height: 20px; display: block; }
