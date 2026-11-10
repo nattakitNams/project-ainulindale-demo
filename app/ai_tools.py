@@ -213,10 +213,10 @@ def _data_card(it, d, dl, direct, res):
     return dict(
         what=dict(title=it.get('t'), short=it.get('sd'), categories=[th.get(k, k) for k in it.get('th') or []], data_type=it.get('tr') or it.get('ty'),
                   knowledge_topics=knowledge.match(' '.join([it.get('t') or '', it.get('k') or '', str(it.get('id') or ''), ' '.join(it.get('kw') or [])]))),
-        variables=dict(count=len(vars_), items=vars_[:40],
+        variables=dict(count=len(vars_), items=[{k: (v[:100] if isinstance(v, str) else v) for k, v in x.items()} for x in vars_[:25]],
                        note='ตัวแปร/แบนด์จาก metadata ต้นทาง: unit = หน่วย · scale/offset = ค่าจริง = DN × scale + offset · classes = รหัสชั้น' if vars_ else 'ต้นทางไม่ระบุตัวแปร — ดูคำอธิบาย/ไฟล์'),
         time=dict(start=start, end=end or (('ต่อเนื่องถึงปัจจุบัน (' + str(datetime.date.today().year) + ')') if start else None), cadence=it.get('cd'),
-                  years_range=it.get('y'), years_with_files=sorted(by_year) or it.get('yl'), files_by_year={str(k): v for k, v in sorted(by_year.items())} or None,
+                  years_range=it.get('y'), years_with_files=sorted(by_year) or it.get('yl'),
                   updated=it.get('up')),
         space=dict(coverage=COVER_TH.get('global_' if it.get('cv') == 'global' else it.get('cv'), it.get('cv')), bbox=it.get('bb'),
                    resolution_m=it.get('g'), note='resolution_m = gsd จาก metadata (ความละเอียดตามชื่อ)' if it.get('g') else None),
@@ -239,7 +239,7 @@ def _year(name):
     return int(m.group(1)) if m else None
 
 
-def t_get_hub_item(key):
+def t_get_hub_item(key, years=None):
     """รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง + ไฟล์ที่ดาวน์โหลดเข้าคลังได้ (พร้อมปี) — ใช้เลือกปี/ไฟล์ก่อนเสนอดาวน์โหลด"""
     it = next((x for x in _hub() if x['k'] == key), None)
     if it is None:
@@ -252,6 +252,9 @@ def t_get_hub_item(key):
         res.append(dict(name=r.get('name'), format=r.get('format'), year=_year(r.get('name') or u), url=u, size_mb=round(r['size'] / 1e6, 1) if r.get('size') else None,
                         downloadable=ok))
     dl = [r for r in res if r['downloadable']]
+    if years:                                                 # ขอเฉพาะปี → ไฟล์ของปีนั้น (ชุดที่มีไฟล์มากไม่ถูกตัดทิ้ง)
+        ys = {int(y) for y in years}
+        dl = [r for r in dl if r['year'] in ys]
     direct = [dict(name=r['name'], year=r['year'], format=r['format'], url=r['url']) for r in res
               if not r['downloadable'] and re.search(r'\.(zip|gpkg|csv|xlsx?|nc|h5|kmz?|shp|parquet|7z)(/content)?(\?|$)', r['url'] or '', re.I)]
     note = None
@@ -265,7 +268,7 @@ def t_get_hub_item(key):
     return dict(key=it['k'], title=it.get('t'), card=card, platform=it.get('p'), provider=it.get('pr'), coverage=it.get('cv'), license=it.get('l') or it.get('lc'),
                 url=it.get('u'), description=desc[:1500] + ('…' if len(desc) > 1500 else ''), description_source=(d.get('desc') or {}).get('source'),
                 years_available=sorted({r['year'] for r in dl if r['year']}) or it.get('y'),
-                downloadable_files=dl[:60], direct_links_app_cannot_import=direct[:40], other_files=len(res) - len(dl) - len(direct),
+                downloadable_files=[{k: v for k, v in f.items() if k not in ('downloadable',) and v is not None} for f in dl[:60]], direct_links_app_cannot_import=direct[:40], other_files=len(res) - len(dl) - len(direct),
                 gee_id=it.get('id') if it.get('s') == 'gee' else None, note=note)
 
 
@@ -344,6 +347,7 @@ def t_search_data_hub(query, limit=12):
                 n_variables=it.get('nv'), resolution_m=it.get('g'), cadence=it.get('cd'), start=it.get('a'), end=it.get('b'), years_with_files=it.get('yl'),
                 satellite_collection=it['k'].split(':', 1)[1] if it.get('s') == 'pc' and it['k'].split(':', 1)[1] in sat else None)
            for _, it, lv, why in scored[:int(limit or 12)]]
+    res = [{k: v for k, v in x.items() if v not in (None, [], '', 0) or k in ('files_app_can_import',)} for x in res]   # ตัดช่องว่าง → ประหยัดโทเคน
     q = (query or '').lower()
     tool = [dict(collection=c['id'], name=c['name'], years=c['years'], bands=list(c['bands']), how='งาน satellite (ดึงได้ทันที ไม่ต้องมีบัญชี)')
             for c in ops_sat.COLLECTIONS if any(h in q for h in SAT_HINT.get(c['id'], [])) or any(h in words or h in q for w in words for h in SYN.get(w, []) if h in SAT_HINT.get(c['id'], []))]
@@ -447,6 +451,35 @@ def t_list_past_work(limit=8):
                   blockers=p.get('blockers')) for p in ai_plan.all_()[:int(limit or 8)]]
     docs = [dict(title=d['title'], file=d['file'], version=d['version'], updated_at=d['updated_at'], url=f'/api/ai/docs/{d["file"]}') for d in ai_docs.all_()[:20]]
     return dict(plans=plans, documents=docs, note='ประวัติข้อความแชตเก่าเก็บในเบราว์เซอร์ ผู้ช่วยไม่เห็น — แต่เห็นแผนงาน/เอกสาร/โน้ตเหล่านี้')
+
+
+def t_propose_recipe(title, purpose, steps_json, raw_folder_id=None, output_folder_id=None):
+    """สูตรงานหลายขั้น: ผู้ใช้ยืนยันครั้งเดียว แอปรันทุกขั้นเอง (ไม่ใช้ LLM) แล้วส่งผลรวมกลับแชต"""
+    import json as _json
+    from . import recipes
+    try:
+        steps = _json.loads(steps_json) if isinstance(steps_json, str) else steps_json
+        steps = recipes.validate(steps)
+    except ValueError as e:
+        raise ToolError(f'steps_json ไม่ใช่ JSON: {e}')
+    except recipes.RecipeError as e:
+        raise ToolError(str(e))
+    checks = []
+    for s in steps:                                           # ตรวจล่วงหน้าเฉพาะขั้นที่ไม่พึ่งผลขั้นก่อน (ขั้นอื่นตรวจตอนรัน)
+        if s['kind'] in recipes.JOB_KINDS and not recipes._refs(s['params'], set()) and s['params'].get('target_res') != 'auto':
+            e = _call('POST', '/api/estimate', dict(kind=s['kind'], params=s['params']))
+            checks.append(dict(step=s['id'], ok=bool(e.get('ok')), error=e.get('error'), resolution=(e.get('grid') or {}).get('res_label'),
+                               warnings=e.get('warnings') or []))
+            if not e.get('ok'):
+                raise ToolError(f'ขั้น {s["id"]} ตรวจไม่ผ่าน: {e.get("error")} — แก้แล้วเสนอใหม่')
+        elif s['kind'] == 'download':
+            item = t_get_hub_item(s['params']['hub_key'])
+            if not any(f['url'] == s['params']['file_url'] for f in item['downloadable_files']):
+                raise ToolError(f'ขั้น {s["id"]}: file_url ไม่อยู่ในรายการไฟล์นำเข้าได้ของ {s["params"]["hub_key"]} (ดู get_hub_item)')
+    out = _propose('recipe', title, dict(title=title, purpose=str(purpose)[:500], steps=steps, raw_folder_id=raw_folder_id, output_folder_id=output_folder_id))
+    with _lock:
+        _PROPOSALS[out['proposal_id']]['estimate'] = dict(ok=True, checks=checks)
+    return dict(out, status='รอผู้ใช้กดยืนยันครั้งเดียว — แล้วแอปรันทุกขั้นเอง ผลรวมจะแจ้งกลับในแชต')
 
 
 # ---------- แผนงานของบทสนทนา ----------
@@ -711,6 +744,12 @@ def execute(pid, model=None, params=None):
     if p['action'] == 'set_value_type':
         _call('PATCH', f'/api/datasets/{a["dataset_id"]}', dict(value_type=a['value_type'], value_type_confirmed=True))
         return dict(ok=True, message=f'ตั้งประเภทค่า #{a["dataset_id"]} เป็น {a["value_type"]} แล้ว')
+    if p['action'] == 'recipe':
+        from . import recipes
+        r = recipes.create(a['title'], a['purpose'], a['steps'], CURRENT_CHAT.get('id'), a.get('raw_folder_id'), a.get('output_folder_id'),
+                           dict(by='ai_assistant', model=model, confirmed_at=db.now()))
+        recipes.start(r, _call, lambda *x: start_hub_import(*x), t_review_output)
+        return dict(ok=True, recipe_id=r['id'], message=f'เริ่มสูตรงาน "{a["title"]}" ({len(a["steps"])} ขั้น) — แอปรันทีละขั้นเอง เสร็จแล้วแจ้งผลรวม')
     if p['action'] == 'create_folders':
         ids = _ensure_folders(a['paths'])
         return dict(ok=True, folders=ids, message='สร้างโฟลเดอร์แล้ว: ' + ', '.join(f'{k} (#{v})' for k, v in ids.items()))
@@ -826,7 +865,7 @@ TOOLS = [
     ('job_status', 'read', t_job_status, 'สถานะงาน + ชุดข้อมูลผลลัพธ์เมื่อเสร็จ', dict(job_id=I), ['job_id']),
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
     ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — คำอังกฤษสั้น 1–2 คำต่อครั้ง ค้นหลายรอบ เช่น "population", "ghsl", "pm2.5" · ผลมี satellite_tool = ชุดที่ดึงได้ทันทีด้วยงาน satellite', dict(query=S, limit=I), ['query']),
-    ('get_hub_item', 'read', t_get_hub_item, 'บัตรข้อมูลของชุดใน Data hub (card): หมวด · ตัวแปร/แบนด์ (หน่วย scale offset รหัสชั้น) · ช่วงเวลา/ความถี่/ปีที่มีไฟล์ · ความละเอียด/ขอบเขต · ต้องมีบัญชีไหม/วิธีได้มา · ผู้ผลิต/สัญญาอนุญาต/การอ้างอิง + ไฟล์ที่นำเข้าได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
+    ('get_hub_item', 'read', t_get_hub_item, 'บัตรข้อมูลของชุดใน Data hub (card) — ใส่ years เพื่อขอเฉพาะไฟล์ของปีที่ต้องการ: หมวด · ตัวแปร/แบนด์ (หน่วย scale offset รหัสชั้น) · ช่วงเวลา/ความถี่/ปีที่มีไฟล์ · ความละเอียด/ขอบเขต · ต้องมีบัญชีไหม/วิธีได้มา · ผู้ผลิต/สัญญาอนุญาต/การอ้างอิง + ไฟล์ที่นำเข้าได้ (url ใช้กับ propose_download_data)', dict(key=S, years=dict(type='array', items=I)), ['key']),
     ('satellite_catalog', 'read', t_satellite_catalog, 'ภาพดาวเทียมที่ดึงได้ทันที (Planetary Computer, ไม่ต้องมีบัญชี): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, การใช้ที่ดิน, น้ำผิวดิน — แบนด์/ช่วงปี/ความละเอียด', {}, []),
     ('search_satellite', 'read', t_search_satellite, 'ค้นภาพดาวเทียมในพื้นที่+ช่วงวันที่ (+เมฆสูงสุด %) → จำนวนภาพ วันที่ เมฆ — ใช้ก่อนเสนองาน satellite',
      dict(collection=S, aoi_id=I, date_from=S, date_to=S, cloud_max=N), ['collection', 'aoi_id']),
@@ -850,6 +889,10 @@ TOOLS = [
     ('propose_create_folders', 'action', t_propose_create_folders, 'เสนอสร้างโฟลเดอร์หลายชั้นในครั้งเดียว เช่น ["งานA/raw_data","งานA/output"] (ผู้ใช้ยืนยัน) — ผลลัพธ์ของงานถัดไปใส่ "folder_id" ใน params เพื่อเข้าโฟลเดอร์นั้นอัตโนมัติ',
      dict(paths=dict(type='array', items=S), purpose=S), ['paths']),
     ('propose_move_to_folder', 'action', t_propose_move_to_folder, 'เสนอย้ายชุดข้อมูลที่มีอยู่เข้าโฟลเดอร์ (ผู้ใช้ยืนยัน)', dict(dataset_ids=dict(type='array', items=I), folder_id=I), ['dataset_ids', 'folder_id']),
+    ('propose_recipe', 'action', t_propose_recipe,
+     'สูตรงานหลายขั้น (≥ 2 งานต่อกัน) — ผู้ใช้ยืนยันครั้งเดียว แอปรันทุกขั้นเองโดยไม่ต้องคุยกับคุณระหว่างทาง (ประหยัดโทเคน) แล้วส่งผลรวมกลับมาให้สรุป · สเปกใน system prompt',
+     dict(title=S, purpose=S, steps_json=dict(type='string', description='JSON array ของขั้น [{"id":"s1","title","kind","params"}] อ้างผลขั้นก่อนด้วย "$s1"'),
+          raw_folder_id=I, output_folder_id=I), ['title', 'purpose', 'steps_json']),
     ('propose_set_value_type', 'action', t_propose_set_value_type, 'เสนอยืนยัน/เปลี่ยนประเภทค่าของราสเตอร์ (ผู้ใช้ต้องกดยืนยัน)',
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',

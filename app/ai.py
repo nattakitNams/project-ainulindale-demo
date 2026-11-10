@@ -272,6 +272,12 @@ TOOLS_PROPOSE = """
   stat: slope (แนวโน้มต่อปี) | change (ปีท้าย−ปีแรก · ปีกลางขาดได้) | pct | mean | std | max_year | min_year | count_above / count_below (+ "threshold") · "min_years" ไม่บังคับ (ค่าเริ่ม = ต้องมีทุกปี) · 2 ปีเทียบกันใช้ change ก็ได้
 - mosaic (ต่อราสเตอร์หลายแผ่นเป็นไฟล์เดียว · CRS/จำนวนแบนด์เดียวกัน): {"dataset_ids":[3,4,5],"method":"first","name":"..."} · method first | last | min | max
 - ทุกงานใส่ "folder_id" ได้ (ผลลัพธ์เข้าโฟลเดอร์นั้น)
+สูตรงาน (propose_recipe) — ใช้แทนการเสนอการ์ดทีละงานเมื่อมี ≥ 2 งานต่อกัน (ประหยัดโทเคน: ออกแบบครั้งเดียว แอปรันเอง ไม่ต้องคุยกับคุณระหว่างทาง):
+  steps_json = [{"id":"s1","title":"ดึง LST ฤดูร้อน 2015","kind":"satellite","params":{"collection":"modis-11A2-061","bands":["LST_Day_1km"],"aoi_id":2,"date_from":"2015-03-01","date_to":"2015-05-31","zoom":7,"pick":"mean"}},
+    {"id":"s2","title":"…2024","kind":"satellite","params":{…}}, {"id":"s3","title":"แนวโน้ม","kind":"trend","params":{"items":[{"dataset_id":"$s1","year":2015},{"dataset_id":"$s2","year":2024}],"stat":"change","target_res":"auto"}},
+    {"id":"s4","kind":"bivariate","params":{"x":{"dataset_id":"$s3",…},"y":{"dataset_id":7,…},"target_res":"auto"}}, {"id":"s5","kind":"stats","params":{"dataset_id":"$s4"}}]
+  kind = ชนิดงานด้านล่าง + download ({"hub_key","file_url","name","value_type","aoi_id"} จาก get_hub_item) + stats · "$sN" = ชุดผลลัพธ์ของขั้น N · "target_res":"auto" = ความละเอียดต้นทางที่หยาบสุด
+  ใส่ raw_folder_id / output_folder_id ถ้ามีโฟลเดอร์งาน · ขั้นที่ไม่พึ่งขั้นอื่นถูกตรวจทันทีตอนเสนอ · เมื่อได้ [แจ้งจากแอป] สรุปสูตรงาน → อ่าน สรุปผล/ปัญหาให้ผู้ใช้ อัปเดตแผน (ไม่ต้องตรวจซ้ำทุกชุด แอปตรวจให้แล้ว)
 - satellite (ดึงภาพดาวเทียมเข้าคลัง · mosaic ฝั่งเซิร์ฟเวอร์ Planetary Computer · ไม่ต้องมีบัญชี): {"collection":"sentinel-2-l2a","bands":["B04","B08"],"aoi_id":2,"date_from":"2025-01-01","date_to":"2025-03-31","cloud_max":20,"zoom":9,"pick":"median","name":"..."}
   ดู satellite_catalog (แบนด์/ปี) → search_satellite (มีกี่ภาพ วันไหน เมฆเท่าไร) ก่อนเสนอ · zoom: 8 ≈ 150 ม. · 9 ≈ 76 ม. · 10 ≈ 38 ม. · 11 ≈ 19 ม. · 12 ≈ 10 ม. (ทั้งประเทศ 8–9 เร็ว, 10 ราว 5 นาที, ละเอียดกว่านั้นให้เลือกจังหวัด)
   pick: median (ตัดเมฆ/สัญญาณรบกวน — ภาพแสง/SAR) | first (ภาพเมฆน้อยสุดก่อน — DEM/การใช้ที่ดิน) · SAR (sentinel-1-rtc vv/vh) ใช้ได้แม้มีเมฆ/ฝน เช่น หาน้ำท่วม (VV dB ต่ำ)
@@ -279,12 +285,13 @@ TOOLS_PROPOSE = """
   อุณหภูมิพื้นผิว: modis-11A2-061 LST_Day_1km / LST_Night_1km (zoom 7 ≈ 300 ม. พอ เพราะต้นทาง 1 กม.) · ค่าเฉลี่ยหลายปี = ดึงทีละปี pick mean แล้ว trend stat mean/slope · °C = calc "A*0.02-273.15"
 - vmerge (รวมเวกเตอร์หลายชั้น → GeoPackage): {"dataset_ids":[5,6],"dissolve":false,"dissolve_field":null,"name":"..."} · dissolve true + ไม่ใส่ฟิลด์ = รวมเป็นรูปเดียว"""
 
+KEEP_FULL = 12                                           # ข้อความล่าสุดที่ส่งเต็ม (ที่เก่ากว่าย่อเหลือ 400 ตัวอักษร)
 MAX_STEPS = 16                                           # พอให้ทำงานหลายขั้นจบในรอบเดียว (ค้น → ตรวจ → เสนอ → อัปเดตแผน)
 
 
 def _context():
     """ข้อมูลอธิบายคลัง (ไม่ใช่ไฟล์ข้อมูล) ให้ AI ตอบตรงกับของที่ผู้ใช้มี"""
-    ds = db.query("SELECT id, name, kind, role, value_type, meta FROM datasets WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 80")
+    ds = db.query("SELECT id, name, kind, role, value_type, meta FROM datasets WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 50")
     aois = db.query('SELECT id, name, area_km2 FROM aoi WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 30')
     rows = []
     for d in ds:
@@ -298,8 +305,11 @@ def _context():
 def _norm(messages):
     """ประวัติจากหน้าเว็บ → [{role: user|assistant, content}] · 'event' (ผลงานจริงจากแอป) ส่งเป็นข้อความผู้ใช้ · รวมบทบาทซ้ำติดกัน"""
     out = []
-    for m in (messages or [])[-40:]:
+    msgs = (messages or [])[-40:]
+    for i, m in enumerate(msgs):
         t = str(m.get('content') or '')[:8000]
+        if i < len(msgs) - KEEP_FULL:                       # ข้อความเก่า: ย่อ (รายละเอียดอยู่ในแผนงาน/เอกสารแล้ว) — ลดโทเคนที่ส่งซ้ำทุกรอบ
+            t = t[:400] + (' …(ย่อ — ดูแผนงาน/เอกสาร)' if len(t) > 400 else '')
         if not t or m.get('role') == 'error':
             continue
         role = 'assistant' if m.get('role') == 'assistant' else 'user'
@@ -316,9 +326,41 @@ def _norm(messages):
     return out
 
 
+DUMP_MAX = 12000                                         # ผลเครื่องมือถูกส่งซ้ำทุกรอบที่เหลือ (แต่แคชได้) → คุมขนาด
+
+
 def _dump(x):
+    """ผลเครื่องมือ → JSON ที่ยังอ่านได้ (ไม่ตัดกลางสตริง): ตัดรายการยาวทีละครึ่งจนพอดี แล้วค่อยตัดข้อความเป็นทางสุดท้าย"""
     s = json.dumps(x, ensure_ascii=False, default=str)
-    return s if len(s) <= 15000 else s[:15000] + ' …(ตัด)'
+    if len(s) <= DUMP_MAX:
+        return s
+    if isinstance(x, (dict, list)):
+        import copy
+        y = copy.deepcopy(x)
+        for _ in range(12):
+            lists = []
+
+            def walk(o):
+                if isinstance(o, dict):
+                    for v in o.values():
+                        walk(v)
+                elif isinstance(o, list):
+                    if len(o) > 1:
+                        lists.append(o)
+                    for v in o:
+                        walk(v)
+            walk(y)
+            if not lists:
+                break
+            big = max(lists, key=lambda l: len(json.dumps(l, ensure_ascii=False, default=str)))
+            n = len(big)
+            del big[max(1, n // 2):]
+            big.append(f'…(ตัดออก {n - max(1, n // 2)} รายการ — ถามเจาะถ้าต้องการ)')
+            s = json.dumps(y, ensure_ascii=False, default=str)
+            if len(s) <= DUMP_MAX:
+                return s
+    return s[:DUMP_MAX] + ' …(ตัด — ถามเจาะเฉพาะส่วนถ้าต้องการ)'
+
 
 
 def _needs_responses(e):
@@ -353,6 +395,21 @@ def _responses(b, p, key, model, system, msgs, specs, texts, call_tool):
             items.append(dict(type='function_call_output', call_id=fc.get('call_id'), output=_dump(res)))
 
 
+def _cache_last(conv):
+    """Anthropic: ติด cache_control ที่บล็อกสุดท้ายของข้อความล่าสุด → รอบเครื่องมือถัดไปอ่านประวัติจากแคช (สำเนา ไม่แก้ conv เดิม)"""
+    if not conv:
+        return conv
+    out = list(conv)
+    last = dict(out[-1])
+    c = last.get('content')
+    blocks = [dict(type='text', text=c)] if isinstance(c, str) else [dict(x) for x in (c or [])]
+    if blocks:
+        blocks[-1] = dict(blocks[-1], cache_control=dict(type='ephemeral'))
+        last['content'] = blocks
+        out[-1] = last
+    return out
+
+
 def chat(messages, page=None, chat_id=None):
     from . import ai_tools
     c = cfg()
@@ -366,11 +423,30 @@ def chat(messages, page=None, chat_id=None):
     from . import ai_plan
     msgs = _norm(messages)
     from . import knowledge
-    system = SYSTEM + (TOOLS_PROPOSE if mode == 'propose' else TOOLS_READ) + '\n\n' + knowledge.index_text() + '\n\n' + _context() + '\n\n' + ai_plan.as_text(ai_plan.get(chat_id)) \
-        + (f'\nผู้ใช้อยู่ที่หน้า: {page}' if page else '')
+    # ส่วนคงที่ขึ้นก่อน (เหมือนกันทุกรอบ → ผู้ให้บริการแคชได้ ราคาถูกลงมาก) · ส่วนที่เปลี่ยนตามคลัง/แผน/หน้า อยู่ท้าย
+    static = SYSTEM + (TOOLS_PROPOSE if mode == 'propose' else TOOLS_READ) + '\n\n' + knowledge.index_text()
+    dynamic = _context() + '\n\n' + ai_plan.as_text(ai_plan.get(chat_id)) + (f'\nผู้ใช้อยู่ที่หน้า: {page}' if page else '')
+    system = static + '\n\n' + dynamic
     specs = ai_tools.specs(mode)
     b = _base(p, c.get('base_url'))
     texts, used, proposals, note, docs = [], [], [], None, []
+    usage = dict(calls=0, input=0, cached=0, output=0)
+
+    def count(j):
+        u = j.get('usage') or j.get('usageMetadata') or {}
+        usage['calls'] += 1
+        if p == 'anthropic':
+            usage['input'] += (u.get('input_tokens') or 0) + (u.get('cache_read_input_tokens') or 0) + (u.get('cache_creation_input_tokens') or 0)
+            usage['cached'] += u.get('cache_read_input_tokens') or 0
+            usage['output'] += u.get('output_tokens') or 0
+        elif p == 'gemini':
+            usage['input'] += u.get('promptTokenCount') or 0
+            usage['cached'] += u.get('cachedContentTokenCount') or 0
+            usage['output'] += u.get('candidatesTokenCount') or 0
+        else:
+            usage['input'] += u.get('prompt_tokens') or u.get('input_tokens') or 0
+            usage['cached'] += (u.get('prompt_tokens_details') or u.get('input_tokens_details') or {}).get('cached_tokens') or 0
+            usage['output'] += u.get('completion_tokens') or u.get('output_tokens') or 0
 
     def call_tool(name, args):
         out = ai_tools.run(name, args, mode)
@@ -383,9 +459,13 @@ def chat(messages, page=None, chat_id=None):
 
     if p == 'anthropic':
         tools = [dict(name=s['name'], description=s['description'], input_schema=s['parameters']) for s in specs]
+        if tools:
+            tools[-1] = dict(tools[-1], cache_control=dict(type='ephemeral'))
+        sysb = [dict(type='text', text=static, cache_control=dict(type='ephemeral')), dict(type='text', text=dynamic)]
         conv = [dict(m) for m in msgs]
         for _ in range(MAX_STEPS):
-            j = _req('POST', f'{b}/messages', p, key, json=dict(model=model, max_tokens=4096, system=system, messages=conv, tools=tools))
+            j = _req('POST', f'{b}/messages', p, key, json=dict(model=model, max_tokens=4096, system=sysb, messages=_cache_last(conv), tools=tools))
+            count(j)
             blocks = j.get('content') or []
             texts += [x['text'] for x in blocks if x.get('type') == 'text' and x.get('text', '').strip()]
             calls = [x for x in blocks if x.get('type') == 'tool_use']
@@ -401,6 +481,7 @@ def chat(messages, page=None, chat_id=None):
         for _ in range(MAX_STEPS):
             j = _req('POST', f'{b}/models/{model}:generateContent', p, key, json=dict(
                 systemInstruction=dict(parts=[dict(text=system)]), contents=contents, tools=[dict(functionDeclarations=decl)]))
+            count(j)
             cands = j.get('candidates') or []
             parts = ((cands[0].get('content') or {}).get('parts') or []) if cands else []
             texts += [x['text'] for x in parts if x.get('text', '').strip()]
@@ -414,13 +495,14 @@ def chat(messages, page=None, chat_id=None):
         _responses(b, p, key, model, system, msgs, specs, texts, call_tool)
     else:
         tools = [dict(type='function', function=s) for s in specs]
-        conv = [dict(role='system', content=system)] + msgs
+        conv = [dict(role='system', content=static), dict(role='system', content=dynamic)] + msgs   # ส่วนคงที่ขึ้นก่อน → แคชอัตโนมัติของ OpenAI
         for step in range(MAX_STEPS):
             body = dict(model=model, messages=conv)
             if tools:
                 body['tools'] = tools
             try:
                 j = _req('POST', f'{b}/chat/completions', p, key, json=body)
+                count(j)
             except AiError as e:
                 if step == 0 and tools and p == 'compat' and 'tool' in str(e).lower():   # รุ่นที่ไม่รองรับ tools (บางรุ่นใน Ollama) → ตอบข้อความอย่างเดียว
                     tools, note = [], 'รุ่นนี้ไม่รองรับการเรียกเครื่องมือ — ตอบได้อย่างเดียว'
@@ -451,4 +533,4 @@ def chat(messages, page=None, chat_id=None):
         text = 'เสนองานไว้ด้านล่าง — ตรวจแล้วกดยืนยันเพื่อรัน'
     if not text:
         raise AiError('ผู้ให้บริการไม่ตอบข้อความ (อาจถูกตัวกรองเนื้อหา หรือเรียกเครื่องมือเกินรอบที่กำหนด)')
-    return dict(reply=text, model=model, proposals=ai_tools.proposals_public(proposals), used=used, note=note, docs=docs)
+    return dict(reply=text, model=model, proposals=ai_tools.proposals_public(proposals), used=used, note=note, docs=docs, usage=usage)

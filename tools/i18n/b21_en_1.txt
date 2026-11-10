@@ -1,0 +1,35 @@
+Confirm once — the app runs every step itself without the assistant in between (saves tokens) · stops and reports if a step fails
+Tokens sent/received for this reply — cached parts are billed much cheaper
+(stats) needs the dataset_id of a bivariate map
+id must start with s and be unique (e.g. s1, s2)
+target_res "auto" needs source datasets
+Could not determine the resolution automatically
+Job finished but produced no dataset
+Recipe (runs every step itself)
+A recipe must have 1–20 steps
+Job took longer than allowed
+which is not an earlier step
+stopped because a step failed
+kind must be one of
+Import from Data hub
+(download) needs
+Statistics failed
+Could not create the job
+Recipe started
+must be an object
+has no result yet
+Fetch satellite imagery
+needs params
+uses an earlier step's result
+Could not check the result
+did not pass the check
+Tokens: sent
+Recipe "
+Step
+Recipe
+→ dataset #
+found
+(cached
+refers to
+reply
+calls

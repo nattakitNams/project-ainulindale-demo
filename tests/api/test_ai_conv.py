@@ -31,6 +31,7 @@ DOC = '''# แคตาล็อกตัวชี้วัด: ความร�
 - ข้อมูล: **MODIS LST** · WorldPop
 '''
 SEEN = {}
+DOC_TITLE = 'แคตาล็อกความร้อน ' + str(int(time.time()))
 
 
 def call(name, args, i=0):
@@ -51,7 +52,7 @@ class Mock(BaseHTTPRequestHandler):
     def do_POST(self):
         body = json.loads(self.rfile.read(int(self.headers.get('Content-Length') or 0)))
         m = body['messages']
-        SEEN['system'] = m[0]['content'] if m and m[0]['role'] == 'system' else ''
+        SEEN['system'] = ' '.join(x['content'] for x in m if x['role'] == 'system')
         lu = max(i for i, x in enumerate(m) if x['role'] == 'user')
         after = m[lu + 1:]
         r = lambda calls=None, text=None: self._send({'choices': [{'message': {'role': 'assistant', 'content': text, 'tool_calls': calls}}]})
@@ -62,7 +63,7 @@ class Mock(BaseHTTPRequestHandler):
             return r(text='ตั้งแผนแล้ว')
         if u.startswith('DOC'):
             if not after:
-                return r([call('save_document', dict(title='แคตาล็อกความร้อน', markdown=DOC)),
+                return r([call('save_document', dict(title=DOC_TITLE, markdown=DOC)),
                           call('update_plan', dict(delivered=['แนวโน้มความร้อน', 'ผู้สูงอายุ × คืนร้อน']), 1)])
             return r(text='บันทึกแคตาล็อกเป็นเอกสารแล้ว (2 ตัวชี้วัด)')
         if u.startswith('PAST'):
@@ -105,7 +106,7 @@ R.check('prompt: override ยกเลิกข้อจำกัด · "ทำ�
         all(k in ai.TOOLS_PROPOSE for k in ('ยกเลิกข้อจำกัดเดิม', 'สร้างผลจริง', 'ห้ามส่งของเดิมในรูปแบบใหม่', 'ตอบคำถามนั้นตรง ๆ ก่อน', 'save_document')))
 out = chat('DOC ทำแคตาล็อก', h)
 d = (out.get('docs') or [{}])[0]
-R.check('save_document → การ์ดเอกสารในคำตอบ (ชื่อ เวอร์ชัน จำนวนตาราง)', d.get('title') == 'แคตาล็อกความร้อน' and d.get('tables') == 1 and d.get('version') == 1, str(d))
+R.check('save_document → การ์ดเอกสารในคำตอบ (ชื่อ เวอร์ชัน จำนวนตาราง)', d.get('title') == DOC_TITLE and d.get('tables') == 1 and d.get('version') == 1, str(d))
 c, page = api(d['url'])
 c2, raw = api(d['url'] + '?raw=1')
 R.check('เปิดเอกสาร = หน้า HTML มีตารางจริง · ดาวน์โหลด .md ได้เนื้อหาเดิม', c == 200 and '<table>' in page.text and '<th>สูตร</th>' in page.text and '<b>MODIS LST</b>' in page.text
@@ -118,7 +119,7 @@ cid_old, cid = cid, 'ctconv_new' + str(int(time.time()))
 chat('PAST จำแชตเก่าได้ไหม', [])
 past = SEEN.get('past') or {}
 R.check('แชตใหม่ list_past_work เห็นแผน/สิ่งที่ส่งมอบ/เอกสารของแชตก่อน', any(p['chat_id'] == cid_old and 'แนวโน้มความร้อน' in (p.get('delivered') or []) for p in past.get('plans', []))
-        and any(x['title'] == 'แคตาล็อกความร้อน' for x in past.get('documents', [])))
+        and any(x['title'] == DOC_TITLE for x in past.get('documents', [])))
 log = Path(os.environ.get('AINU_WORKSPACE', '')) / 'ai_logs' / f'{cid_old}.jsonl'
 rows = [json.loads(x) for x in log.read_text(encoding='utf-8').splitlines()] if log.exists() else []
 R.check('บันทึกบทสนทนาลง ai_logs (ข้อความ/เครื่องมือ/เอกสาร) และไม่มี API key', len(rows) >= 4 and any('save_document' in r['tools'] for r in rows)

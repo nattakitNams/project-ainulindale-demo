@@ -73,12 +73,12 @@ ws = Path(sysi['dirs']['aoi']['path']).parent
 plain = [p.name for p in (ws / 'secrets.json', ws / 'ai.json') if p.exists() and KEY in p.read_text(encoding='utf-8')]
 R.check('key ไม่อยู่ในไฟล์แบบอ่านออก (เข้ารหัส DPAPI)', not plain, plain)
 c, j = api('/api/ai/chat', dict(messages=[dict(role='user', content='สวัสดี')], page='#/biv'))
-sysmsg = LAST.get('messages', [{}])[0].get('content', '')
+sysmsg = ' '.join(m.get('content', '') for m in LAST.get('messages', []) if m.get('role') == 'system')
 R.check('แชต → ตอบ + ส่ง system prompt พร้อมบริบทคลัง/หน้า', c == 200 and j['reply'] == 'ok:mock-small:สวัสดี' and 'Ainulindalë' in sysmsg and '#/biv' in sysmsg,
         f'{len(sysmsg):,} ตัวอักษร')
 api('/api/ai', dict(model='mock-large'), 'PATCH')
 c, j = api('/api/ai/chat', dict(messages=[dict(role='user', content='a'), dict(role='assistant', content='b'), dict(role='user', content='c')]))
-R.check('เปลี่ยนรุ่น + ส่งประวัติต่อเนื่อง', j.get('reply') == 'ok:mock-large:c' and len(LAST['messages']) == 4)
+R.check('เปลี่ยนรุ่น + ส่งประวัติต่อเนื่อง', j.get('reply') == 'ok:mock-large:c' and len([m for m in LAST['messages'] if m['role'] != 'system']) == 3)
 c, j = api('/api/ai/models')
 R.check('รายการรุ่นต้องเป็น POST (GET ไม่มี Origin กระตุ้นใช้ key ไม่ได้)', c == 405)
 c, j = api('/api/ai/logout', {})

@@ -267,9 +267,31 @@ def _ai_log(b, r):
         with open(d / f'{cid}.jsonl', 'a', encoding='utf-8') as f:
             f.write(json.dumps(dict(t=db.now(), model=ai.cfg().get('model'), user=str(last.get('content') or '')[:4000], reply=str(r.get('reply') or '')[:20000],
                                     tools=[u.get('tool') for u in r.get('used') or []], proposals=[p.get('action') for p in r.get('proposals') or []],
-                                    docs=[x.get('file') for x in r.get('docs') or []]), ensure_ascii=False) + '\n')
+                                    docs=[x.get('file') for x in r.get('docs') or []], usage=r.get('usage')), ensure_ascii=False) + '\n')
     except Exception as e:                                   # บันทึกไม่ได้ ไม่ให้แชตล้ม
         print('[ai log]', e)
+
+
+@app.route('/api/recipes')
+def recipe_list():
+    from . import recipes
+    return jsonify(recipes=recipes.all_())
+
+
+@app.route('/api/recipes/<rid>')
+def recipe_get(rid):
+    from . import recipes
+    r = recipes.get(rid)
+    if not r:
+        raise ApiError('ไม่พบสูตรงาน')
+    return jsonify(dict(r, summary=recipes.summary_text(r)))
+
+
+@app.route('/api/recipes/<rid>/cancel', methods=['POST'])
+def recipe_cancel(rid):
+    from . import recipes
+    recipes.cancel(rid)
+    return jsonify(ok=True)
 
 
 @app.route('/api/ai/docs')

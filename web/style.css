@@ -615,3 +615,7 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 
 .ai-doc { display: flex; gap: 8px; align-items: center; border: 1px solid var(--line-2); border-radius: 10px; padding: 8px 10px; margin: 4px 0 8px; }
 .ai-doc > div { flex: 1; min-width: 0; }
+
+/* สูตรงาน */
+.ai-steps { margin: 6px 0; padding-left: 18px; display: grid; gap: 2px; }
+.ai-steps li.st-done .ai-si { color: var(--mint); } .ai-steps li.st-running .ai-si { color: var(--sky); } .ai-steps li.st-failed .ai-si { color: var(--coral); }

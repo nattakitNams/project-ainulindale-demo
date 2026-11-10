@@ -95,7 +95,7 @@ const AIDock = (() => {
       try {
         const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
         if (r.plan !== undefined) plan = r.plan;
-        hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [],
+        hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [], usage: r.usage,
           proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
       } catch (e) { hist.push({ role: 'error', content: e.message }); }
       busy = false; save(); drawMsgs();
@@ -109,7 +109,10 @@ const AIDock = (() => {
 
   // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
   const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', download: 'ดาวน์โหลดเข้าคลัง',
-    create_folders: 'สร้างโฟลเดอร์', move_folder: 'ย้ายเข้าโฟลเดอร์' };
+    create_folders: 'สร้างโฟลเดอร์', move_folder: 'ย้ายเข้าโฟลเดอร์', recipe: 'สูตรงาน (รันเองทุกขั้น)' };
+  const STEP_TH = { satellite: 'ดึงภาพดาวเทียม', download: 'นำเข้าจาก Data hub', calc: 'สูตรคำนวณ', trend: 'อนุกรมเวลา', change: 'เปรียบเทียบ', bivariate: 'ไบแวเรียต',
+    resample: 'ปรับความละเอียด', rasterize: 'แปลงเป็นราสเตอร์', hex: 'หกเหลี่ยม', hexbiv: 'ไบแวเรียตหกเหลี่ยม', vgrid: 'กริดเวกเตอร์', mosaic: 'รวมราสเตอร์', vmerge: 'รวมเวกเตอร์', stats: 'สถิติความสัมพันธ์' };
+  const ST_IC = { todo: '○', running: '◐', done: '●', failed: '✕', skipped: '–' };
 
   // การ์ดดาวน์โหลดจาก Data hub: ไฟล์ · ปี · ขนาด · พื้นที่ · ประเภทค่า (เลือกได้) · สัญญาอนุญาต · แหล่ง
   function dlCard(p) {
@@ -188,6 +191,8 @@ const AIDock = (() => {
       : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>`
       : p.action === 'download' ? dlCard(p)
       : p.action === 'create_folders' ? `<div class="tiny">${(p.args.paths || []).map(x => `${IC.folder}<span translate="no">${esc(x)}</span>${(p.args.new || []).includes(x) ? '' : ' <span class="muted">(มีแล้ว)</span>'}`).join('<br>')}</div>`
+      : p.action === 'recipe' ? `<ol class="ai-steps tiny">${(p.args.steps || []).map(st => `<li><b translate="no">${esc(st.title)}</b> <span class="muted">${STEP_TH[st.kind] || st.kind}</span>${JSON.stringify(st.params).includes('"$s') ? ' <span class="muted">· ใช้ผลขั้นก่อน</span>' : ''}</li>`).join('')}</ol>
+          <div class="tiny muted">ยืนยันครั้งเดียว — แอปรันทุกขั้นเองโดยไม่ใช้ผู้ช่วยระหว่างทาง (ประหยัดโทเคน) · ขั้นไหนพลาดจะหยุดแล้วแจ้ง</div>`
       : p.action === 'move_folder' ? `<div class="tiny"><span translate="no">${(p.args.names || []).map(esc).join(', ')}</span> → ${IC.folder}<span translate="no">${esc(p.args.folder)}</span></div>` : '';
     const P = p.args?.params || {};
     const resEd = p.state !== 'pending' || p.action !== 'run_job' ? ''
@@ -248,7 +253,8 @@ const AIDock = (() => {
       const r = await api(ENGINE + '/api/ai/confirm', { json: { id: p.id, params: edited } });
       p.state = 'done'; p.result = r.message;
       hist.push({ role: 'event', content: r.message + (r.job_id ? ' — กำลังประมวลผล' : '') });
-      if (r.job_id) watchJob(r.job_id);
+      if (r.recipe_id) watchRecipe(r.recipe_id);
+      else if (r.job_id) watchJob(r.job_id);
       else if (!r.report && !hist[mi].proposals.some(q => q.state === 'pending' || q.state === 'running') && !watching.size) setTimeout(autoContinue, 300);
       if (r.report) { try { sessionStorage.setItem('ainu-ai-report', JSON.stringify(r.report)); } catch { } location.hash = '#/report?ai=1'; }
       if (typeof jobBadge === 'function') jobBadge();
@@ -265,9 +271,28 @@ const AIDock = (() => {
     try {
       const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
       if (r.plan !== undefined) plan = r.plan;
-      hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [], proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
+      hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, docs: r.docs || [], usage: r.usage, proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
     } catch (e) { hist.push({ role: 'error', content: e.message }); }
     busy = false; save(); drawMsgs();
+  }
+
+  // สูตรงาน: อัปเดตข้อความเดียวในแชตตามความคืบหน้า → เสร็จแล้วส่งสรุปให้ผู้ช่วยอ่านครั้งเดียว
+  function watchRecipe(id) {
+    const ev = { role: 'event', content: 'สูตรงานเริ่มแล้ว', recipe: id };
+    hist.push(ev); save(); drawMsgs();
+    watching.add('r' + id);
+    const tick = async () => {
+      let r;
+      try { r = await api(`${ENGINE}/api/recipes/${id}`); } catch { return setTimeout(tick, 5000); }
+      ev.steps = r.steps.map(st => ({ t: st.title, s: st.status, o: st.output, e: st.error }));
+      const live = ['queued', 'running'].includes(r.status);
+      ev.content = live ? `สูตรงาน "${r.title}" — ขั้น ${r.steps.filter(x => x.status === 'done').length}/${r.steps.length}` : r.summary;
+      save(); drawMsgs();
+      if (live) return setTimeout(tick, 4000);
+      watching.delete('r' + id);
+      if (!watching.size) autoContinue();
+    };
+    setTimeout(tick, 1500);
   }
 
   function watchJob(id) {
@@ -298,10 +323,11 @@ const AIDock = (() => {
       ${(plan.blockers || []).map(b => `<div class="tiny warn-t" translate="no">ติด: ${esc(b)}</div>`).join('')}</details>` : '';
     m.innerHTML = planHtml + (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เริ่มจากบอกว่าจะทำแผนที่ไปเพื่ออะไร ใครดู — เช่น "อยากรู้ว่าพื้นที่ไหนคนอยู่หนาแน่นและน้ำท่วมซ้ำบ่อย เพื่อเสนอผู้บริหารจัดลำดับพื้นที่ช่วยเหลือทั้งประเทศ"<br>${st.mode === 'propose' ? 'ผู้ช่วยจะถามสิ่งที่ยังไม่ชัด ออกแบบการวิเคราะห์ตามวัตถุประสงค์ แล้วเสนองานให้กดยืนยัน' : 'ผู้ช่วยจะแนะนำการวิเคราะห์และการตั้งค่าตามวัตถุประสงค์'}</div>`)
       + hist.map((x, mi) => x.role === 'event'
-        ? `<div class="ai-msg event">${esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
+        ? `<div class="ai-msg event">${x.recipe && x.steps ? `<div>${esc(x.content.split('\n')[0])}</div><ol class="ai-steps tiny">${x.steps.map(st => `<li class="st-${st.s}"><span class="ai-si">${ST_IC[st.s] || '○'}</span> <span translate="no">${esc(st.t)}</span>${st.o ? ` <a href="#/ds/${st.o}">#${st.o}</a>` : ''}${st.e ? ` <span class="warn-t">${esc(st.e)}</span>` : ''}</li>`).join('')}</ol>` : esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
         : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
           + (x.used?.length ? `<div class="ai-used tiny muted">ตรวจข้อมูล: ${[...new Set(x.used.map(u => u.tool))].join(', ')}${x.used.some(u => u.error) ? ' · บางคำขอผิดพลาด' : ''}</div>` : '')
           + (x.note ? `<div class="ai-used tiny muted">${esc(x.note)}</div>` : '')
+          + (x.usage?.calls ? `<div class="ai-used tiny muted" title="โทเคนที่ส่ง/รับในคำตอบนี้ — ส่วนที่แคชคิดราคาถูกกว่ามาก">โทเคน: ส่ง ${fmt(x.usage.input, 0)}${x.usage.cached ? ` (แคช ${fmt(x.usage.cached, 0)})` : ''} · ตอบ ${fmt(x.usage.output, 0)} · ${x.usage.calls} รอบ</div>` : '')
           + (x.docs || []).map(d => `<div class="ai-doc">${IC.pdf}<div><b translate="no">${esc(d.title)}</b><div class="tiny muted">เอกสาร v${d.version} · ${d.lines} บรรทัด${d.tables ? ` · ${d.tables} ตาราง` : ''}</div></div>
               <a class="btn sm" href="${ENGINE}${d.url}" target="_blank" rel="noopener">เปิด</a><a class="btn sm ghost" href="${ENGINE}${d.url}?raw=1">${IC.download}.md</a></div>`).join('')
           + (x.proposals || []).map((p, pi) => propCard(p, mi, pi)).join('')
