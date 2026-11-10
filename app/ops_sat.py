@@ -3,7 +3,7 @@
 
 ทำไมเร็ว (แนวคิดจาก Project Palantir + วัดจริง):
 - ไฟล์ต้นทางเป็น COG บน Azure (ยุโรป) — ดึงเองจากไทยได้ ~0.09 MB/s ต่อการเชื่อมต่อ: ภาพ Sentinel-2 1 แผ่นที่ ~80 ม. ใช้ 41 วินาที, SAR 214 วินาที
-- บริการ Data API ของ PC ทำ mosaic + เลือกพิกเซล (median / first ตามเมฆน้อยสุด) + อ่าน overview ฝั่งเซิร์ฟเวอร์ → ส่งไทล์ผลลัพธ์ 512×512 มา (~2 วินาที/ไทล์)
+- บริการ Data API ของ PC ทำ mosaic + เลือกพิกเซล (median / first ตามเมฆน้อยสุด) + อ่าน overview ฝั่งเซิร์ฟเวอร์ → ส่งไทล์ผลลัพธ์ 512×512 มา (~2 วินาที/ไทล์ ถ้าภาพเดียว · ~5–6 วินาทีเมื่อรวมทุกภาพในช่วง exitwhenfull=false)
   ดึงหลายไทล์พร้อมกัน (16 การเชื่อมต่อ) · ใช้กริดไทล์ WGS1984Quad → ขนาดพิกเซล 180°/(512·2^z) เป็นเศษส่วนฐานสองแท้ ต่อกับเครื่องคำนวณเดิมได้
 - ไม่ต้องมีบัญชี/โทเคน (Data API ลงชื่อ SAS ให้ฝั่งเซิร์ฟเวอร์)
 
@@ -56,6 +56,11 @@ COLLECTIONS = [
     dict(id='modis-13Q1-061', name='MODIS NDVI/EVI 16 วัน (250 ม.)', kind='index', years='2000–ปัจจุบัน', revisit='16 วัน', native_m=250,
          cloud=False, vt='density', pick='median', default=['250m_16_days_NDVI'],
          bands={'250m_16_days_NDVI': 'NDVI ×10000', '250m_16_days_EVI': 'EVI ×10000'}, note='ค่า ÷ 10000 = ดัชนีจริง', license='NASA (สาธารณะ)'),
+    dict(id='modis-11A2-061', name='MODIS LST 8 วัน (อุณหภูมิพื้นผิว กลางวัน/กลางคืน 1 กม.)', kind='index', years='2000–ปัจจุบัน', revisit='8 วัน', native_m=1000,
+         cloud=False, vt='density', pick='mean', default=['LST_Day_1km', 'LST_Night_1km'],
+         bands=dict(LST_Day_1km='อุณหภูมิพื้นผิวกลางวัน (ค่า × 0.02 = เคลวิน)', LST_Night_1km='อุณหภูมิพื้นผิวกลางคืน (ค่า × 0.02 = เคลวิน)',
+                    QC_Day='คุณภาพกลางวัน', QC_Night='คุณภาพกลางคืน'),
+         note='°C = ค่า × 0.02 − 273.15 (ใช้สูตรคำนวณ) · ค่าเฉลี่ยหลายปี: ดึงทีละปีด้วย pick=mean แล้วใช้อนุกรมเวลา (mean/slope)', license='NASA (สาธารณะ)'),
     dict(id='cop-dem-glo-30', name='Copernicus DEM 30 ม. (ความสูงภูมิประเทศ)', kind='dem', years='2011–2015 (ชุดเดียว)', revisit='—', native_m=30,
          cloud=False, vt='density', pick='first', default=['data'], bands=dict(data='ความสูง (ม.)'), note='', license='Copernicus DEM'),
     dict(id='esa-worldcover', name='ESA WorldCover 10 ม. (การใช้ที่ดิน 11 ชั้น)', kind='class', years='2020, 2021', revisit='รายปี', native_m=10,
@@ -195,7 +200,7 @@ def estimate(p):
     warns = []
     if len(tiles) > MAX_TILES:
         raise EngineError(f'{len(tiles):,} ไทล์ มากเกิน (≤ {MAX_TILES:,}) — ลดความละเอียด หรือเลือกพื้นที่เล็กลง')
-    sec = len(tiles) * 2.5 / THREADS * max(1, len(bands) / 2)
+    sec = len(tiles) * 6 / THREADS * max(1, len(bands) / 2)        # รวมทุกภาพในช่วง ~5–6 วิ/ไทล์
     if z - 1 >= 0 and 180 / 512 / 2 ** z * 111320 < c['native_m'] * 0.9:
         warns.append(f'ละเอียดกว่าข้อมูลต้นทาง ({c["native_m"]} ม.) — ไม่ได้รายละเอียดเพิ่ม แต่ไฟล์ใหญ่ขึ้น')
     if c['id'] == 'sentinel-2-l2a' and (p.get('date_from') or '') < '2022-01-25' < (p.get('date_to') or '9999'):
@@ -237,7 +242,9 @@ def op_satellite(job, P, log):
     c1, r1 = min(W, math.ceil((bbox[2] - ox) / px)), min(H, math.ceil((oy - bbox[1]) / px))
     OW, OH = c1 - c0, r1 - r0
     otr = from_origin(ox + c0 * px, oy - r0 * px, px, px)
-    params = dict(collection=c['id'], assets=bands, pixel_selection=pick)
+    # exitwhenfull/skipcovered=false: ให้เซิร์ฟเวอร์ใช้ทุกภาพในช่วง — ค่าเริ่มของบริการหยุดที่ภาพแรกที่ "เต็มไทล์" (median/mean ไม่ได้รวมจริง
+    # และภาพที่ค่าว่างเป็น 0 แทน nodata เช่น MODIS LST จะได้ไทล์เป็น 0 ทั้งแผ่น) — วัดจริง: พิกเซลมีค่า 9.6% → 62% ในไทล์เดียวกัน
+    params = dict(collection=c['id'], assets=bands, pixel_selection=pick, exitwhenfull='false', skipcovered='false')
     if c['id'] == 'esa-worldcover' or c['kind'] == 'class':
         params['resampling'] = 'nearest'
 

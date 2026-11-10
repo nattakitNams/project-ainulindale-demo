@@ -219,27 +219,160 @@ def t_get_hub_item(key):
                 gee_id=it.get('id') if it.get('s') == 'gee' else None, note=note)
 
 
+STOP = {'thailand', 'thai', 'ไทย', 'ประเทศไทย', 'raster', 'data', 'dataset', 'datasets', 'map', 'maps', 'annual', 'global', 'the', 'of', 'and',
+        'for', 'in', 'grid', 'gridded', 'file', 'files', 'tif', 'geotiff', 'layer', 'ข้อมูล', 'แผนที่', 'รายปี', '-', '/', 'change', 'index'}
+# คำพ้อง: ผู้ช่วยมักค้นด้วยคำที่ต่างจากชื่อชุด (PM2.5 ↔ air pollution, built-up ↔ GHSL ...) — ขยายคำค้นให้เอง
+SYN = {
+    'pm2.5': ['pm25', 'pm 2.5', 'particulate', 'air pollution', 'air quality', 'aerosol', 'pm'], 'pm25': ['pm2.5', 'particulate', 'air pollution', 'air quality'],
+    'pm': ['pm2.5', 'particulate', 'air quality'], 'air': ['air quality', 'air pollution', 'pm2.5', 'aerosol'], 'pollution': ['air quality', 'pm2.5', 'no2'],
+    'built-up': ['built', 'ghsl', 'settlement', 'urban', 'impervious', 'building'], 'built': ['ghsl', 'settlement', 'urban', 'impervious', 'building'],
+    'urban': ['built', 'ghsl', 'settlement', 'city', 'impervious'], 'settlement': ['ghsl', 'built', 'urban'], 'impervious': ['built', 'urban', 'ghsl'],
+    'lst': ['land surface temperature', 'temperature', 'thermal', 'modis lst'], 'heat': ['land surface temperature', 'temperature', 'thermal', 'lst'],
+    'temperature': ['lst', 'thermal', 'climate'], 'thermal': ['lst', 'temperature'],
+    'flood': ['inundation', 'surface water', 'flooding', 'water'], 'recurrence': ['occurrence', 'frequency'], 'inundation': ['flood', 'surface water'],
+    'drought': ['spi', 'spei', 'soil moisture', 'precipitation', 'dryness'], 'rainfall': ['precipitation', 'chirps', 'rain'], 'rain': ['precipitation', 'rainfall'],
+    'population': ['worldpop', 'people', 'pop'], 'night': ['nighttime lights', 'viirs', 'dmsp'], 'nighttime': ['night', 'viirs', 'lights'], 'lights': ['nighttime', 'viirs'],
+    'ndvi': ['vegetation', 'evi', 'greenness'], 'vegetation': ['ndvi', 'evi', 'forest'], 'green': ['ndvi', 'vegetation', 'tree cover'],
+    'roads': ['road', 'openstreetmap', 'osm', 'transport'], 'road': ['roads', 'openstreetmap', 'osm'], 'health': ['hospital', 'health facilities', 'clinic'],
+    'hospital': ['health', 'health facilities'], 'mangrove': ['mangroves', 'coastal', 'wetland'], 'wetland': ['wetlands', 'mangrove'], 'dem': ['elevation', 'srtm', 'terrain'],
+    'elevation': ['dem', 'srtm', 'terrain'], 'landcover': ['land cover', 'lulc', 'worldcover'], 'cropland': ['agriculture', 'crop', 'farmland'],
+    'น้ำท่วม': ['flood', 'inundation'], 'ประชากร': ['population', 'worldpop'], 'อุณหภูมิ': ['temperature', 'lst'], 'ฝุ่น': ['pm2.5', 'air quality'],
+}
+# ชุดที่ดึงได้ทันทีด้วยเครื่องมือภาพดาวเทียม (ไม่ต้องหาไฟล์) — คำค้น → คอลเลกชัน
+SAT_HINT = {
+    'modis-11A2-061': ['lst', 'land surface temperature', 'heat', 'temperature', 'thermal', 'อุณหภูมิ', 'ความร้อน'],
+    'landsat-c2-l2': ['landsat', 'thermal', 'lst', 'heat', 'temperature', 'ndvi', 'ndwi', 'ndbi'],
+    'sentinel-2-l2a': ['sentinel-2', 'ndvi', 'ndwi', 'ndbi', 'vegetation', 'imagery', 'optical', 'reflectance', 'ภาพถ่ายดาวเทียม'],
+    'sentinel-1-rtc': ['sar', 'radar', 'sentinel-1', 'flood', 'inundation', 'water', 'น้ำท่วม', 'เรดาร์'],
+    'alos-palsar-mosaic': ['palsar', 'l-band', 'sar', 'forest', 'biomass'],
+    'modis-13Q1-061': ['ndvi', 'evi', 'vegetation', 'greenness', 'modis'],
+    'cop-dem-glo-30': ['dem', 'elevation', 'terrain', 'slope', 'srtm', 'coastal', 'ความสูง'],
+    'esa-worldcover': ['land cover', 'landcover', 'worldcover', 'built', 'built-up', 'urban', 'cropland', 'wetland', 'mangrove', 'การใช้ที่ดิน'],
+    'io-lulc-annual-v02': ['land cover', 'lulc', 'built', 'built-up', 'urban', 'urban expansion', 'cropland', 'การใช้ที่ดิน'],
+    'jrc-gsw': ['flood', 'recurrence', 'inundation', 'surface water', 'water', 'occurrence', 'น้ำท่วม', 'แหล่งน้ำ'],
+}
+
+
+def _terms(query):
+    q = (query or '').lower().replace(',', ' ').replace(';', ' ')
+    words = [w.strip('()[]"\'') for w in q.split() if w.strip('()[]"\'')]
+    words = [w for w in words if w not in STOP] or words
+    phrases = [q] if len(words) > 1 else []
+    return words, phrases
+
+
 def t_search_data_hub(query, limit=12):
-    """ค้นรายชื่อแหล่งข้อมูลภายนอกใน Data hub (ชื่อ/ผู้ให้บริการ/คำสำคัญ)"""
-    words = [w for w in (query or '').lower().split() if w]
-    scored = []
-    for it in _hub():
-        hay = ' '.join([it.get('t', ''), it.get('pr', ''), it.get('k', ''), it.get('tr', ''), ' '.join(it.get('kw') or []), ' '.join(it.get('th') or [])]).lower()
-        s = sum(hay.count(w) for w in words)
-        if s and all(w in hay for w in words[:3]):          # ดันชุดที่มีไฟล์ให้แอปโหลดได้ + ครอบไทย ขึ้นก่อน (GEE/PC โหลดเองไม่ได้)
-            scored.append((s + (3 if it.get('cv') == 'thailand' else 0) + (4 if it.get('nr') and it.get('s') == 'ckan' else 0), it))
-    scored.sort(key=lambda x: -x[0])
+    """ค้นแหล่งข้อมูลภายนอกใน Data hub — ไม่ต้องตรงทุกคำ (ให้คะแนนตามคำที่เจอ + คำพ้อง) · ดันชุดที่นำเข้าได้/ครอบไทยขึ้นก่อน
+    + บอกชุดที่ดึงได้ทันทีด้วยเครื่องมือภาพดาวเทียม (satellite_tool)"""
     from . import hub_access, ops_sat
     sat = set(ops_sat.BY_ID)
-
-    def acc(it):
+    words, phrases = _terms(query)
+    exp = {w: SYN.get(w, []) for w in words}
+    scored = []
+    for it in _hub():
+        title = (it.get('t') or '').lower()
+        hay = ' '.join([title, it.get('pr', ''), it.get('k', ''), it.get('tr', ''), str(it.get('id') or ''), ' '.join(it.get('kw') or []), ' '.join(it.get('th') or [])]).lower()
+        sc, hit = 0.0, 0
+        for w in words:
+            if w in hay:
+                sc += 3 if w in title else 1
+                hit += 1
+            elif any(x in hay for x in exp[w]):
+                sc += 0.8
+                hit += 1
+        sc += sum(4 for ph in phrases if ph in hay)
+        if not hit:
+            continue
+        sc *= hit / len(words)                               # ครบหลายคำได้คะแนนมากกว่า แต่ไม่บังคับครบ
         lv, why = hub_access.access(it, sat)
-        return dict(level=lv, detail=why)
-    return [dict(key=it['k'], title=it.get('t'), provider=it.get('pr'), platform=it.get('p'), type=it.get('tr'), coverage=it.get('cv'),
-                 license=it.get('lc'), years=it.get('y'), files_app_can_import=it.get('ni') or 0, direct_download_links=it.get('nf') or 0,
-                 access=acc(it), page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None,
-                 satellite_collection=it['k'].split(':', 1)[1] if it.get('s') == 'pc' and it['k'].split(':', 1)[1] in sat else None)
-            for _, it in scored[:int(limit or 12)]]
+        sc += (2 if it.get('cv') == 'thailand' else 0) + (3 if lv == 'app' else 1 if lv == 'open' else 0)
+        scored.append((sc, it, lv, why))
+    scored.sort(key=lambda x: -x[0])
+    res = [dict(key=it['k'], title=it.get('t'), provider=it.get('pr'), platform=it.get('p'), type=it.get('tr'), coverage=it.get('cv'),
+                license=it.get('lc'), years=it.get('y'), files_app_can_import=it.get('ni') or 0, direct_download_links=it.get('nf') or 0,
+                access=dict(level=lv, detail=why), page=it.get('u'), gee_id=it.get('id') if it.get('s') == 'gee' else None,
+                satellite_collection=it['k'].split(':', 1)[1] if it.get('s') == 'pc' and it['k'].split(':', 1)[1] in sat else None)
+           for _, it, lv, why in scored[:int(limit or 12)]]
+    q = (query or '').lower()
+    tool = [dict(collection=c['id'], name=c['name'], years=c['years'], bands=list(c['bands']), how='งาน satellite (ดึงได้ทันที ไม่ต้องมีบัญชี)')
+            for c in ops_sat.COLLECTIONS if any(h in q for h in SAT_HINT.get(c['id'], [])) or any(h in words or h in q for w in words for h in SYN.get(w, []) if h in SAT_HINT.get(c['id'], []))]
+    return dict(results=res, satellite_tool=tool,
+                tip='ไม่เจอ → ลองคำสั้น 1–2 คำ (อังกฤษ) หลายรอบ เช่น "ghsl", "pm2.5", "air quality", "lst" · ดู satellite_tool ก่อนบอกผู้ใช้ว่าต้องไป GEE' if not res else None)
+
+
+def t_list_folders():
+    """โฟลเดอร์ในคลัง (id, ชื่อ, path)"""
+    fs = _call('GET', '/api/folders')['folders']
+    by = {f['id']: f for f in fs}
+
+    def path(f):
+        out = [f['name']]
+        while f.get('parent_id') and f['parent_id'] in by:
+            f = by[f['parent_id']]
+            out.insert(0, f['name'])
+        return '/'.join(out)
+    return [dict(id=f['id'], path=path(f), parent_id=f.get('parent_id')) for f in fs]
+
+
+def t_propose_create_folders(paths, purpose=None):
+    """เสนอสร้างโฟลเดอร์ (หลายชั้นได้ เช่น "Urban_Heat_TH/raw_data") — ผู้ใช้ยืนยันครั้งเดียว"""
+    ps = [str(x).strip().strip('/') for x in (paths or []) if str(x).strip().strip('/')]
+    if not ps or len(ps) > 20:
+        raise ToolError('ใส่ path 1–20 รายการ เช่น ["งานA/raw_data", "งานA/output"]')
+    exist = {f['path'] for f in t_list_folders()}
+    new = [x for x in ps if x not in exist]
+    return _propose('create_folders', 'สร้างโฟลเดอร์: ' + ', '.join(ps), dict(paths=ps, new=new, purpose=purpose))
+
+
+def t_propose_move_to_folder(dataset_ids, folder_id):
+    """เสนอย้ายชุดข้อมูลเข้าโฟลเดอร์"""
+    ids = [int(i) for i in dataset_ids or []]
+    if not ids:
+        raise ToolError('เลือกชุดข้อมูลอย่างน้อย 1 ชุด')
+    f = next((x for x in t_list_folders() if x['id'] == int(folder_id)), None)
+    if not f:
+        raise ToolError(f'ไม่พบโฟลเดอร์ #{folder_id} (ดู list_folders)')
+    names = [_call('GET', f'/api/datasets/{i}')['name'] for i in ids]
+    return _propose('move_folder', f'ย้าย {len(ids)} ชุดเข้า {f["path"]}', dict(dataset_ids=ids, folder_id=f['id'], folder=f['path'], names=names))
+
+
+def _ensure_folders(paths):
+    """สร้างโฟลเดอร์ตาม path (ข้ามที่มีอยู่แล้ว) → {path: id}"""
+    out = {}
+    for path in paths:
+        parent = None
+        acc = []
+        for part in path.split('/'):
+            acc.append(part)
+            key = '/'.join(acc)
+            cur = {f['path']: f['id'] for f in t_list_folders()}
+            if key in cur:
+                parent = cur[key]
+            else:
+                r = _call('POST', '/api/folders', dict(name=part, parent_id=parent))
+                parent = r.get('id') or (r.get('folder') or {}).get('id')
+        out[path] = parent
+    return out
+
+
+# ---------- แผนงานของบทสนทนา ----------
+CURRENT_CHAT = {'id': None}
+
+
+def t_update_plan(goal=None, purpose=None, audience=None, steps_json=None, decisions=None, blockers=None, folder_id=None):
+    """เขียน/อัปเดตแผนงานของบทสนทนานี้ (เก็บถาวร แสดงให้ผู้ใช้เห็น) — ส่งเฉพาะช่องที่เปลี่ยน"""
+    import json as _json
+    from . import ai_plan
+    steps = None
+    if steps_json is not None:
+        try:
+            steps = _json.loads(steps_json) if isinstance(steps_json, str) else steps_json
+        except ValueError:
+            raise ToolError('steps_json ต้องเป็น JSON: [{"title":"…","status":"todo|doing|done|blocked|skipped","outputs":[69],"note":"…"}]')
+    if not CURRENT_CHAT['id']:
+        raise ToolError('บทสนทนานี้ไม่มีรหัส (หน้าเว็บรุ่นเก่า) — รีเฟรชหน้าเว็บ')
+    plan = ai_plan.update(CURRENT_CHAT['id'], goal=goal, purpose=purpose, audience=audience, steps=steps, decisions=decisions, blockers=blockers, folder_id=folder_id)
+    return dict(ok=True, plan=plan)
 
 
 # ---------- action → ข้อเสนอ ----------
@@ -374,7 +507,7 @@ def _inspect_quick(url, limit=25):
         return None
 
 
-def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value_type=None):
+def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value_type=None, folder_id=None):
     """ดาวน์โหลดไฟล์จาก Data hub เข้าคลัง (ตัดตามกรอบพื้นที่ศึกษา) — รับเฉพาะ URL ที่อยู่ในรายการไฟล์ของชุดนั้นใน Data hub
     (AI ส่ง URL อื่นไม่ได้: กันดึงไฟล์จากที่ที่ไม่รู้จัก / คำสั่งแฝงในข้อมูล)"""
     from . import links
@@ -390,7 +523,8 @@ def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value
         if aoi_name is None:
             raise ToolError(f'ไม่พบพื้นที่ศึกษา #{aoi_id}')
     args = dict(hub_key=hub_key, title=item['title'], file=f, name=str(name)[:120], aoi_id=int(aoi_id) if aoi_id else None,
-                aoi_name=aoi_name, value_type=value_type, purpose=str(purpose)[:500], license=item.get('license'), source=item.get('url'))
+                aoi_name=aoi_name, value_type=value_type, purpose=str(purpose)[:500], license=item.get('license'), source=item.get('url'),
+                folder_id=int(folder_id) if folder_id else None)
 
     def check():
         info = _inspect_quick(file_url)                     # อ่านหัวไฟล์ทางเน็ต (ไม่โหลดทั้งไฟล์) · เซิร์ฟเวอร์ไม่รองรับ range → แค่ขนาดไฟล์
@@ -403,7 +537,7 @@ def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value
     return _propose('download', t, args, check)
 
 
-def start_hub_import(hub_key, url, name, aoi_id=None, value_type=None, purpose=None, requested_by=None):
+def start_hub_import(hub_key, url, name, aoi_id=None, value_type=None, purpose=None, requested_by=None, folder_id=None):
     """นำเข้าไฟล์จาก Data hub (ใช้ร่วม: ผู้ช่วย AI หลังผู้ใช้ยืนยัน · ปุ่ม "นำเข้าคลัง" ในหน้า Data hub)
     URL ต้องเป็นไฟล์ที่นำเข้าได้ของชุดนั้นใน Data hub เท่านั้น → เพิ่มลิงก์ → งานดาวน์โหลด (ตัดกรอบพื้นที่ศึกษา) → ชุดใหม่ในคลัง"""
     from . import links
@@ -422,6 +556,7 @@ def start_hub_import(hub_key, url, name, aoi_id=None, value_type=None, purpose=N
     nm = (name or re.sub(r'\.(tiff?|geo)?json$|\.tiff?$', '', f['name'], flags=re.I))[:120]
     lid = _call('POST', '/api/links', dict(info=info, name=f'{item["title"][:80]} · {f["name"]}'))['id']
     jp = dict(link_id=lid, aoi_id=int(aoi_id) if aoi_id else None, name=nm, value_type=value_type, purpose=purpose, hub_key=hub_key,
+              folder_id=int(folder_id) if folder_id else None,
               requested_by=requested_by or dict(by='user', at=db.now()))
     r = _call('POST', '/api/jobs', dict(kind='download', params=jp))
     return dict(ok=True, job_id=r['job'], link_id=lid, message=f'เริ่มนำเข้า "{nm}" (งาน #{r["job"]}) — เสร็จแล้วจะเข้าคลังข้อมูล')
@@ -474,13 +609,19 @@ def execute(pid, model=None, params=None):
         if isinstance(params, dict) and 'value_type' in params and params['value_type'] in ('count', 'density', 'class', None):
             vt = params['value_type']                          # ผู้ใช้เลือกประเภทค่าในการ์ดเอง
         return start_hub_import(a['hub_key'], a['file']['url'], a['name'], a.get('aoi_id'), vt, a.get('purpose'),
-                                dict(by='ai_assistant', model=model, confirmed_at=db.now()))
+                                dict(by='ai_assistant', model=model, confirmed_at=db.now()), a.get('folder_id'))
     if p['action'] == 'run_job' and isinstance(params, dict):
         a = dict(a, params=_params(a['kind'], params))
         p['user_edited'] = True
     if p['action'] == 'set_value_type':
         _call('PATCH', f'/api/datasets/{a["dataset_id"]}', dict(value_type=a['value_type'], value_type_confirmed=True))
         return dict(ok=True, message=f'ตั้งประเภทค่า #{a["dataset_id"]} เป็น {a["value_type"]} แล้ว')
+    if p['action'] == 'create_folders':
+        ids = _ensure_folders(a['paths'])
+        return dict(ok=True, folders=ids, message='สร้างโฟลเดอร์แล้ว: ' + ', '.join(f'{k} (#{v})' for k, v in ids.items()))
+    if p['action'] == 'move_folder':
+        _call('POST', '/api/folders/move', dict(dataset_ids=a['dataset_ids'], folder_ids=[], to=a['folder_id']))
+        return dict(ok=True, message=f'ย้าย {len(a["dataset_ids"])} ชุดเข้า {a["folder"]} (#{a["folder_id"]}) แล้ว')
     if p['action'] == 'create_aoi':
         r = _call('POST', '/api/aoi', a)
         aid = r.get('id') or (r.get('aoi') or {}).get('id')
@@ -589,20 +730,28 @@ TOOLS = [
      dict(dataset_id=I, text=S), ['dataset_id', 'text']),
     ('job_status', 'read', t_job_status, 'สถานะงาน + ชุดข้อมูลผลลัพธ์เมื่อเสร็จ', dict(job_id=I), ['job_id']),
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
-    ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — ค้นด้วยคำภาษาอังกฤษสั้น ๆ หลายครั้ง เช่น "population", "nighttime lights"', dict(query=S, limit=I), ['query']),
+    ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — คำอังกฤษสั้น 1–2 คำต่อครั้ง ค้นหลายรอบ เช่น "population", "ghsl", "pm2.5" · ผลมี satellite_tool = ชุดที่ดึงได้ทันทีด้วยงาน satellite', dict(query=S, limit=I), ['query']),
     ('get_hub_item', 'read', t_get_hub_item, 'รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง, ปีที่มี, ไฟล์ที่แอปดาวน์โหลดเข้าคลังได้ (url ใช้กับ propose_download_data)', dict(key=S), ['key']),
     ('satellite_catalog', 'read', t_satellite_catalog, 'ภาพดาวเทียมที่ดึงได้ทันที (Planetary Computer, ไม่ต้องมีบัญชี): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, การใช้ที่ดิน, น้ำผิวดิน — แบนด์/ช่วงปี/ความละเอียด', {}, []),
     ('search_satellite', 'read', t_search_satellite, 'ค้นภาพดาวเทียมในพื้นที่+ช่วงวันที่ (+เมฆสูงสุด %) → จำนวนภาพ วันที่ เมฆ — ใช้ก่อนเสนองาน satellite',
      dict(collection=S, aoi_id=I, date_from=S, date_to=S, cloud_max=N), ['collection', 'aoi_id']),
     ('review_output', 'read', t_review_output, 'ประเมินผลงานตัวเอง: ตรวจชุดผลลัพธ์ (ครอบพื้นที่ครบไหม ช่วงค่าสมเหตุสมผลไหม ภาพ/เมฆ คำเตือนของงาน) — เรียกทุกครั้งหลังงานเสร็จ ก่อนสรุปให้ผู้ใช้',
      dict(dataset_id=I, expectation=S), ['dataset_id']),
+    ('update_plan', 'note', t_update_plan,
+     'เขียน/อัปเดตแผนงานของบทสนทนา (ผู้ใช้เห็นเป็นแผงในแชต · ส่งกลับให้คุณทุกรอบ) — เรียกเมื่อเริ่มงานหลายขั้น และทุกครั้งที่ขั้นเปลี่ยนสถานะ/ได้ชุดใหม่/ผู้ใช้ตัดสินใจอะไร · ส่งเฉพาะช่องที่เปลี่ยน',
+     dict(goal=S, purpose=S, audience=S, steps_json=dict(type='string', description='JSON array [{"title","status":"todo|doing|done|blocked|skipped","outputs":[ids],"note"}] — ส่งทั้งรายการ'),
+          decisions=dict(type='array', items=S), blockers=dict(type='array', items=S), folder_id=I), []),
+    ('list_folders', 'read', t_list_folders, 'โฟลเดอร์ในคลัง (id + path)', {}, []),
+    ('propose_create_folders', 'action', t_propose_create_folders, 'เสนอสร้างโฟลเดอร์หลายชั้นในครั้งเดียว เช่น ["งานA/raw_data","งานA/output"] (ผู้ใช้ยืนยัน) — ผลลัพธ์ของงานถัดไปใส่ "folder_id" ใน params เพื่อเข้าโฟลเดอร์นั้นอัตโนมัติ',
+     dict(paths=dict(type='array', items=S), purpose=S), ['paths']),
+    ('propose_move_to_folder', 'action', t_propose_move_to_folder, 'เสนอย้ายชุดข้อมูลที่มีอยู่เข้าโฟลเดอร์ (ผู้ใช้ยืนยัน)', dict(dataset_ids=dict(type='array', items=I), folder_id=I), ['dataset_ids', 'folder_id']),
     ('propose_set_value_type', 'action', t_propose_set_value_type, 'เสนอยืนยัน/เปลี่ยนประเภทค่าของราสเตอร์ (ผู้ใช้ต้องกดยืนยัน)',
      dict(dataset_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['dataset_id', 'value_type']),
     ('propose_run_job', 'action', t_propose_run_job, 'เสนองานประมวลผล (ผู้ใช้ต้องกดยืนยัน) — params_json เป็น JSON ตามสเปกใน system prompt',
      dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S, title=S, purpose=S), ['kind', 'params_json', 'purpose']),
     ('propose_download_data', 'action', t_propose_download_data,
      'เสนอดาวน์โหลดไฟล์จาก Data hub เข้าคลัง ตัดตามกรอบพื้นที่ศึกษา (ผู้ใช้ต้องกดยืนยัน) — file_url ต้องมาจาก get_hub_item.downloadable_files · ใส่ value_type ถ้ารู้ความหมายแน่ชัด (เช่น WorldPop ppp = count, night light = density)',
-     dict(hub_key=S, file_url=S, name=S, purpose=S, aoi_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['hub_key', 'file_url', 'name', 'purpose']),
+     dict(hub_key=S, file_url=S, name=S, purpose=S, aoi_id=I, folder_id=I, value_type=dict(type='string', enum=['count', 'density', 'class'])), ['hub_key', 'file_url', 'name', 'purpose']),
     ('propose_create_report', 'action', t_propose_create_report,
      'เสนอทำรายงานแผนที่ (เปิดตัวออกแบบรายงานพร้อมเทมเพลต/ชั้นข้อมูล/ข้อความ ผู้ใช้กดยืนยันแล้วส่งออก PDF เอง) — dataset_ids ปกติคือแผนที่ไบแวเรียตที่ทำเสร็จแล้ว',
      dict(dataset_ids=dict(type='array', items=I), template=dict(type='string', enum=list(REPORT_TEMPLATES)), title=S, subtitle=S, org=S, author=S,

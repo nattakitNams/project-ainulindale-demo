@@ -1,0 +1,83 @@
+Write/update the conversation's work plan (shown as a panel in the chat · sent back to you every turn) — call when starting multi-step work and whenever a step changes status, a new dataset arrives or the user decides something · send only the changed fields
+Satellite imagery available right away (Planetary Computer, no account): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, land cover, surface water — bands/years/resolution
+Propose creating nested folders in one go, e.g. ["jobA/raw_data","jobA/output"] (user confirms) — put "folder_id" in the params of later jobs so results go into that folder
+Self-review: check an output dataset (full study-area coverage, sensible value range, imagery/cloud, job warnings) — call after every finished job, before summarising to the user
+Nothing found → try short 1–2 word English queries several times, e.g. "ghsl", "pm2.5", "air quality", "lst" · check satellite_tool before telling the user to use GEE
+°C = value × 0.02 − 273.15 (use the formula tool) · multi-year mean: fetch each year with pick=mean, then time series (mean/slope)
+Search satellite images for an area + date range (+ max cloud %) → number of images, dates, cloud — use before proposing a satellite job
+Work plan for this conversation: none yet (create with update_plan when the user asks for multi-step work)
+Work plan for this conversation (the user already answered these — do not ask again)
+Give 1–20 paths, e.g. ["jobA/raw_data", "jobA/output"]
+This file is not in the importable file list of this Data hub item
+MODIS LST 8-day (land surface temperature day/night 1 km)
+This conversation has no id (old web page) — refresh the page
+Propose moving existing datasets into a folder (user confirms)
+Images span 25 Jan 2022 — values after that date have +1000 mixed in
+Out of range: bands may be swapped / not rescaled / offset applied
+Areas without imagery: widen the date range or raise the cloud limit
+Statistics not finished yet — wait a moment and check again
+Night land surface temperature (value × 0.02 = kelvin)
+Day land surface temperature (value × 0.02 = kelvin)
+partly missing (incomplete imagery/clouds/data not overlapping)
+satellite job (fetch right away, no account needed)
+steps_json must be JSON: [
+" was converted from a vector and covers "
+Folders in the library (id + path)
+Mean difference per pixel |Δ|
+(see list_folders)
+] — send the whole list
+Pixels changed (%)
+Folders created
+(counted up to the limit)
+Study area coverage
+Move into folder
+No conversation id
+" overlap covers "
+pixels with values out of
+satellite imagery
+Confirm all (
+Folder not found #
+) · mean difference
+Index range −1…1
+Max difference |Δ|
+Mean difference |Δ|
+Correlation (r)
+Work folder: #
+Job warning
+Night quality
+Day quality
+Pixels changed
+Images used, cloud
+Create folders
+Start importing "
+User/audience
+All tiles have imagery
+Values not constant
+Not started
+Correlation
+The overlap of "
+% (up
+(exists)
+of the frame)
+Heat
+Agreed
+Temperature
+Goal
+Water bodies
+" and "
+datasets into
+Value range
+Image dates
+Flood
+Population
+Has values ≈
+) done
+Radar
+Work plan
+8 days
+→ dataset
+steps
+Skipped
+Dust
+Blocked
+down

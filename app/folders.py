@@ -120,6 +120,10 @@ def assign(dataset_ids, folder_id):
 def input_folder(params):
     """โฟลเดอร์ของชุดข้อมูลต้นทางชุดแรกของงาน (ผลลัพธ์เข้าโฟลเดอร์เดียวกัน)"""
     p = params or {}
+    if p.get('folder_id'):                                   # งานระบุโฟลเดอร์ผลลัพธ์เอง (เช่น ผู้ช่วยจัดเป็น <งาน>/output)
+        f = db.get('folders', int(p['folder_id']))
+        if f:
+            return f['id']
     cands = [p.get('dataset_id')] + list(p.get('dataset_ids') or []) + [(p.get(a) or {}).get('dataset_id') for a in ('x', 'y', 'base')] \
         + [p.get('a_id'), p.get('link_id'), p.get('zones_dataset_id')]
     for c in cands:

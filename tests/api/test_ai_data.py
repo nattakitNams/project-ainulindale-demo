@@ -53,7 +53,7 @@ class Mock(BaseHTTPRequestHandler):
             if step == 0:
                 return r([call('search_data_hub', {'query': 'nighttime lights'}), call('search_data_hub', {'query': 'population worldpop'}, 1)])
             if step == 1:
-                nl, pop = tools[-2][0]['key'], [x for x in tools[-1] if '2015-2030' in x['title']][0]['key']
+                nl, pop = tools[-2]['results'][0]['key'], [x for x in tools[-1]['results'] if '2015-2030' in x['title']][0]['key']
                 STATE.update(nl_key=nl, pop_key=pop)
                 return r([call('get_hub_item', {'key': nl}), call('get_hub_item', {'key': pop}, 1)])
             if step == 2:

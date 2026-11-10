@@ -246,7 +246,16 @@ def ai_models():
 @app.route('/api/ai/chat', methods=['POST'])
 def ai_chat():
     b = request.get_json(force=True)
-    return jsonify(ai.chat(b.get('messages'), b.get('page')))
+    r = ai.chat(b.get('messages'), b.get('page'), b.get('chat_id'))
+    from . import ai_plan
+    r['plan'] = ai_plan.get(b.get('chat_id'))
+    return jsonify(r)
+
+
+@app.route('/api/ai/plan')
+def ai_plan_get():
+    from . import ai_plan
+    return jsonify(plan=ai_plan.get(request.args.get('chat')))
 
 
 @app.route('/api/ai/confirm', methods=['POST'])         # ผู้ใช้กดยืนยันการ์ดข้อเสนอ → รัน (ข้อเสนอใช้ได้ครั้งเดียว)
@@ -1144,12 +1153,34 @@ def validate_job(kind, p):
         dx, dy = _confirmed_raster(p['x']['dataset_id']), _confirmed_raster(p['y']['dataset_id'])
         sx, sy = engine.Source(dx), engine.Source(dy)
         g = engine.make_grid([sx, sy], Fraction(p['target_res']))
-        for s in (sx, sy):                     # ไขว้ได้เฉพาะส่วนที่ทับกัน → เตือนเมื่อชุดหนึ่งเล็กกว่ามาก (เช่น แปลงจากเวกเตอร์แล้วได้แค่กรอบของรูป)
-            cover = (g.width * g.rx * g.height * g.ry) / (s.w * s.rx * s.h * s.ry)
+        # ไขว้ได้เฉพาะส่วนที่ทับกัน → เตือนเมื่อส่วนที่ทับกัน "ขาด" จากพื้นที่ที่ผู้ใช้ต้องการ (พื้นที่ศึกษา หรือชุดที่เล็กกว่า)
+        # ไม่เตือนกรณีปกติ เช่น ประชากรไทย × night light ทั้งโลก (ทับกันครบทั้งไทย แม้เป็น 0% ของทั้งโลก)
+        need = None
+        if p.get('aoi_id'):
+            ab = aoimod.geom_in(int(p['aoi_id']), g.crs).bounds
+            need = ((ab[2] - ab[0]) * (ab[3] - ab[1]), aoimod.get(int(p['aoi_id']))['name'])
+        else:
+            small = min((sx, sy), key=lambda s: s.w * s.rx * s.h * s.ry)
+            need = (small.w * small.rx * small.h * small.ry, small.name)
+        if need and need[0] > 0:
+            x0, y0 = g.x0, g.y0 - g.height * g.ry
+            gb = (x0, y0, g.x0 + g.width * g.rx, g.y0)
+            tb = ab if p.get('aoi_id') else None
+            inter = (max(0, min(gb[2], tb[2]) - max(gb[0], tb[0])) * max(0, min(gb[3], tb[3]) - max(gb[1], tb[1]))) if tb else g.width * g.rx * g.height * g.ry
+            cover = inter / need[0]
             if cover < 0.95:
-                o = sy if s is sx else sx
-                warns.append(f'ขอบเขตของ "{o.name}" ครอบ "{s.name}" แค่ {cover:.0%} — แผนที่จะมีเฉพาะส่วนที่ทับกัน '
-                             f'· ถ้า "{o.name}" แปลงมาจากเวกเตอร์ ให้แปลงใหม่โดยตั้ง "ขอบเขตผลลัพธ์" = "{s.name}" (นอกรูป = 0)')
+                warns.append(f'ส่วนที่ "{sx.name}" กับ "{sy.name}" ทับกัน ครอบ "{need[1]}" แค่ {cover:.0%} — แผนที่จะมีเฉพาะส่วนที่ทับกัน '
+                             '· ถ้าชุดหนึ่งแปลงมาจากเวกเตอร์ ให้แปลงใหม่โดยตั้ง "ขอบเขตผลลัพธ์" = ชุดราสเตอร์อีกชุด (นอกรูป = 0)')
+        # ชุดที่แปลงจากเวกเตอร์ (กรอบ = แค่รูป เช่น น้ำท่วมบางพื้นที่) ไขว้กับข้อมูลทั้งผืน → ผลจะเหลือแค่กรอบรูป ซึ่งมักไม่ใช่สิ่งที่ต้องการ
+        if not p.get('aoi_id'):
+            for s_, o_ in ((sx, sy), (sy, sx)):
+                d_ = db.get('datasets', s_.id) if s_.id else None
+                j_ = db.get('jobs', d_['job_id']) if d_ and d_.get('job_id') else None
+                if j_ and j_['kind'] == 'rasterize':
+                    cov = (g.width * g.rx * g.height * g.ry) / (o_.w * o_.rx * o_.h * o_.ry)
+                    if cov < 0.95:
+                        warns.append(f'"{s_.name}" แปลงมาจากเวกเตอร์ ครอบ "{o_.name}" แค่ {cov:.0%} — แผนที่จะมีเฉพาะกรอบของรูป '
+                                     f'· ถ้าต้องการทั้งผืน ให้แปลงใหม่โดยตั้ง "ขอบเขตผลลัพธ์" = "{o_.name}" (นอกรูป = 0)')
         ox, oy = engine.OnGrid(sx, g), engine.OnGrid(sy, g)
         aoi_name = _apply_aoi(p, g, [ox, oy])
         engine.check_tiles(g, [ox, oy])

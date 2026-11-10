@@ -595,3 +595,13 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .tool-it:hover { background: rgba(255,255,255,.04); }
 .tool-it > span:nth-child(2) { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-var { margin-bottom: 6px; align-items: flex-end; flex-wrap: wrap; }
+
+/* แผนงานของผู้ช่วย */
+.ai-plan { position: sticky; top: 0; z-index: 2; background: var(--panel, #1e2133); border: 1px solid var(--line-2); border-radius: 12px; padding: 8px 10px; margin-bottom: 8px; }
+.ai-plan summary { cursor: pointer; display: flex; gap: 8px; align-items: baseline; }
+.ai-plan ol { list-style: none; padding: 0; margin: 6px 0; display: grid; gap: 3px; }
+.ai-plan li { display: flex; gap: 6px; font-size: 12.5px; line-height: 1.45; }
+.ai-plan .ai-si { width: 14px; flex: none; color: var(--muted); }
+.ai-plan li.st-done .ai-si { color: var(--mint); } .ai-plan li.st-doing .ai-si { color: var(--sky); } .ai-plan li.st-blocked .ai-si { color: var(--coral); }
+.ai-plan li.st-done > span:last-child { opacity: .75; }
+.ai-all { margin: 4px 0 10px; }

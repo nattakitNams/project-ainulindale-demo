@@ -1,8 +1,9 @@
 // ผู้ช่วย AI — ขั้นที่ 1: เปิด/ปิดในหน้า "ระบบ" · ช่องแชตลอยมุมขวาล่าง (ย่อเป็นปุ่มได้) · ล็อกอินด้วย API key ในช่องแชต
 // key ส่งไปเก็บเข้ารหัสในตัวประมวลผลครั้งเดียวตอนเชื่อมต่อ — หน้าเว็บไม่เก็บ/ไม่ได้รับค่ากลับ · ประวัติแชตเก็บในเบราว์เซอร์นี้
 const AIDock = (() => {
-  const HKEY = 'ainu-ai-chat', OKEY = 'ainu-ai-open';
-  let st = null, busy = false, hist = [];
+  const HKEY = 'ainu-ai-chat', OKEY = 'ainu-ai-open', CKEY = 'ainu-ai-chat-id';
+  let st = null, busy = false, hist = [], plan = null, cid = null;
+  const newCid = () => 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
   const ls = { get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } }, set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { } } };
   // markdown อย่างง่าย + ลิงก์คลิกได้ ([ชื่อ](url) และ URL เปล่า) — เปิดแท็บใหม่ · รับเฉพาะ http(s)
   const md = s => esc(s).replace(/```([\s\S]*?)```/g, '<pre>$1</pre>')
@@ -15,6 +16,8 @@ const AIDock = (() => {
   async function init() {
     try { await refresh(); } catch { return; }
     hist = ls.get(HKEY, []);
+    cid = ls.get(CKEY, null) || newCid(); ls.set(CKEY, cid);
+    try { plan = (await api(`${ENGINE}/api/ai/plan?chat=${cid}`)).plan; } catch { }
     render();
   }
 
@@ -42,7 +45,7 @@ const AIDock = (() => {
       <div class="ai-body"></div></div>`;
     d.querySelector('[data-a=min]').onclick = () => { ls.set(OKEY, false); render(); };
     if (st.connected) {
-      d.querySelector('[data-a=clear]').onclick = () => { hist = []; ls.set(HKEY, hist); chatView(); };
+      d.querySelector('[data-a=clear]').onclick = () => { hist = []; ls.set(HKEY, hist); cid = newCid(); ls.set(CKEY, cid); plan = null; chatView(); };
       d.querySelector('[data-a=set]').onclick = () => { location.hash = '#/system'; };
       chatView();
     } else loginView();
@@ -90,7 +93,8 @@ const AIDock = (() => {
       if (!t || busy) return;
       hist.push({ role: 'user', content: t }); $('#aiTxt').value = ''; busy = true; drawMsgs();
       try {
-        const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/' } });
+        const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
+        if (r.plan !== undefined) plan = r.plan;
         hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note,
           proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
       } catch (e) { hist.push({ role: 'error', content: e.message }); }
@@ -104,7 +108,8 @@ const AIDock = (() => {
   const save = () => ls.set(HKEY, hist.slice(-60));
 
   // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
-  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', download: 'ดาวน์โหลดเข้าคลัง' };
+  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', download: 'ดาวน์โหลดเข้าคลัง',
+    create_folders: 'สร้างโฟลเดอร์', move_folder: 'ย้ายเข้าโฟลเดอร์' };
 
   // การ์ดดาวน์โหลดจาก Data hub: ไฟล์ · ปี · ขนาด · พื้นที่ · ประเภทค่า (เลือกได้) · สัญญาอนุญาต · แหล่ง
   function dlCard(p) {
@@ -181,7 +186,9 @@ const AIDock = (() => {
         + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
         : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`)
       : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>`
-      : p.action === 'download' ? dlCard(p) : '';
+      : p.action === 'download' ? dlCard(p)
+      : p.action === 'create_folders' ? `<div class="tiny">${(p.args.paths || []).map(x => `${IC.folder}<span translate="no">${esc(x)}</span>${(p.args.new || []).includes(x) ? '' : ' <span class="muted">(มีแล้ว)</span>'}`).join('<br>')}</div>`
+      : p.action === 'move_folder' ? `<div class="tiny"><span translate="no">${(p.args.names || []).map(esc).join(', ')}</span> → ${IC.folder}<span translate="no">${esc(p.args.folder)}</span></div>` : '';
     const P = p.args?.params || {};
     const resEd = p.state !== 'pending' || p.action !== 'run_job' ? ''
       : p.res_options?.length ? `<label class="ai-res tiny">ความละเอียด <select data-k="target_res">${p.res_options.map(o => `<option value="${esc(o.value)}" ${String(o.value) === String(P.target_res) ? 'selected' : ''}>${esc(o.label)} · ${fmt(o.pixels / 1e6, 1)} ล้านพิกเซล${o.same_as_source ? ' · = ข้อมูล' : ''}</option>`).join('')}</select></label>`
@@ -242,6 +249,7 @@ const AIDock = (() => {
       p.state = 'done'; p.result = r.message;
       hist.push({ role: 'event', content: r.message + (r.job_id ? ' — กำลังประมวลผล' : '') });
       if (r.job_id) watchJob(r.job_id);
+      else if (!r.report && !hist[mi].proposals.some(q => q.state === 'pending' || q.state === 'running') && !watching.size) setTimeout(autoContinue, 300);
       if (r.report) { try { sessionStorage.setItem('ainu-ai-report', JSON.stringify(r.report)); } catch { } location.hash = '#/report?ai=1'; }
       if (typeof jobBadge === 'function') jobBadge();
     } catch (e) { p.state = 'failed'; p.result = e.message; hist.push({ role: 'event', content: `ไม่สำเร็จ: ${p.title} — ${e.message}` }); }
@@ -255,7 +263,8 @@ const AIDock = (() => {
     if (busy || !st?.connected || !st?.enabled) return;
     busy = true; drawMsgs();
     try {
-      const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/' } });
+      const r = await api(ENGINE + '/api/ai/chat', { json: { messages: hist.map(x => ({ role: x.role, content: x.content })), page: location.hash || '#/', chat_id: cid } });
+      if (r.plan !== undefined) plan = r.plan;
       hist.push({ role: 'assistant', content: r.reply, used: r.used || [], note: r.note, proposals: (r.proposals || []).map(p => ({ ...p, state: 'pending' })) });
     } catch (e) { hist.push({ role: 'error', content: e.message }); }
     busy = false; save(); drawMsgs();
@@ -280,14 +289,26 @@ const AIDock = (() => {
   function drawMsgs() {
     const m = dock().querySelector('.ai-msgs');
     if (!m) return;
-    m.innerHTML = (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เริ่มจากบอกว่าจะทำแผนที่ไปเพื่ออะไร ใครดู — เช่น "อยากรู้ว่าพื้นที่ไหนคนอยู่หนาแน่นและน้ำท่วมซ้ำบ่อย เพื่อเสนอผู้บริหารจัดลำดับพื้นที่ช่วยเหลือทั้งประเทศ"<br>${st.mode === 'propose' ? 'ผู้ช่วยจะถามสิ่งที่ยังไม่ชัด ออกแบบการวิเคราะห์ตามวัตถุประสงค์ แล้วเสนองานให้กดยืนยัน' : 'ผู้ช่วยจะแนะนำการวิเคราะห์และการตั้งค่าตามวัตถุประสงค์'}</div>`)
+    const SI = { todo: '○', doing: '◐', done: '●', blocked: '✕', skipped: '–' };
+    const planHtml = plan && (plan.goal || plan.steps?.length) ? `<details class="ai-plan" ${ls.get('ainu-ai-plan-open', true) ? 'open' : ''}><summary><b>แผนงาน</b>
+        <span class="tiny muted">${(plan.steps || []).filter(s => s.status === 'done').length}/${(plan.steps || []).length} ขั้น${plan.blockers?.length ? ` · ติด ${plan.blockers.length}` : ''}</span></summary>
+      ${plan.goal ? `<div class="small" translate="no">${esc(plan.goal)}</div>` : ''}${plan.purpose ? `<div class="tiny muted" translate="no">วัตถุประสงค์: ${esc(plan.purpose)}</div>` : ''}
+      <ol>${(plan.steps || []).map(s => `<li class="st-${s.status}"><span class="ai-si">${SI[s.status] || '○'}</span><span translate="no">${esc(s.title)}${s.note ? ` <span class="tiny muted">— ${esc(s.note)}</span>` : ''}${(s.outputs || []).map(o => ` <a href="#/ds/${o}" class="tiny">#${o}</a>`).join('')}</span></li>`).join('')}</ol>
+      ${(plan.decisions || []).length ? `<div class="tiny muted" translate="no">ตกลงแล้ว: ${plan.decisions.map(esc).join(' · ')}</div>` : ''}
+      ${(plan.blockers || []).map(b => `<div class="tiny warn-t" translate="no">ติด: ${esc(b)}</div>`).join('')}</details>` : '';
+    m.innerHTML = planHtml + (hist.length ? '' : `<div class="tiny muted" style="padding:6px 2px">เริ่มจากบอกว่าจะทำแผนที่ไปเพื่ออะไร ใครดู — เช่น "อยากรู้ว่าพื้นที่ไหนคนอยู่หนาแน่นและน้ำท่วมซ้ำบ่อย เพื่อเสนอผู้บริหารจัดลำดับพื้นที่ช่วยเหลือทั้งประเทศ"<br>${st.mode === 'propose' ? 'ผู้ช่วยจะถามสิ่งที่ยังไม่ชัด ออกแบบการวิเคราะห์ตามวัตถุประสงค์ แล้วเสนองานให้กดยืนยัน' : 'ผู้ช่วยจะแนะนำการวิเคราะห์และการตั้งค่าตามวัตถุประสงค์'}</div>`)
       + hist.map((x, mi) => x.role === 'event'
         ? `<div class="ai-msg event">${esc(x.content)}${x.link ? ` <a href="${x.link}">เปิดผลลัพธ์</a>` : ''}</div>`
         : `<div class="ai-msg ${x.role}" ${x.role !== 'error' ? 'translate="no"' : ''}>${x.role === 'assistant' ? md(x.content) : esc(x.content)}</div>`
           + (x.used?.length ? `<div class="ai-used tiny muted">ตรวจข้อมูล: ${[...new Set(x.used.map(u => u.tool))].join(', ')}${x.used.some(u => u.error) ? ' · บางคำขอผิดพลาด' : ''}</div>` : '')
           + (x.note ? `<div class="ai-used tiny muted">${esc(x.note)}</div>` : '')
-          + (x.proposals || []).map((p, pi) => propCard(p, mi, pi)).join('')).join('')
+          + (x.proposals || []).map((p, pi) => propCard(p, mi, pi)).join('')
+          + ((x.proposals || []).filter(p => p.state === 'pending').length > 1 ? `<button class="sm primary ai-all" data-all="${mi}">${IC.check}ยืนยันทั้งหมด (${x.proposals.filter(p => p.state === 'pending').length})</button>` : '')).join('')
       + (busy ? '<div class="ai-msg assistant typing"><i></i><i></i><i></i></div>' : '');
+    m.querySelectorAll('[data-all]').forEach(b => b.onclick = async () => {
+      const mi = +b.dataset.all;
+      for (let pi = 0; pi < hist[mi].proposals.length; pi++) if (hist[mi].proposals[pi].state === 'pending') await decide(mi, pi, true);
+    });
     m.querySelectorAll('.ai-prop').forEach(c => {
       const mi = +c.dataset.m, pi = +c.dataset.p;
       c.querySelector('[data-ok]')?.addEventListener('click', () => decide(mi, pi, true));
@@ -295,6 +316,8 @@ const AIDock = (() => {
       c.querySelector('[data-form]')?.addEventListener('click', () => decide(mi, pi, false, true));
       c.querySelectorAll('.ai-edit [data-k], .ai-res [data-k]').forEach(el => el.addEventListener('change', () => onEdit(hist[mi].proposals[pi], el)));
     });
+    const pd = m.querySelector('.ai-plan');
+    if (pd) pd.ontoggle = () => ls.set('ainu-ai-plan-open', pd.open);
     m.scrollTop = m.scrollHeight;
   }
 

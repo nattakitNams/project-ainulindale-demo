@@ -83,7 +83,7 @@ ai_tools._call = _call
 rv = ai_tools.t_review_output(r['dataset_id'], 'ภาพ Sentinel-2 กทม. ครบพื้นที่')
 names = [c['item'] for c in rv['checks']]
 R.check('ประเมินผลงาน: ตรวจไทล์/เมฆ/แบนด์ ไม่มีปัญหา', not rv['problems'] and 'ไทล์มีภาพครบ' in names, '; '.join(f'{c["item"]}: {c["detail"]}' for c in rv['checks'])[:300])
-hub = ai_tools.t_search_data_hub('sentinel-1', 5) + ai_tools.t_search_data_hub('viirs nighttime', 8)
+hub = ai_tools.t_search_data_hub('sentinel-1', 5)['results'] + ai_tools.t_search_data_hub('viirs nighttime', 8)['results']
 lv = {h['key']: h['access']['level'] for h in hub}
 R.check('ป้ายบัญชี/โทเคน: GEE = account · PC ที่ดึงได้ = app', any(k.startswith('gee:') and v == 'account' for k, v in lv.items()) and lv.get('pc:sentinel-1-rtc') == 'app', str(lv)[:300])
 sys.exit(R.done())

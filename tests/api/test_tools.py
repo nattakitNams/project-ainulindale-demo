@@ -119,6 +119,18 @@ R.check('จำนวนปีที่ค่า > เกณฑ์ ตรงก�
 e = api('/api/estimate', dict(kind='trend', params=dict(items=items[:1], stat='slope', target_res=src)))
 R.check('อนุกรมเวลาปีเดียว → ปฏิเสธ', not e.get('ok'), e.get('error', '')[:60])
 
+# ---------- เปรียบเทียบ: ไฟล์เดียวกัน = ไม่ต่าง · ต่างเล็กน้อย = บอก % พิกเซลที่ต่าง ----------
+same_a = add(tif('cmp_a.tif', base.astype('float32')))
+same_b = add(tif('cmp_a_copy.tif', base.astype('float32')))
+pert = base.copy(); pert[:6, :] *= 1.05                       # 6 จาก 60 แถว = 10% ของพิกเซล ค่าเพิ่ม 5%
+same_c = add(tif('cmp_a_pert.tif', pert.astype('float32')))
+c1 = run('change', dict(a_id=same_a, b_id=same_b, mode='diff', target_res=src))['summary']
+c2 = run('change', dict(a_id=same_a, b_id=same_c, mode='diff', target_res=src))['summary']
+R.check('ไฟล์เดียวกันสองชุด → พิกเซลต่าง 0% · ผลรวมเท่ากัน · r = 1', c1['pct_pixels_changed'] == 0 and abs(c1['pct']) < 1e-9 and abs(c1['correlation'] - 1) < 1e-9,
+        f"{c1['pct_pixels_changed']}% · ผลรวม {c1['pct']:.2e}% · r {c1['correlation']}")
+R.check('แก้ 10% ของพิกเซล +5% → พิกเซลต่าง 10% · บอกผลรวมต่าง/ต่างเฉลี่ย/สหสัมพันธ์', abs(c2['pct_pixels_changed'] - 10) < 0.01 and c2['pixels_up'] == 6 * W and c2['correlation'] > 0.99,
+        f"{c2['pct_pixels_changed']:.2f}% · ผลรวม +{c2['pct']:.3f}% · |Δ| เฉลี่ย {c2['mean_abs_diff']:.4f} · r {c2['correlation']:.5f}")
+
 # ---------- mosaic ----------
 L_, Rt = rng.uniform(0, 5, (H, W)), rng.uniform(5, 9, (H, W))
 t1, t2 = add(tif('tile_l.tif', L_), 'density'), add(tif('tile_r.tif', Rt, x0=X0 + W * RES), 'density')

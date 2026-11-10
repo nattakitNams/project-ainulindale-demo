@@ -110,6 +110,10 @@ def op_download(job, P, log):
     did = catalog._insert(str(outp), m['url'], True, 'raster' if t == 'cog' else 'vector', None,
                           p.get('name') or f"{lk['name']} (ดาวน์โหลด {datetime.now():%Y-%m-%d})",
                           [f'ดาวน์โหลดจาก {m["url"]} เมื่อ {src["downloaded_at"]}'], role='input', job_id=job['id'], value_type=vt)
+    from . import folders
+    fid = folders.input_folder(dict(folder_id=p.get('folder_id')))     # ผลดาวน์โหลดเข้าโฟลเดอร์ที่ระบุ (เช่น <งาน>/raw_data)
+    if fid:
+        db.update('datasets', did, folder_id=fid)
     if p.get('purpose') or p.get('hub_key'):                       # ที่มาจาก Data hub + วัตถุประสงค์ (ผู้ช่วย AI)
         d0 = db.get('datasets', did)
         db.update('datasets', did, meta=dict(d0['meta'], hub_key=p.get('hub_key'), purpose=p.get('purpose')))
@@ -331,6 +335,7 @@ def op_change(job, P, log):
     log(f'โหมด {mode} · กริด {grid.describe()["res_label"]} · {len(tiles):,} ไทล์')
     sum_a = sum_b = 0.0
     n_up = n_down = n_same = 0
+    acc = dict(n=0, sad=0.0, mad=0.0, sa=0.0, sb=0.0, saa=0.0, sbb=0.0, sab=0.0)   # ความต่างต่อพิกเซล + สหสัมพันธ์
     mat = np.zeros((len(va) if mode == 'transition' else 1, len(vb) if mode == 'transition' else 1))
     t0 = time.time()
     for i, (r0, c0, h, w) in enumerate(tiles):
@@ -361,9 +366,19 @@ def op_change(job, P, log):
             ok2 = ok & np.isfinite(o)
             sum_a += float(a[ok].sum())
             sum_b += float(b[ok].sum())
-            n_up += int((ok & (b > a)).sum())
-            n_down += int((ok & (b < a)).sum())
-            n_same += int((ok & (b == a)).sum())
+            # "เท่าเดิม" ยอมความคลาดเคลื่อนทศนิยม (สัมพัทธ์ 1e-6) — ไฟล์เดียวกันที่ผ่านการคำนวณต่างทางไม่ถูกนับว่าต่างเพราะเศษทศนิยม
+            tol = 1e-6 * np.maximum(np.maximum(np.abs(a), np.abs(b)), 1e-12)
+            dd = b - a
+            same = ok & (np.abs(dd) <= tol)
+            n_same += int(same.sum())
+            n_up += int((ok & ~same & (dd > 0)).sum())
+            n_down += int((ok & ~same & (dd < 0)).sum())
+            av, bv = a[ok].astype('float64'), b[ok].astype('float64')
+            acc['n'] += av.size
+            acc['sad'] += float(np.abs(bv - av).sum())
+            acc['mad'] = max(acc['mad'], float(np.abs(bv - av).max()))
+            acc['sa'] += float(av.sum()); acc['sb'] += float(bv.sum())
+            acc['saa'] += float((av * av).sum()); acc['sbb'] += float((bv * bv).sum()); acc['sab'] += float((av * bv).sum())
             W.write(r0, c0, np.where(ok2, o, -99999.0).astype('float32'))
         if i % 5 == 0 or i == len(tiles) - 1:
             P(0.88 * (i + 1) / len(tiles), f'ไทล์ {i + 1:,}/{len(tiles):,} · {time.time() - t0:,.0f} วินาที')
@@ -383,10 +398,19 @@ def op_change(job, P, log):
         summary.update(transition_km2={f'{va[i]}→{vb[j]}': float(mat[i, j]) for i in range(len(va)) for j in range(len(vb)) if mat[i, j] > 0})
         vt = 'class'
     else:
+        n = acc['n'] or 1
+        va_, vb_ = acc['saa'] / n - (acc['sa'] / n) ** 2, acc['sbb'] / n - (acc['sb'] / n) ** 2
+        r = (acc['sab'] / n - acc['sa'] / n * acc['sb'] / n) / (va_ * vb_) ** 0.5 if va_ > 0 and vb_ > 0 else None
+        tot = n_up + n_down + n_same
         summary.update(sum_before=sum_a, sum_after=sum_b, diff=sum_b - sum_a, pct=(sum_b - sum_a) / sum_a * 100 if sum_a else None,
-                       pixels_up=n_up, pixels_down=n_down, pixels_same=n_same)
+                       pixels_up=n_up, pixels_down=n_down, pixels_same=n_same,
+                       pct_pixels_changed=(n_up + n_down) / tot * 100 if tot else None, mean_abs_diff=acc['sad'] / n, max_abs_diff=acc['mad'],
+                       mean_before=acc['sa'] / n, correlation=r)
+        log(f'พิกเซลที่ต่าง {(n_up + n_down) / (tot or 1):.2%} · ต่างเฉลี่ย |Δ| {acc["sad"] / n:.6g} · สูงสุด {acc["mad"]:.6g} · สหสัมพันธ์ {r if r is None else round(r, 6)}')
         export.write_csv(out_dir / f'{base}_summary.csv', ['รายการ', 'ค่า'],
-                         [['ผลรวมก่อน', sum_a], ['ผลรวมหลัง', sum_b], ['ผลต่าง', sum_b - sum_a], ['พิกเซลที่เพิ่ม', n_up], ['พิกเซลที่ลด', n_down], ['พิกเซลเท่าเดิม', n_same]])
+                         [['ผลรวมก่อน', sum_a], ['ผลรวมหลัง', sum_b], ['ผลต่าง', sum_b - sum_a], ['พิกเซลที่เพิ่ม', n_up], ['พิกเซลที่ลด', n_down], ['พิกเซลเท่าเดิม', n_same],
+                          ['พิกเซลที่ต่าง (%)', summary['pct_pixels_changed']], ['ต่างเฉลี่ยต่อพิกเซล |Δ|', summary['mean_abs_diff']], ['ต่างสูงสุด |Δ|', summary['max_abs_diff']],
+                          ['สหสัมพันธ์ (r)', summary['correlation']]])
         vt = 'density' if mode != 'diff' else (da['value_type'] if da['value_type'] != 'class' else 'density')
     export.write_lineage(out_dir, 'change', [export.lineage_input(da), export.lineage_input(dbb)], p, [outp], summary)
     did = register_output(outp, p.get('name') or f'เปลี่ยนแปลง {da["name"]} → {dbb["name"]}', vt, job['id'], 'derived')

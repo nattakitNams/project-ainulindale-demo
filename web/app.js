@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.32';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.33';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -1679,7 +1679,8 @@ async function pageJobs() {
       + (s.weight_total != null ? `<div class="small" style="margin-top:4px">น้ำหนักรวม <b>${fmt(s.weight_total)}</b> · มีรหัส ${fmt(s.weight_coded)} · เขตเน้น <b style="color:var(--butter)">${fmt(s.highlight_weight)}</b></div>` : '')
       + (s.sum != null ? `<div class="small" style="margin-top:4px">ผลรวมค่า <b>${fmt(s.sum)}</b></div>` : '') + (s.cells != null ? `<div class="small" style="margin-top:4px">${fmt(s.cells, 0)} ช่อง</div>` : '')
       + (s.zones != null ? `<div class="small" style="margin-top:4px">${fmt(s.zones, 0)} พื้นที่ · มีรหัส ${fmt(s.zones_coded, 0)} · เขตเน้น <b style="color:var(--butter)">${fmt(s.zones_highlight, 0)}</b> พื้นที่</div>` : '')
-      + (s.diff != null ? `<div class="small" style="margin-top:4px">ก่อน ${fmt(s.sum_before)} → หลัง ${fmt(s.sum_after)} · <b>${s.diff >= 0 ? '+' : ''}${fmt(s.diff)}</b>${s.pct != null ? ` (${s.pct >= 0 ? '+' : ''}${fmt(s.pct)}%)` : ''}</div>` : '')
+      + (s.diff != null ? `<div class="small" style="margin-top:4px">ก่อน ${fmt(s.sum_before)} → หลัง ${fmt(s.sum_after)} · <b>${s.diff >= 0 ? '+' : ''}${fmt(s.diff)}</b>${s.pct != null ? ` (${s.pct >= 0 ? '+' : ''}${fmt(s.pct)}%)` : ''}</div>` 
+        + (s.pct_pixels_changed != null ? `<div class="tiny muted">พิกเซลที่ต่าง ${fmt(s.pct_pixels_changed, 2)}% (เพิ่ม ${fmt(s.pixels_up, 0)} · ลด ${fmt(s.pixels_down, 0)} · เท่าเดิม ${fmt(s.pixels_same, 0)}) · ต่างเฉลี่ย |Δ| ${fmt(s.mean_abs_diff, 4)} · สูงสุด ${fmt(s.max_abs_diff, 4)}${s.correlation != null ? ` · r = ${fmt(s.correlation, 4)}` : ''}</div>` : '') : '')
       + (s.results ? `<div class="small" style="margin-top:6px">เขตเน้น <b style="color:var(--butter)">${fmt(s.highlight_min)} – ${fmt(s.highlight_max)}</b> (มัธยฐาน ${fmt(s.highlight_median)}) จาก ${s.runs} ชุดค่า</div>
           <table class="sens"><tbody>${s.results.map(r => `<tr><td class="tiny">${esc(r.label)}</td><td style="text-align:right"><b>${fmt(r.highlight_weight)}</b></td><td style="width:40%"><div class="sbar"><div style="width:${s.highlight_max ? r.highlight_weight / s.highlight_max * 100 : 0}%"></div></div></td></tr>`).join('')}</tbody></table>` : '');
     const secs = (a, b) => a && b ? (new Date(b) - new Date(a)) / 1000 : null;
