@@ -37,12 +37,44 @@ def preview_factor(meta):
     if meta.get('overviews') or px <= PREVIEW_NEED_PX:
         return 0                               # ไม่ต้องทำสำเนา (เล็ก หรือมี overview แล้ว)
     if px <= PREVIEW_MAX_PX:
-        return 1
+        # พรีวิวใช้ตอนซูมออกเท่านั้น (ซูมเข้าอ่านไฟล์ต้นฉบับ — tiles.choose_path) → ย่อ 1/4 ต่อด้าน พอ
+        # เดิม F=1 = คัดลอกทั้งไฟล์ขนาดเท่าต้นฉบับ (WorldPop 100 ม. ปีละ ~124 MB · 17 ปี ≈ 2 GB) → เหลือ ~1/16
+        return 4 if min(meta['width'], meta['height']) >= 4 * 256 else 2
     f = math.ceil(math.sqrt(px / PREVIEW_MAX_PX))
     for nice in (2, 4, 5, 8, 10, 16, 20, 25, 32, 40, 50, 64, 100):
         if nice >= f:
             return nice
     return f
+
+
+def migrate_previews():
+    """เปิดเซิร์ฟเวอร์ครั้งแรกหลังอัปเดต: ลบสำเนาพรีวิวแบบเต็มขนาด (F=1) ที่ไม่สร้างแล้ว → คืนพื้นที่ทันที
+    ชุดที่อ้างถึงถูกล้าง preview_path/preview_key → เปิดชุดนั้นครั้งถัดไปจะสร้างสำเนาย่อใหม่ให้เอง"""
+    freed, n = 0, 0
+    for d in db.query('SELECT id, preview_path FROM datasets WHERE preview_path IS NOT NULL'):
+        if not d['preview_path'].endswith('_F1.tif'):
+            continue
+        p = Path(d['preview_path'])
+        try:
+            if p.exists():
+                freed += p.stat().st_size
+                p.unlink()
+            n += 1
+        except OSError:
+            continue
+        db.update('datasets', d['id'], preview_path=None, preview_key=None)
+    pv = DIRS['cache'] / 'preview'
+    if pv.exists():                                               # ไฟล์ F=1 ที่ไม่มีชุดไหนอ้างแล้ว (เช่น ชุดถูกลบ)
+        used = {Path(r['preview_path']).name for r in db.query('SELECT preview_path FROM datasets WHERE preview_path IS NOT NULL')}
+        for f in pv.glob('*_F1.tif'):
+            if f.name not in used:
+                try:
+                    freed += f.stat().st_size
+                    f.unlink()
+                    n += 1
+                except OSError:
+                    pass
+    return n, freed
 
 
 def preview_key(ds, F):
@@ -164,6 +196,12 @@ def op_prepare(job, P, log):
         if pv_path.exists():
             pv_path.unlink()
         tmp.rename(pv_path)
+        old = ds.get('preview_path')
+        if old and Path(old) != pv_path and Path(old).exists() and Path(old).parent == pv_path.parent:
+            try:                                                  # สำเนาพรีวิวรุ่นก่อน (ตัวคูณต่างกัน) → ลบ ไม่ให้ค้างกินพื้นที่
+                Path(old).unlink()
+            except OSError:
+                pass
 
     sv = np.concatenate(samp_v) if samp_v else np.zeros(0)
     sr = np.concatenate(samp_r) if samp_r else np.zeros(0, 'int32')

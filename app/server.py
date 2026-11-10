@@ -1607,6 +1607,12 @@ def main():
             webbrowser.open(url)
         sys.exit(0)
     db.init()
+    try:
+        n, freed = ops.migrate_previews()
+        if n:
+            print(f'ลบสำเนาพรีวิวเต็มขนาดแบบเก่า {n} ไฟล์ · คืนพื้นที่ {freed / 1e9:.2f} GB (สร้างแบบย่อใหม่เมื่อเปิดชุดนั้น)')
+    except Exception as e:
+        print('[migrate previews]', e)
     jobs.start_dispatcher()
     try:
         from . import recipes
