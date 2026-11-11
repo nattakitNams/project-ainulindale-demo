@@ -254,8 +254,17 @@ def _year(name):
     return int(m.group(1)) if m else None
 
 
-def t_get_hub_item(key, years=None):
-    """รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง + ไฟล์ที่ดาวน์โหลดเข้าคลังได้ (พร้อมปี) — ใช้เลือกปี/ไฟล์ก่อนเสนอดาวน์โหลด"""
+def _match_list(match):
+    if not match:
+        return []
+    if isinstance(match, str):
+        match = match.split(',')
+    return [str(m).strip() for m in match if str(m).strip()]      # ตรงตัวพิมพ์: WorldPop tha_t_65 (รวมสองเพศ) ≠ tha_T_F (หญิงทุกอายุ) — ไม่งั้นนับซ้ำ
+
+
+def _hub_files(key, years=None, match=None, must=None):
+    """ไฟล์ที่นำเข้าได้ของชุดใน Data hub (ไม่ตัดจำนวน) + ไฟล์ย่อยในโฟลเดอร์ต้นทางของ ZIP (hub_browse) → (it, d, res, dl, direct, browsed)"""
+    from . import hub_browse
     it = next((x for x in _hub() if x['k'] == key), None)
     if it is None:
         raise ToolError(f'ไม่พบ {key} ใน Data hub — ใช้ key จาก search_data_hub')
@@ -267,23 +276,103 @@ def t_get_hub_item(key, years=None):
         res.append(dict(name=r.get('name'), format=r.get('format'), year=_year(r.get('name') or u), url=u, size_mb=round(r['size'] / 1e6, 1) if r.get('size') else None,
                         downloadable=ok))
     dl = [r for r in res if r['downloadable']]
-    if years:                                                 # ขอเฉพาะปี → ไฟล์ของปีนั้น (ชุดที่มีไฟล์มากไม่ถูกตัดทิ้ง)
-        ys = {int(y) for y in years}
-        dl = [r for r in dl if r['year'] in ys]
     direct = [dict(name=r['name'], year=r['year'], format=r['format'], url=r['url']) for r in res
               if not r['downloadable'] and re.search(r'\.(zip|gpkg|csv|xlsx?|nc|h5|kmz?|shp|parquet|7z)(/content)?(\?|$)', r['url'] or '', re.I)]
+    ys = {int(y) for y in years} if years else None
+    browsed = None
+    zips = [r for r in direct if re.search(r'\.zip(\?|$)', r['url'] or '', re.I)]
+    if zips and len(dl) < 5:                                  # ต้นทางให้แต่ ZIP → ดูโฟลเดอร์ข้าง ZIP ว่ามี GeoTIFF แยกไหม (WorldPop ฯลฯ)
+        pick = [z for z in zips if z['year'] in ys] if ys else zips[-2:]
+        got = hub_browse.expand([z['url'] for z in pick[:24]])
+        seen = {r['url'] for r in dl}
+        n = 0
+        for z in pick[:24]:
+            for f in got.get(z['url']) or []:
+                if f['url'] in seen:
+                    continue
+                seen.add(f['url'])
+                dl.append(dict(name=f['name'], format='GeoTIFF', year=_year(f['name']) or z['year'], url=f['url'], size_mb=f['size_mb'],
+                               downloadable=True, from_zip=z['name']))
+                n += 1
+        browsed = dict(zips_checked=len(pick[:24]), files_found=n, all_years=sorted({z['year'] for z in zips if z['year']}),
+                       note=None if ys else 'ดูแค่ ZIP ล่าสุดเป็นตัวอย่าง — ใส่ years เพื่อดูไฟล์ของปีที่ต้องการ')
+    if ys:
+        dl = [r for r in dl if r['year'] in ys]
+    ms, mu = _match_list(match), _match_list(must)
+    if ms:
+        dl = [r for r in dl if any(m in (r['name'] or '') for m in ms)]
+    if mu:                                                    # ทุกคำต้องมี (เช่น ความละเอียด "1km")
+        dl = [r for r in dl if all(m in (r['name'] or '') for m in mu)]
+    return it, d, res, dl, direct, browsed
+
+
+def _hub_file(key, url):
+    """URL นี้เป็นไฟล์ที่นำเข้าได้ของชุดนั้นจริงไหม (รวมไฟล์ย่อยจากโฟลเดอร์ต้นทาง) — ด่านกันดึงไฟล์จากที่ที่ไม่รู้จัก"""
+    name = (url or '').rstrip('/').rsplit('/', 1)[-1]
+    y = _year(name)
+    it, _d, _res, dl, _direct, _b = _hub_files(key)
+    f = next((x for x in dl if x['url'] == url), None)
+    if f is None:
+        dl = _hub_files(key, years=[y] if y else None, match=[name])[3]
+        f = next((x for x in dl if x['url'] == url), None)
+    return it, f
+
+
+def hub_plan(key, years, match, must=None):
+    """สูตรงาน download แบบหลายไฟล์: {ปี: [ไฟล์ที่ชื่อตรง match]} (ไม่ใส่ years = ทุกปีที่มี) — เรียงตามลำดับ match"""
+    ms = _match_list(match)
+    if not ms:
+        raise ToolError('download แบบหลายไฟล์ต้องมี match (คำในชื่อไฟล์ เช่น ["_t_60_","_t_65_"])')
+    if years in (None, '', []):
+        _it, _d, _res, dl0, _direct, b = _hub_files(key)
+        ys = (b or {}).get('all_years') or sorted({f['year'] for f in dl0 if f['year']})
+    else:
+        ys = [int(y) for y in years]
+    dl = _hub_files(key, ys, ms, must)[3]
+    out = {}
+    for y in ys:
+        fs = [f for f in dl if f['year'] == y]
+        fs.sort(key=lambda f: next((i for i, m in enumerate(ms) if m in f['name']), 99))
+        out[y] = fs
+    return out
+
+
+def _patterns(dl, limit=60):
+    """ชื่อไฟล์แบบย่อ (ปี → {year}) — ให้ผู้ช่วยเห็นว่ามีไฟล์ชนิดไหนบ้างโดยไม่ต้องส่งทุก URL"""
+    out = {}
+    for r in dl:
+        k = re.sub(r'(?<![\dA-Za-z])(19[5-9]\d|20[0-4]\d)(?![\dA-Za-z])', '{year}', r['name'] or '')
+        e = out.setdefault(k, dict(pattern=k, years=set(), size_mb=r.get('size_mb')))
+        if r.get('year'):
+            e['years'].add(r['year'])
+    return [dict(pattern=e['pattern'], years=sorted(e['years']), size_mb=e['size_mb']) for e in list(out.values())[:limit]]
+
+
+def t_get_hub_item(key, years=None, match=None, must=None):
+    """รายละเอียดชุดใน Data hub: คำอธิบายจากต้นทาง + ไฟล์ที่ดาวน์โหลดเข้าคลังได้ (พร้อมปี) — ใช้เลือกปี/ไฟล์ก่อนเสนอดาวน์โหลด
+    ต้นทางมีแต่ ZIP → ดูโฟลเดอร์ต้นทางให้ว่ามี GeoTIFF แยกรายไฟล์ไหม (เช่น WorldPop รายช่วงอายุ/เพศ) · match = คำในชื่อไฟล์ (หลายคำคั่น , = อันไหนก็ได้)"""
+    it, d, res, dl, direct, browsed = _hub_files(key, years, match, must)
     note = None
     if not dl:
         note = {'gee': 'อยู่บน Google Earth Engine — แอปดาวน์โหลดเองไม่ได้ (ต้องใช้บัญชี GEE ส่งออกเป็น GeoTIFF แล้วเพิ่มเข้าคลัง)',
                 'pc': 'อยู่บน Planetary Computer — ถ้าไม่อยู่ในเครื่องมือภาพดาวเทียม แอปดาวน์โหลดเองไม่ได้'}.get(it.get('s'), 'ไม่มีไฟล์ที่แอปดาวน์โหลดเองได้ — เปิดลิงก์ต้นทางเพื่อดาวน์โหลดเองแล้วเพิ่มเข้าคลัง')
+        if match:
+            note = f'ไม่มีไฟล์ที่ชื่อมี {match} — เรียกใหม่โดยไม่ใส่ match แล้วดู file_patterns'
     desc = ((d.get('desc') or {}).get('text') or '')
     card = _data_card(it, d, dl, direct, res)
     if card['access']['satellite_collection']:
         note = f'ดึงด้วยเครื่องมือภาพดาวเทียมได้ทันที (งาน satellite collection="{card["access"]["satellite_collection"]}") ไม่ต้องดาวน์โหลดไฟล์'
+    cap = 40 if len(dl) <= 40 else 12                      # ไฟล์เยอะ → ส่งชนิดไฟล์ (file_patterns) แทนทุก URL
+    files = [{k: v for k, v in f.items() if k not in ('downloadable', 'from_zip') and v is not None} for f in dl[:cap]]
     return dict(key=it['k'], title=it.get('t'), card=card, platform=it.get('p'), provider=it.get('pr'), coverage=it.get('cv'), license=it.get('l') or it.get('lc'),
                 url=it.get('u'), description=desc[:1500] + ('…' if len(desc) > 1500 else ''), description_source=(d.get('desc') or {}).get('source'),
-                years_available=sorted({r['year'] for r in dl if r['year']}) or it.get('y'),
-                downloadable_files=[{k: v for k, v in f.items() if k not in ('downloadable',) and v is not None} for f in dl[:60]], direct_links_app_cannot_import=direct[:40], other_files=len(res) - len(dl) - len(direct),
+                years_available=(browsed or {}).get('all_years') or sorted({r['year'] for r in dl if r['year']}) or it.get('y'),
+                file_patterns=_patterns(dl) if len(dl) > cap else None,   # ส่งเฉพาะเมื่อรายการไฟล์ถูกตัด (ไม่งั้นซ้ำกับ downloadable_files)
+                downloadable_files=files, more_files=max(0, len(dl) - cap) or None,
+                files_tip=(f'มีอีก {len(dl) - cap} ไฟล์ — ใส่ years/match ให้แคบลง · ในสูตรงานใช้ขั้น download แบบ years+match (ไม่ต้องใส่ URL ทีละไฟล์)' if len(dl) > cap else None),
+                browsed_source_folders=browsed,
+                direct_links_app_cannot_import=None if browsed and browsed['files_found'] else direct[:40],
+                other_files=len(res) - len([r for r in res if r['downloadable']]) - len(direct),
                 gee_id=it.get('id') if it.get('s') == 'gee' else None, note=note)
 
 
@@ -481,16 +570,24 @@ def t_propose_recipe(title, purpose, steps_json, raw_folder_id=None, output_fold
         raise ToolError(str(e))
     checks = []
     for s in steps:                                           # ตรวจล่วงหน้าเฉพาะขั้นที่ไม่พึ่งผลขั้นก่อน (ขั้นอื่นตรวจตอนรัน)
-        if s['kind'] in recipes.JOB_KINDS and not recipes._refs(s['params'], set()) and s['params'].get('target_res') != 'auto':
+        if s['kind'] in recipes.JOB_KINDS and s.get('for_years') is None and not recipes._refs(s['params'], set()) and s['params'].get('target_res') != 'auto':
             e = _call('POST', '/api/estimate', dict(kind=s['kind'], params=s['params']))
             checks.append(dict(step=s['id'], ok=bool(e.get('ok')), error=e.get('error'), resolution=(e.get('grid') or {}).get('res_label'),
                                warnings=e.get('warnings') or []))
             if not e.get('ok'):
                 raise ToolError(f'ขั้น {s["id"]} ตรวจไม่ผ่าน: {e.get("error")} — แก้แล้วเสนอใหม่')
         elif s['kind'] == 'download':
-            item = t_get_hub_item(s['params']['hub_key'])
-            if not any(f['url'] == s['params']['file_url'] for f in item['downloadable_files']):
-                raise ToolError(f'ขั้น {s["id"]}: file_url ไม่อยู่ในรายการไฟล์นำเข้าได้ของ {s["params"]["hub_key"]} (ดู get_hub_item)')
+            sp = s['params']
+            if sp.get('file_url'):
+                if _hub_file(sp['hub_key'], sp['file_url'])[1] is None:
+                    raise ToolError(f'ขั้น {s["id"]}: file_url ไม่อยู่ในรายการไฟล์นำเข้าได้ของ {sp["hub_key"]} (ดู get_hub_item)')
+            else:                                             # หลายไฟล์ต่อปี (years + match) → ตรวจว่าทุกปีมีไฟล์ตรง
+                plan = hub_plan(sp['hub_key'], sp.get('years'), sp.get('match'), sp.get('must'))
+                miss = [y for y, fs in plan.items() if not fs]
+                if miss or not plan:
+                    raise ToolError(f'ขั้น {s["id"]}: ไม่พบไฟล์ที่ชื่อมี {sp.get("match")} ของปี {miss or sp.get("years")} ใน {sp["hub_key"]} (ดู get_hub_item file_patterns)')
+                checks.append(dict(step=s['id'], ok=True, files={str(y): [f['name'] for f in fs] for y, fs in plan.items()},
+                                   total_mb=round(sum(f.get('size_mb') or 0 for fs in plan.values() for f in fs), 1)))
     out = _propose('recipe', title, dict(title=title, purpose=str(purpose)[:500], steps=steps, raw_folder_id=raw_folder_id, output_folder_id=output_folder_id))
     with _lock:
         _PROPOSALS[out['proposal_id']]['estimate'] = dict(ok=True, checks=checks)
@@ -654,10 +751,10 @@ def t_propose_download_data(hub_key, file_url, name, purpose, aoi_id=None, value
     """ดาวน์โหลดไฟล์จาก Data hub เข้าคลัง (ตัดตามกรอบพื้นที่ศึกษา) — รับเฉพาะ URL ที่อยู่ในรายการไฟล์ของชุดนั้นใน Data hub
     (AI ส่ง URL อื่นไม่ได้: กันดึงไฟล์จากที่ที่ไม่รู้จัก / คำสั่งแฝงในข้อมูล)"""
     from . import links
-    item = t_get_hub_item(hub_key)
-    f = next((x for x in item['downloadable_files'] if x['url'] == file_url), None)
+    it, f = _hub_file(hub_key, file_url)
     if f is None:
         raise ToolError('URL นี้ไม่อยู่ในรายการไฟล์ที่ดาวน์โหลดได้ของชุดนี้ — เลือกจาก get_hub_item.downloadable_files')
+    item = dict(title=it.get('t'), license=it.get('l') or it.get('lc'), url=it.get('u'))
     if value_type not in (None, 'count', 'density', 'class'):
         raise ToolError('value_type ต้องเป็น count / density / class')
     aoi_name = None
@@ -684,10 +781,10 @@ def start_hub_import(hub_key, url, name, aoi_id=None, value_type=None, purpose=N
     """นำเข้าไฟล์จาก Data hub (ใช้ร่วม: ผู้ช่วย AI หลังผู้ใช้ยืนยัน · ปุ่ม "นำเข้าคลัง" ในหน้า Data hub)
     URL ต้องเป็นไฟล์ที่นำเข้าได้ของชุดนั้นใน Data hub เท่านั้น → เพิ่มลิงก์ → งานดาวน์โหลด (ตัดกรอบพื้นที่ศึกษา) → ชุดใหม่ในคลัง"""
     from . import links
-    item = t_get_hub_item(hub_key)
-    f = next((x for x in item['downloadable_files'] if x['url'] == url), None)
+    it, f = _hub_file(hub_key, url)
     if f is None:
         raise ToolError('ไฟล์นี้ไม่อยู่ในรายการไฟล์ที่นำเข้าได้ของชุดนี้ใน Data hub')
+    item = dict(title=it.get('t'))
     if value_type not in (None, 'count', 'density', 'class'):
         raise ToolError('value_type ต้องเป็น count / density / class')
     try:
@@ -870,7 +967,7 @@ TOOLS = [
     ('resolution_options', 'read', t_resolution_options, 'ตัวเลือกความละเอียดผลลัพธ์ที่ใช้ได้กับชุดข้อมูลเหล่านี้ (ค่า value ใช้ใส่ target_res)',
      dict(dataset_ids=dict(type='array', items=I)), ['dataset_ids']),
     ('preview_classes', 'read', t_preview_classes, 'พรีวิวเกณฑ์แบ่งคลาสของชุดข้อมูล (สัดส่วนพิกเซล/ค่าในแต่ละคลาส)',
-     dict(dataset_id=I, method=dict(type='string', enum=['breaks', 'quantile', 'equal']), n=I, metric=dict(type='string', enum=['density', 'per_pixel', 'value']),
+     dict(dataset_id=I, method=dict(type='string', enum=['breaks', 'quantile', 'equal', 'jenks']), n=I, metric=dict(type='string', enum=['density', 'per_pixel', 'value']),
           breaks=dict(type='array', items=N)), ['dataset_id']),
     ('estimate_job', 'read', t_estimate_job, 'ตรวจค่าที่ตั้ง + ประเมินขนาดงานโดยไม่รัน (ใช้ก่อนเสนองาน)', dict(kind=dict(type='string', enum=list(JOB_KINDS)), params_json=S), ['kind', 'params_json']),
     ('get_dataset_profile', 'read', t_get_dataset_profile, 'ประวัติชุดข้อมูล: ไฟล์อะไร รูปแบบ มาจากไหน ชุดต้นทาง (พ่อแม่) ค่าที่ตั้ง ชุดที่ทำต่อ (ลูก) โน้ต — ใช้ตอบคำถามที่มาของข้อมูล', dict(dataset_id=I), ['dataset_id']),
@@ -880,7 +977,7 @@ TOOLS = [
     ('job_status', 'read', t_job_status, 'สถานะงาน + ชุดข้อมูลผลลัพธ์เมื่อเสร็จ', dict(job_id=I), ['job_id']),
     ('list_jobs', 'read', t_list_jobs, 'งานล่าสุด', dict(limit=I), []),
     ('search_data_hub', 'read', t_search_data_hub, 'ค้นแหล่งข้อมูลภายนอกใน Data hub (GEE, Planetary Computer, พอร์ทัลไทย, Zenodo ฯลฯ) — คำอังกฤษสั้น 1–2 คำต่อครั้ง ค้นหลายรอบ เช่น "population", "ghsl", "pm2.5" · ผลมี satellite_tool = ชุดที่ดึงได้ทันทีด้วยงาน satellite', dict(query=S, limit=I), ['query']),
-    ('get_hub_item', 'read', t_get_hub_item, 'บัตรข้อมูลของชุดใน Data hub (card) — ใส่ years เพื่อขอเฉพาะไฟล์ของปีที่ต้องการ: หมวด · ตัวแปร/แบนด์ (หน่วย scale offset รหัสชั้น) · ช่วงเวลา/ความถี่/ปีที่มีไฟล์ · ความละเอียด/ขอบเขต · ต้องมีบัญชีไหม/วิธีได้มา · ผู้ผลิต/สัญญาอนุญาต/การอ้างอิง + ไฟล์ที่นำเข้าได้ (url ใช้กับ propose_download_data)', dict(key=S, years=dict(type='array', items=I)), ['key']),
+    ('get_hub_item', 'read', t_get_hub_item, 'บัตรข้อมูลของชุดใน Data hub (card) — ใส่ years เพื่อขอเฉพาะไฟล์ของปีที่ต้องการ: หมวด · ตัวแปร/แบนด์ (หน่วย scale offset รหัสชั้น) · ช่วงเวลา/ความถี่/ปีที่มีไฟล์ · ความละเอียด/ขอบเขต · ต้องมีบัญชีไหม/วิธีได้มา · ผู้ผลิต/สัญญาอนุญาต/การอ้างอิง + ไฟล์ที่นำเข้าได้ (url ใช้กับ propose_download_data) · ต้นทางมีแต่ ZIP → แอปเปิดโฟลเดอร์ต้นทางหาไฟล์ GeoTIFF แยกให้ (เช่น WorldPop รายช่วงอายุ/เพศ) · match = คำในชื่อไฟล์ (ตรงตัวพิมพ์) คั่น , (เช่น "_t_60_,_t_65_") · must = คำที่ต้องมีทุกคำ (เช่น "1km") · file_patterns = ชนิดไฟล์ทั้งหมด', dict(key=S, years=dict(type='array', items=I), match=S, must=S), ['key']),
     ('satellite_catalog', 'read', t_satellite_catalog, 'ภาพดาวเทียมที่ดึงได้ทันที (Planetary Computer, ไม่ต้องมีบัญชี): Sentinel-2, Landsat, SAR (Sentinel-1, ALOS PALSAR), MODIS NDVI, DEM, การใช้ที่ดิน, น้ำผิวดิน — แบนด์/ช่วงปี/ความละเอียด', {}, []),
     ('search_satellite', 'read', t_search_satellite, 'ค้นภาพดาวเทียมในพื้นที่+ช่วงวันที่ (+เมฆสูงสุด %) → จำนวนภาพ วันที่ เมฆ — ใช้ก่อนเสนองาน satellite',
      dict(collection=S, aoi_id=I, date_from=S, date_to=S, cloud_max=N), ['collection', 'aoi_id']),

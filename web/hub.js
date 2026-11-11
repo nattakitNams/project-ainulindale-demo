@@ -336,6 +336,9 @@ async function hubDetail(it) {
           ${nImp ? `<div class="note info small" style="margin-top:0">นำเข้าคลังได้ ${fmt(nImp, 0)} ไฟล์ — กด "นำเข้าคลัง" แล้วเลือกพื้นที่ศึกษา แอปจะดาวน์โหลดเฉพาะส่วนที่ต้องการ (ถ้าเซิร์ฟเวอร์รองรับ) ตัดตามพื้นที่ แล้วเพิ่มเข้าคลังให้</div>` : ''}
           <div class="hub-links">${res.map((r, i) => linkRow(r.name || r.url.split('/').pop() || r.url, r.url, [r.format ? 'รูปแบบ: ' + r.format : '', r.size ? fmt(r.size / 1e6, 1) + ' MB' : '', r.key ? 'ต้องใช้ API key ของคุณเอง — แอปซ่อนคีย์ที่ติดมากับลิงก์ต้นทางไว้ ({YOUR_API_KEY})' : ''].filter(Boolean).join(' · '), true,
             canImport(r) ? `<button class="sm primary" data-imp="${i}">${IC.download}นำเข้าคลัง</button>` : '')).join('')}</div></div>` : ''}
+        ${res.some(r => /\.zip(\?|$)/i.test(r.url || '')) && nImp < 5 ? `<div class="card" id="hbCard"><div class="card-head"><h2>ไฟล์ย่อยจากโฟลเดอร์ต้นทาง</h2><span class="tiny muted">ต้นทางลงไว้เป็น ZIP ก้อนใหญ่ — ถ้าเซิร์ฟเวอร์เปิดรายชื่อโฟลเดอร์ เลือกนำเข้าทีละไฟล์ได้</span></div>
+          <div class="row"><input type="text" id="hbYears" placeholder="ปี เช่น 2015,2020" style="width:150px"><input type="text" id="hbMatch" placeholder="คำในชื่อไฟล์ เช่น _t_60_,_t_65_" style="flex:1"><input type="text" id="hbMust" placeholder="ต้องมี เช่น 1km" style="width:120px"><button class="sm" id="hbGo">ดูไฟล์</button></div>
+          <div id="hbOut" class="small muted" style="margin-top:8px">กด "ดูไฟล์" (ไม่ใส่ปี = ดู ZIP ล่าสุดเป็นตัวอย่าง)</div></div>` : ''}
         ${x.citation ? `<div class="card"><div class="card-head"><h2>การอ้างอิง (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.citation, 'md')}</div></div>` : ''}
         ${x.terms ? `<div class="card"><div class="card-head"><h2>เงื่อนไขการใช้ (จากต้นทาง)</h2></div><div class="hub-desc small">${hubMd(x.terms, 'md')}</div></div>` : ''}
       </div>
@@ -347,6 +350,19 @@ async function hubDetail(it) {
           <div class="tiny muted" style="margin-top:8px">สถานะจากการกด "ตรวจสอบทุกลิงก์" ในหน้า Data hub</div></div>
       </div></div>`;
   $$('[data-imp]').forEach(b => b.onclick = () => hubImport(it, res[+b.dataset.imp]));
+  if ($('#hbGo')) $('#hbGo').onclick = async () => {               // ไฟล์ย่อยในโฟลเดอร์ต้นทาง (แอปเปิดรายชื่อโฟลเดอร์ให้)
+    const out = $('#hbOut'); out.textContent = 'กำลังเปิดโฟลเดอร์ต้นทาง…';
+    try {
+      const q = new URLSearchParams({ key: it.k, years: $('#hbYears').value.trim(), match: $('#hbMatch').value.trim(), must: $('#hbMust').value.trim() });
+      const r = await api(`${ENGINE}/api/hub/browse?${q}`);
+      if (!r.total) { out.innerHTML = `ไม่พบไฟล์${r.browsed ? ` (ดู ${r.browsed.zips_checked} โฟลเดอร์)` : ''} — ลองคำอื่น หรือเว้นช่องคำว่างเพื่อดูชนิดไฟล์ทั้งหมด`; return; }
+      out.innerHTML = `<div class="tiny muted">${fmt(r.total, 0)} ไฟล์${r.total > r.files.length ? ` (แสดง ${r.files.length})` : ''} · ${fmt(r.files.reduce((a, f) => a + (f.size_mb || 0), 0), 0)} MB${r.browsed?.note ? ' · ' + esc(r.browsed.note) : ''}
+          ${!$('#hbMatch').value.trim() && r.patterns.length ? '<br>ชนิดไฟล์: ' + r.patterns.slice(0, 40).map(p => `<code>${esc(p.pattern)}</code>`).join(' ') : ''}</div>
+        <div class="hub-links">${r.files.slice(0, 200).map((f, i) => linkRow(f.name, f.url, [f.year, f.size_mb ? fmt(f.size_mb, 1) + ' MB' : ''].filter(Boolean).join(' · '), true,
+          `<button class="sm primary" data-hb="${i}">${IC.download}นำเข้าคลัง</button>`)).join('')}</div>`;
+      $$('[data-hb]').forEach(b => b.onclick = () => hubImport(it, r.files[+b.dataset.hb]));
+    } catch (e) { out.innerHTML = `<span class="note err">${esc(e.message)}</span>`; }
+  };
   $$('[data-goth]').forEach(a => a.onclick = () => { HUB.th = a.dataset.goth; HUB.shown = 40; });
   $$('[data-goorg]').forEach(a => a.onclick = () => { HUB.org = a.dataset.goorg; HUB.shown = 40; });
   if ($('#hdMap')) {

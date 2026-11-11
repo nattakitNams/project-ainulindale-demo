@@ -343,7 +343,7 @@ def point_vector(ds, lon, lat, z):
     tol = 360 / (256 * 2 ** z) * 4
     bb = _bbox_to_crs((lon - tol, lat - tol, lon + tol, lat + tol), ds['meta'].get('crs'))
     from .dsinfo import read_vector
-    df = read_vector(ds, bbox=tuple(bb), max_features=500)
+    df = read_vector(ds, bbox=tuple(bb), max_features=500, fid_as_index=True)
     if not len(df):
         return []
     if df.crs is not None and df.crs.to_epsg() != 4326:
@@ -352,8 +352,8 @@ def point_vector(ds, lon, lat, z):
     d = df.geometry.distance(p)
     df = df[d <= tol].assign(_d=d[d <= tol]).sort_values('_d').head(10)
     out = []
-    for _, r in df.iterrows():
+    for fid, r in df.iterrows():
         attrs = {k: (None if v is None or (isinstance(v, float) and math.isnan(v)) else str(v))
                  for k, v in r.items() if k not in ('geometry', '_d')}
-        out.append(dict(attrs=attrs, geom_type=r.geometry.geom_type if r.geometry is not None else None))
+        out.append(dict(fid=int(fid), attrs=attrs, geom_type=r.geometry.geom_type if r.geometry is not None else None))
     return out

@@ -173,6 +173,9 @@ def _breaks(v, cfg):
         return []
     if cfg.get('method') == 'quantile':
         return [float(b) for b in engine.quantile_breaks(v[ok], n)] if ok.any() else []
+    if cfg.get('method') == 'jenks':
+        from .ops import jenks_exact
+        return jenks_exact(v[ok], n) if ok.any() else []
     if cfg.get('method') == 'equal':
         lo, hi = (float(v[ok].min()), float(v[ok].max())) if ok.any() else (0, 1)
         return [lo + (hi - lo) * i / n for i in range(1, n)]

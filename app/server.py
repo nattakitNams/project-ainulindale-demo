@@ -353,6 +353,20 @@ def ai_confirm():
         raise ApiError(str(e))
 
 
+@app.route('/api/hub/browse')
+def hub_browse():
+    """ไฟล์ย่อยในโฟลเดอร์ต้นทางของชุดที่ลงไว้เป็น ZIP (เช่น WorldPop รายช่วงอายุ/เพศ) · ?key= &years=2015,2016 &match=_t_60_,_t_65_ &must=1km"""
+    from . import ai_tools
+    a = request.args
+    ys = [int(y) for y in (a.get('years') or '').split(',') if y.strip().isdigit()] or None
+    try:
+        it, _d, _res, dl, _direct, browsed = ai_tools._hub_files(str(a.get('key')), ys, a.get('match') or None, a.get('must') or None)
+    except ai_tools.ToolError as e:
+        raise ApiError(str(e))
+    files = [dict(name=f['name'], year=f.get('year'), url=f['url'], size_mb=f.get('size_mb')) for f in dl if f.get('from_zip')]
+    return jsonify(files=files[:600], total=len(files), browsed=browsed, patterns=ai_tools._patterns([f for f in dl if f.get('from_zip')], 120))
+
+
 @app.route('/api/hub/import', methods=['POST'])
 def hub_import():
     """ปุ่ม "นำเข้าคลัง" ในหน้า Data hub — ไฟล์ต้องอยู่ในรายการนำเข้าได้ของชุดนั้น"""
@@ -656,6 +670,38 @@ def feats(did):
     flds = [f for f in request.args.get('fields', '').split(',') if f]
     gj, trunc, n, hidden = tiles.features(d, bbox, z, int(request.args.get('limit', 4000)), flds)
     return Response(gj, mimetype='application/geo+json', headers={'X-Truncated': str(int(trunc)), 'X-Count': str(n), 'X-Hidden': str(hidden)})
+
+
+@app.route('/api/datasets/<int:did>/table')
+def ds_table(did):
+    """ตาราง attribute หนึ่งหน้า: ค้นหา (q, field) · เรียง (sort, desc) · แบ่งหน้า (offset, limit) · fid = แถวเดียว"""
+    from . import attrtable
+    d = ds_or_404(did)
+    if d['kind'] != 'vector':
+        raise ApiError('ตาราง attribute มีเฉพาะชุดเวกเตอร์')
+    a = request.args
+    return jsonify(attrtable.table(d, a.get('offset', 0), a.get('limit', 50), a.get('q', ''), a.get('field', ''),
+                                   a.get('sort', ''), a.get('desc') in ('1', 'true'), a.get('fid')))
+
+
+@app.route('/api/datasets/<int:did>/field-stats')
+def ds_field_stats(did):
+    from . import attrtable
+    d = ds_or_404(did)
+    try:
+        return jsonify(attrtable.field_stats(d, request.args['field']))
+    except KeyError:
+        raise ApiError('ไม่พบฟิลด์นี้')
+
+
+@app.route('/api/datasets/<int:did>/feature/<int:fid>')
+def ds_feature(did, fid):
+    """รูป + attribute ของ feature เดียว (ไว้ซูม/ไฮไลต์จากตาราง)"""
+    from . import attrtable
+    try:
+        return jsonify(attrtable.feature(ds_or_404(did), fid))
+    except KeyError:
+        raise ApiError('ไม่พบ feature นี้')
 
 
 @app.route('/api/datasets/<int:did>/colors', methods=['POST'])
@@ -1138,29 +1184,29 @@ def classes_preview():
     v = ops.load_sample(d, cfg.get('metric', 'density'))
     if v is None:
         raise ApiError('ยังไม่มีค่าสุ่ม — รองานเตรียมข้อมูลให้เสร็จ')
-    if cfg.get('method') in ('quantile', 'equal'):
+    if cfg.get('method') in ('quantile', 'equal', 'jenks'):
         br = ops.auto_breaks(d, cfg)
     elif cfg.get('method') == 'degurba':
         br = (cfg.get('degurba') or {}).get('dens', [300, 1500])
     else:
         br = [float(x) for x in cfg.get('breaks', [])]
     n = int(cfg.get('n', 3))
-    cls = np.digitize(v, br) if n > 1 else np.zeros(v.size, int)
+    # le=True → ค่า ≤ เกณฑ์อยู่ชั้นล่าง (แบบสัญลักษณ์ / QGIS discrete) · ปกติ ค่า ≥ เกณฑ์ขึ้นชั้น (แบบแกนไบแวเรียต)
+    cls = np.digitize(v, br, right=bool(cfg.get('le'))) if n > 1 else np.zeros(v.size, int)
     px = np.bincount(cls, minlength=n)[:n]
     out = dict(breaks=br, n=int(v.size), pixel_share=(px / max(v.size, 1)).tolist())
+    if v.size:
+        out.update(vmin=float(v.min()), vmax=float(v.max()))   # ตามหน่วยที่แสดง (ความหนาแน่น/ค่า) ไม่ใช่ค่าดิบต่อพิกเซล
     if d['value_type'] == 'count':
         z = np.load(d['stats']['sample_path'])
         cnt = np.bincount(cls, weights=z['v'], minlength=n)[:n]
-        out['value_share'] = (cnt / max(cnt.sum(), 1e-12)).tolist()
-    # ฮิสโทแกรม (log ถ้าเบ้มาก)
-    pos = v[v > 0]
-    if d['value_type'] != 'class' and pos.size and np.quantile(pos, 0.99) / max(np.quantile(pos, 0.5), 1e-12) > 20:
-        edges = np.logspace(np.log10(max(pos.min(), 1e-6)), np.log10(pos.max()), 41)
-        h, e = np.histogram(pos, edges)
-        out['hist'] = dict(log=True, counts=h.tolist(), edges=e.tolist(), zeros=int((v <= 0).sum()))
-    else:
-        h, e = np.histogram(v, 40)
-        out['hist'] = dict(log=False, counts=h.tolist(), edges=e.tolist())
+        if (z['v'] < 0).any():                                # มีค่าลบ (เช่น ประชากรเปลี่ยนแปลง) → % ของผลรวมสุทธิไม่มีความหมาย (ได้ −5%, 105%) → ส่งผลรวมจริงต่อชั้น
+            out['value_sum'] = cnt.tolist()
+        else:
+            out['value_share'] = (cnt / max(cnt.sum(), 1e-12)).tolist()
+    # ฮิสโทแกรม: เชิงเส้น / log (บวกล้วนเบ้มาก) / symlog (มีทั้งค่าลบและบวก เช่น ประชากรเปลี่ยนแปลง)
+    from . import histo
+    out['hist'] = histo.hist(v, 40, d['value_type'])
     if cfg.get('method') == 'degurba':
         out['note'] = 'DEGURBA: สัดส่วนนี้คิดจากเกณฑ์ความหนาแน่นอย่างเดียว ยังไม่รวมเงื่อนไขกลุ่มช่องติดกัน/ประชากรรวม'
     return jsonify(out)

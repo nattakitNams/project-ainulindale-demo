@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.41';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.44';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -455,7 +455,7 @@ async function pageDataset(id) {
           ${d.role !== 'map' ? `<a class="btn" style="margin-top:10px" href="#/biv?hex=${d.id}">${IC.grid}ใช้ทำไบแวเรียตหกเหลี่ยม</a>` : ''}</div>` : (d.role !== 'map' && /Polygon|Line|Point/i.test(m.geometry_type || '') ? hexCard(d, all, aoiOpts) : '')}
         ${/Polygon/.test(m.geometry_type || '') ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav)"></span>ใช้เป็นพื้นที่ศึกษา</h2></div><p class="small muted" style="margin-top:0">เลือกจังหวัด / อำเภอ / ตำบล จากชั้นนี้</p><a class="btn" href="#/aoi?ds=${d.id}">${IC.target}เลือกพื้นที่จากชั้นนี้</a></div>` : ''}`}
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--muted);color:var(--muted)"></span>รายละเอียด</h2></div>${kv(info)}
-      ${isR && st.valid != null && d.role !== 'map' ? '<h3>ฮิสโทแกรม (ค่าสุ่ม)</h3><canvas class="hist" id="hist"></canvas><div class="tiny muted" id="histNote"></div>' : ''}</div>
+</div>
       <div class="card" id="profCard"><div class="card-head"><h2><span class="dot" style="background:var(--butter);color:var(--butter)"></span>ประวัติชุดข้อมูล</h2>
         <div class="row">${d.lineage ? `<button class="sm" id="rerun">${IC.refresh}รันซ้ำ</button><button class="sm" onclick='openFolder(${attr(d.out_dir)})'>${IC.folder}โฟลเดอร์ผล</button>` : ''}
           <a class="btn sm ghost" href="${ENGINE}/api/datasets/${d.id}/profile.md">${IC.download}.md</a></div></div>
@@ -471,7 +471,8 @@ async function pageDataset(id) {
       </div>
       <div id="map" class="mapbox"></div>
       <div id="pt" class="pt small muted">คลิกบนแผนที่เพื่อดูค่า</div>
-    </div></div>`;
+    </div></div>
+    <div class="card" id="dataBottom"></div>`;
 
   $('#ren').onclick = async () => { const n = await ui.prompt('แก้ชื่อชุดข้อมูล', d.name); if (n) { await api(ENGINE + '/api/datasets/' + id, { method: 'PATCH', json: { name: n } }); route(); } };
   $('#toViewer').onclick = () => { viewerAdd([vLayerFromDs(d)]); location.hash = '#/viewer'; };
@@ -511,7 +512,6 @@ async function pageDataset(id) {
     $('#rsRun').onclick = () => runJob('resample', { dataset_id: id, target_res: $('#rsRes').value, tie: $('#rsTie')?.value || 'high', aoi_id: +$('#rsAoi').value || null, aoi_rule: $('#rsRule').value });
     $('#vgRun').onclick = () => runJob('vgrid', { dataset_ids: [id, ...$$('#vgMore input:checked').map(o => +o.value)], target_res: $('#vgRes').value, aoi_id: +$('#vgAoi').value || null });
     if ($('#hxRun')) hexCardBind(d);
-    if (st.valid != null && d.role !== 'map') drawHist(id);
     if (d.role === 'map') { mapPalette(d); if (isR) bivStatsCard(d); }
   } else {
     const loadRz = async () => {
@@ -591,6 +591,7 @@ async function pageDataset(id) {
   initMap(d);
   if ($('#symPanel')) symPanel(d);
   profileCard(d);
+  dataBottom(d);
 }
 
 // ประวัติชุดข้อมูล: โน้ต (ผู้ใช้ / ผู้ช่วย AI) · ไฟล์อะไร · มาจากไหน · สร้างโดยงานอะไร (ชุดต้นทาง + ค่าที่ตั้ง) · ชุดที่ทำต่อ
@@ -656,6 +657,17 @@ async function profileCard(d) {
 }
 
 // ================= สัญลักษณ์ (Symbology แบบ QGIS) =================
+// วิธีแบ่งชั้น (ปุ่ม Classify) — 3 ตัวแรกเหมือน QGIS raster · ที่เหลือ QGIS มีเฉพาะชั้นเวกเตอร์ หรือไม่มี
+const CLASS_MODES = [
+  ['continuous', 'Continuous', 'ช่วงเท่ากันระหว่าง Min–Max (แบบ QGIS)'],
+  ['equal', 'Equal Interval', 'ช่วงเท่ากันระหว่าง Min–Max'],
+  ['quantile', 'Quantile', 'จำนวนพิกเซลเท่ากันทุกชั้น'],
+  ['pretty', 'Pretty breaks (เลขกลม)', 'ช่วงเท่ากันแบบเลขกลม 1, 2, 2.5, 5 × 10ⁿ — ป้ายอ่านง่าย'],
+  ['log', 'Logarithmic (เลขกลม)', 'ช่วงลอการิทึม 1-3-10 / 1-2-5 — ข้อมูลบวกที่เบ้ขวามาก เช่น ประชากร'],
+  ['jenks', 'Natural breaks (Jenks)', 'แบ่งตามกลุ่มที่ข้อมูลจับตัวกัน (ความแปรปรวนในชั้นน้อยสุด)'],
+  ['headtail', 'Head/tail breaks', 'ข้อมูลหางยาว: ตัดที่ค่าเฉลี่ยของส่วนหัวซ้ำ ๆ จำนวนชั้นตามข้อมูล'],
+  ['stddev', 'Standard deviation', 'ค่าเฉลี่ย ± 0.5, 1.5, 2.5 SD — หาค่าสูง/ต่ำผิดปกติ'],
+];
 const RTYPE = { paletted: 'Paletted / Unique values (ค่าเฉพาะ)', pseudocolor: 'Singleband pseudocolor (ไล่สี)', gray: 'Singleband gray (ขาวดำ)' };
 const rampCss = (name, inv) => { const s = STATE.ramps[name] || []; const c = inv ? [...s].reverse() : s; return STATE.categorical.includes(name) ? `linear-gradient(90deg,${c.map((x, i) => `${x} ${i / c.length * 100}% ${(i + 1) / c.length * 100}%`).join(',')})` : `linear-gradient(90deg,${c.join(',')})`; };
 const vstr = v => v === 'inf' || v === Infinity ? '∞' : v;
@@ -689,6 +701,7 @@ async function symPanel(d, o = {}) {
     } catch { }
   }
   const preview = () => {
+    if (!o.viewer) document.dispatchEvent(new CustomEvent('symchange', { detail: sty }));
     clearTimeout(pvTimer);
     pvTimer = setTimeout(async () => {
       if (o.viewer) { if (!override) { override = true; draw(); } o.onStyle(sty); return; }
@@ -707,6 +720,7 @@ async function symPanel(d, o = {}) {
       <div class="row">${saved ? '<span class="chip ok">บันทึกแล้ว</span>' : '<span class="chip">ค่าเริ่มต้น</span>'}<a class="btn sm ghost" href="${ENGINE}/api/datasets/${d.id}/style.qml" title="ไฟล์สไตล์สำหรับ QGIS">${IC.download}.qml</a></div></div>`) + `
       <div class="grid-form">
         <label class="field full"><span>Render type</span><select id="sType">${Object.entries(RTYPE).map(([k, t]) => `<option value="${k}" ${k === T ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+        ${sty.note ? `<div class="tiny muted full">${esc(sty.note)}</div>` : ''}
         ${isCount && T !== 'paletted' ? `<label class="field full"><span>ค่าที่แสดง</span><select id="sMetric"><option value="density" ${sty.metric === 'density' ? 'selected' : ''}>ความหนาแน่น (ต่อ ตร.กม.) — เทียบได้ทุกความละเอียด</option><option value="value" ${sty.metric !== 'density' ? 'selected' : ''}>ค่าต่อพิกเซล (ค่าดิบ)</option></select></label>` : ''}
         ${T === 'gray' ? `<div class="field full"><span>Color ramp <span class="tiny muted">— เลือกพาเลท = เปลี่ยนเป็นไล่สี (pseudocolor) ใช้ Min/Max เดิม</span></span><div class="ramp-pick"><button type="button" id="rampBtn" class="ramp-btn"><i style="background:linear-gradient(90deg,#000,#fff)"></i><span>ขาวดำ</span>▾</button>
           <div class="ramp-list hide" id="rampList">${Object.keys(STATE.ramps).filter(k => !STATE.categorical.includes(k)).map(k => `<div data-r="${esc(k)}"><i style="background:${rampCss(k)}"></i>${esc(k)}</div>`).join('')}</div></div></div>` : ''}
@@ -718,8 +732,10 @@ async function symPanel(d, o = {}) {
           <label class="field"><span>Min</span><input type="number" step="any" id="sMin" value="${sty.min ?? ''}"></label>
           <label class="field"><span>Max</span><input type="number" step="any" id="sMax" value="${sty.max ?? ''}"></label>
           <label class="field"><span>Interpolation</span><select id="sInterp">${[['discrete', 'Discrete (เป็นช่วง)'], ['linear', 'Linear (ไล่สี)'], ['exact', 'Exact (ค่าตรง)']].map(([k, t]) => `<option value="${k}" ${sty.interp === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
-          <label class="field"><span>Mode</span><select id="sMode">${[['continuous', 'Continuous'], ['equal', 'Equal Interval'], ['quantile', 'Quantile']].map(([k, t]) => `<option value="${k}" ${sty.mode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
+          <label class="field"><span>Mode</span><select id="sMode">${CLASS_MODES.map(([k, t, tip]) => `<option value="${k}" title="${esc(tip)}" ${sty.mode === k ? 'selected' : ''}>${t}</option>`).join('')}</select></label>
           <label class="field"><span>Classes</span><input type="number" min="2" max="64" id="sN" value="${sty.classes || 5}"></label>
+          <div class="field" title="ข้อมูลเพิ่ม/ลด (เช่น ประชากรเปลี่ยนแปลง ผลต่างสองปี แนวโน้ม): สองฝั่งของจุดกลางแบ่งชั้นแยกกัน สีจากคนละครึ่งของ ramp — ค่าลบไม่หายเพราะข้อมูลเบ้ขวา"><span>จุดกลาง (สองขั้ว)</span>
+            <div class="row"><input type="checkbox" id="sCtrOn" ${sty.center != null ? 'checked' : ''}><input type="number" step="any" id="sCtr" value="${sty.center ?? 0}" style="width:90px" ${sty.center != null ? '' : 'disabled'}></div></div>
           <div class="field"><span>&nbsp;</span><button id="sMinMax" class="sm ghost" title="ตัด 2%–98% ของค่าสุ่ม">ใช้ช่วง 2–98%</button></div>` : ''}
         ${T === 'gray' ? `<label class="field"><span>Min</span><input type="number" step="any" id="sMin" value="${sty.min ?? 0}"></label>
           <label class="field"><span>Max</span><input type="number" step="any" id="sMax" value="${sty.max ?? 1}"></label>
@@ -774,6 +790,14 @@ async function symPanel(d, o = {}) {
     $('#sInterp') && ($('#sInterp').onchange = () => { sty.interp = $('#sInterp').value; reclass(); });
     $('#sMode') && ($('#sMode').onchange = () => { sty.mode = $('#sMode').value; });
     $('#sN') && ($('#sN').onchange = () => { sty.classes = +$('#sN').value; });
+    const DIV_RAMPS = ['RdBu', 'RdYlBu', 'RdYlGn', 'Spectral'];
+    $('#sCtrOn') && ($('#sCtrOn').onchange = () => {
+      const on = $('#sCtrOn').checked; $('#sCtr').disabled = !on;
+      sty.center = on ? (num('#sCtr') ?? 0) : null;
+      if (on && !DIV_RAMPS.includes(sty.ramp)) sty.ramp = 'RdBu';       // สองขั้วต้องใช้ ramp สองขั้ว
+      sty.min = sty.max = null; reclass();
+    });
+    $('#sCtr') && ($('#sCtr').onchange = () => { if ($('#sCtrOn').checked) { sty.center = num('#sCtr') ?? 0; sty.min = sty.max = null; reclass(); } });
     $('#sMinMax') && ($('#sMinMax').onclick = () => { sty.min = sty.max = null; reclass(); });
     $('#sClassify') && ($('#sClassify').onclick = () => reclass());
     $('#sAdd') && ($('#sAdd').onclick = () => { const it = items(); const last = it.at(-1); it.push({ value: last ? (last.value === 'inf' ? 0 : +last.value + 1) : 0, color: '#c3b6ff', label: '', visible: true }); draw(); preview(); });
@@ -804,7 +828,7 @@ async function symPanel(d, o = {}) {
     try {
       const req = { type: sty.type, ramp: sty.ramp || (sty.type === 'paletted' ? 'Set3 (หมวดหมู่)' : 'viridis'), invert: !!sty.invert, mode: sty.mode || 'continuous',
         interp: sty.interp || 'linear', classes: sty.classes || 5, min: sty.min ?? null, max: sty.max ?? null, metric: isCount ? (sty.metric || 'density') : 'value',
-        hide_values: sty.hide_values || [], range: sty.range || null, opacity: sty.opacity ?? .85 };
+        hide_values: sty.hide_values || [], range: sty.range || null, opacity: sty.opacity ?? .85, center: sty.type === 'pseudocolor' ? (sty.center ?? null) : null };
       const r = await api(`${ENGINE}/api/datasets/${d.id}/classify`, { json: req });
       sty = r.style; draw(); preview();
       return true;
@@ -812,6 +836,7 @@ async function symPanel(d, o = {}) {
   };
   // เปลี่ยน ramp → ระบายสีรายการเดิมใหม่ (ไม่เปลี่ยนค่า)
   const recolor = () => {
+    if (sty.type === 'pseudocolor' && sty.center != null) return reclass();   // สองขั้ว: สีต้องแยกที่จุดกลาง ไม่ใช่เรียงเท่ากัน
     const it = items(), n = it.length, s = STATE.ramps[sty.ramp] || [];
     const st = sty.invert ? [...s].reverse() : s;
     const cat = STATE.categorical.includes(sty.ramp);
@@ -884,20 +909,152 @@ async function runJob(kind, params, then) {
   } catch (er) { toast(er.message, true); }
 }
 
-async function drawHist(id) {
-  try {
-    const r = await api(ENGINE + '/api/classes-preview', { json: { dataset_id: id, cfg: { n: 1, method: 'breaks', breaks: [], metric: 'value' } } });
-    histCanvas($('#hist'), r.hist);
-    $('#histNote').textContent = `${fmt(r.n, 0)} ค่าสุ่ม · ${r.hist.log ? 'แกน X แบบ log (ข้อมูลเบ้มาก)' + (r.hist.zeros ? ` · ค่า ≤0 ${fmt(r.hist.zeros, 0)} ค่าไม่แสดง` : '') : 'แกน X เชิงเส้น'}`;
-  } catch { }
+// ================= ล่างหน้าชุดข้อมูล: กราฟการกระจาย (raster) · ตาราง attribute + กราฟฟิลด์ (vector/หกเหลี่ยม) =================
+async function dataBottom(d) {
+  const el = $('#dataBottom'); if (!el) return;
+  _hl = null; window._atGoto = null;
+  if (d.kind === 'raster' && d.role !== 'map') return rasterDist(d, el);
+  if (d.kind === 'vector') return attrTable(d, el);
+  el.remove();                                       // แผนที่ไบแวเรียตแบบ raster มีการ์ดสถิติความสัมพันธ์แล้ว
 }
 
-function histCanvas(cv, h, breaks = [], colors = []) {
-  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = 96 * devicePixelRatio;
+// ---- ไฮไลต์ feature บนแผนที่ (จากตาราง หรือคลิกบนแผนที่) ----
+let _hl = null;
+async function hlFeature(d, fid, zoom = true) {
+  const mp = window._mapObj; if (!mp) return null;
+  let f;
+  try { f = await api(`${ENGINE}/api/datasets/${d.id}/feature/${fid}`); } catch (e) { toast(e.message, true); return null; }
+  if (_hl) mp.removeLayer(_hl);
+  _hl = f.geojson ? L.geoJSON(f.geojson, { interactive: false, style: { color: '#ffe66d', weight: 3, fillColor: '#ffe66d', fillOpacity: .22 },
+    pointToLayer: (g, ll) => L.circleMarker(ll, { radius: 9, color: '#ffe66d', weight: 3, fillOpacity: .3 }) }).addTo(mp) : null;
+  if (zoom && f.bbox) { const b = f.bbox; mp.fitBounds([[b[1], b[0]], [b[3], b[2]]], { maxZoom: 17, padding: [40, 40] }); }
+  $$('#atBody tr').forEach(tr => tr.classList.toggle('on', +tr.dataset.fid === +fid));
+  return f;
+}
+
+// ---- raster: ฮิสโทแกรมสีตามสัญลักษณ์ + สัดส่วนต่อชั้น ----
+async function rasterDist(d, el) {
+  const st = d.stats || {};
+  const head = `<div class="card-head"><h2><span class="dot" style="background:var(--peach);color:var(--peach)"></span>การกระจายของค่า</h2><span class="tiny muted">สีและชั้นตามสัญลักษณ์ที่กำลังแสดง</span></div>`;
+  if (st.valid == null) { el.innerHTML = head + '<div class="small muted">กำลังเตรียมข้อมูล (ดูแท็บงาน) — เสร็จแล้วกราฟจะขึ้นที่นี่</div>'; return; }
+  let gen = 0;
+  const draw = async sty => {
+    const my = ++gen;
+    sty = sty || (await api(`${ENGINE}/api/datasets/${d.id}/style`)).style || {};
+    const metric = d.value_type === 'count' ? (sty.metric || 'value') : 'value';
+    // ค่าเฉพาะ: นับจริงจากฮิสโทแกรมจำนวนเต็มของงานเตรียมข้อมูล (ครบทุกพิกเซล ไม่ใช่ค่าสุ่ม)
+    if (sty.type === 'paletted' && (st.hist_int || []).length) {
+      const cnt = Object.fromEntries(st.hist_int), ents = sty.entries || [];
+      const tot = ents.reduce((a, e) => a + (cnt[e.value] || 0), 0) || 1, mx = Math.max(...ents.map(e => cnt[e.value] || 0), 1);
+      if (my !== gen || !document.body.contains(el)) return;
+      el.innerHTML = head + `<div class="dist-bars">${ents.map(e => {
+        const c = cnt[e.value] || 0, off = e.visible === false || (sty.hide_values || []).includes(+e.value);
+        return `<div class="db-row ${off ? 'off' : ''}"><span class="db-lbl"><i style="background:${e.color}"></i>${esc(e.label ?? e.value)}</span>
+          <span class="db-bar"><b style="width:${(c / mx * 100).toFixed(1)}%;background:${e.color}"></b></span><span class="db-v mono">${fmt(c, 0)} <span class="muted">${fmt(c / tot * 100, 1)}%</span></span></div>`;
+      }).join('')}</div>
+        <div class="tiny muted">นับทุกพิกเซล (ฮิสโทแกรมจำนวนเต็มของงานเตรียมข้อมูล) · แถวจาง = ซ่อนอยู่บนแผนที่</div>`;
+      return;
+    }
+    const stops = (sty.stops || []).map(s => ({ ...s, v: s.value === 'inf' ? Infinity : +s.value }));
+    const disc = sty.type === 'pseudocolor' && sty.interp === 'discrete' && stops.length > 1;
+    const breaks = disc ? stops.filter(s => isFinite(s.v)).map(s => s.v) : [];
+    let r;
+    try { r = await api(ENGINE + '/api/classes-preview', { json: { dataset_id: d.id, cfg: { n: disc ? stops.length : 1, method: 'breaks', breaks, metric, le: true } } }); }
+    catch (e) { if (my === gen) el.innerHTML = head + `<div class="note err">${esc(e.message)}</div>`; return; }
+    if (my !== gen || !document.body.contains(el)) return;
+    const lin = sty.type === 'pseudocolor' && !disc && stops.length > 1;
+    el.innerHTML = head + `<canvas class="hist big" id="distCv"></canvas>
+      <div class="tiny muted" style="margin:4px 0 10px">${fmt(r.n, 0)} ค่าสุ่ม · ${histNote(r.hist)}
+        · min ${fmt(r.vmin ?? st.min, 4)} · max ${fmt(r.vmax ?? st.max, 4)} (ของค่าสุ่ม)${metric === 'density' ? ' · หน่วย: ต่อ ตร.กม.' : ''}</div>
+      ${disc ? `<table class="kv dist-tbl"><tr><td></td><td>ชั้น</td><td>% พิกเซล</td>${r.value_share ? '<td>% ของผลรวมค่า</td>' : r.value_sum ? '<td title="ข้อมูลมีค่าลบ — แสดงผลรวมจริงของค่าสุ่มในชั้น (เพิ่ม/ลด) แทน %">ผลรวมค่า (ค่าสุ่ม)</td>' : ''}</tr>
+        ${stops.map((s, i) => `<tr class="${s.visible === false ? 'off' : ''}"><td><i class="sw" style="background:${s.color}"></i></td><td>${esc(s.label ?? '')}</td>
+          <td class="mono">${fmt((r.pixel_share[i] || 0) * 100, 1)}%</td>${r.value_share ? `<td class="mono">${fmt((r.value_share[i] || 0) * 100, 1)}%</td>` : r.value_sum ? `<td class="mono">${fmt(r.value_sum[i] || 0, 1)}</td>` : ''}</tr>`).join('')}</table>` : ''}`;
+    const cv = $('#distCv');
+    if (disc) histCanvas(cv, r.hist, breaks, stops.map(s => s.color), 150);
+    else if (lin) histCanvas(cv, r.hist, stops.slice(1).map(s => s.v), stops.map(s => s.color), 150);   // ไล่สี: แท่งได้สีของจุดสีที่ใกล้
+    else histCanvas(cv, r.hist, [], [sty.type === 'gray' ? '#9aa0b8' : '#c3b6ff'], 150);
+  };
+  if (window._symHandler) document.removeEventListener('symchange', window._symHandler);
+  let t = null;
+  window._symHandler = e => { clearTimeout(t); t = setTimeout(() => document.body.contains(el) && draw(e.detail), 400); };
+  document.addEventListener('symchange', window._symHandler);
+  draw();
+}
+
+// ---- vector / หกเหลี่ยม: ตาราง attribute (ค้นหา · เรียง · แบ่งหน้า · คลิก = ซูม) + กราฟของฟิลด์ ----
+async function attrTable(d, el) {
+  const S = { offset: 0, limit: 50, q: '', field: '', sort: '', desc: false, fid: null };
+  const flds = d.meta.fields || [];
+  const isNum = f => /int|float|double|real/i.test(f.type);
+  el.innerHTML = `<div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>ตารางข้อมูล (attribute)</h2><span class="tiny muted">${fmt(d.meta.features, 0)} feature · ${flds.length} ฟิลด์</span></div>
+    <div class="row at-bar"><input type="search" id="atQ" placeholder="ค้นหาในตาราง… (เช่น ชื่อจังหวัด รหัส)"><select id="atField" class="sm"><option value="">ทุกฟิลด์</option>${flds.map(f => `<option value="${esc(f.name)}">${esc(f.name)}</option>`).join('')}</select>
+      <span class="spacer"></span><span class="tiny muted" id="atInfo"></span><button class="sm ghost" id="atPrev" title="หน้าก่อน">‹</button><button class="sm ghost" id="atNext" title="หน้าถัดไป">›</button></div>
+    <div class="at-wrap"><table class="at"><thead id="atHead"></thead><tbody id="atBody"><tr><td class="muted small">กำลังโหลด…</td></tr></tbody></table></div>
+    <div class="tiny muted" style="margin-top:6px">คลิกหัวคอลัมน์ = เรียง · คลิกแถว = ซูมไปรูปนั้นบนแผนที่ (ไฮไลต์สีเหลือง) · คลิกรูปบนแผนที่ → "แสดงในตาราง"</div>
+    <h3 style="margin-top:16px">กราฟของฟิลด์</h3>
+    <div class="row"><select id="atStatF">${flds.map(f => `<option value="${esc(f.name)}">${esc(f.name)} · ${isNum(f) ? 'ตัวเลข' : 'ข้อความ'}</option>`).join('')}</select></div>
+    <div id="atStat" class="small muted" style="margin-top:8px"></div>`;
+  let gen = 0;
+  const load = async () => {
+    const my = ++gen;
+    const p = new URLSearchParams({ offset: S.offset, limit: S.limit, q: S.q, field: S.field, sort: S.sort, desc: S.desc ? 1 : 0 });
+    if (S.fid != null) p.set('fid', S.fid);
+    if (S.q || S.sort) $('#atInfo').textContent = 'กำลังค้นหา… (ชั้นใหญ่ครั้งแรกอาจใช้หลายวินาที ครั้งต่อไปเร็ว)';
+    let r;
+    try { r = await api(`${ENGINE}/api/datasets/${d.id}/table?${p}`); } catch (e) { $('#atBody').innerHTML = `<tr><td class="note err">${esc(e.message)}</td></tr>`; return; }
+    if (my !== gen || !document.body.contains(el)) return;
+    const cell = v => v == null ? '<span class="muted">–</span>' : esc(typeof v === 'number' ? fmt(v, Number.isInteger(v) ? 0 : 4) : v);
+    $('#atHead').innerHTML = `<tr><th title="FID ของ feature">FID</th>${r.fields.map(f => `<th data-s="${esc(f.name)}" class="${r.searchable ? 'sortable' : ''}">${esc(f.name)}${S.sort === f.name ? (S.desc ? ' ▾' : ' ▴') : ''}</th>`).join('')}</tr>`;
+    $('#atBody').innerHTML = r.rows.map(row => `<tr data-fid="${row[0]}"><td class="mono muted">${row[0]}</td>${row.slice(1).map(v => `<td translate="no">${cell(v)}</td>`).join('')}</tr>`).join('')
+      || `<tr><td colspan="${r.fields.length + 1}" class="muted small">ไม่พบแถวที่ตรง${S.q ? ` "${esc(S.q)}"` : ''}</td></tr>`;
+    const a = r.matched ? S.offset + 1 : 0, b = Math.min(S.offset + S.limit, r.matched);
+    $('#atInfo').textContent = (S.fid != null ? `FID ${S.fid} — ล้างช่องค้นหาเพื่อดูทั้งหมด` : `${fmt(a, 0)}–${fmt(b, 0)} จาก ${fmt(r.matched, 0)}${r.matched !== r.total ? ` (ทั้งหมด ${fmt(r.total, 0)})` : ''}`)
+      + (r.warming ? ' · กำลังโหลดทั้งชั้นไว้ค้นหา/เรียง (ค้นหาครั้งแรกอาจรอสักครู่)' : '');
+    $('#atPrev').disabled = S.offset <= 0; $('#atNext').disabled = S.offset + S.limit >= r.matched;
+    if (!r.searchable) { $('#atQ').disabled = $('#atField').disabled = true; $('#atQ').placeholder = r.note || 'ค้นหาไม่ได้'; }
+    $$('#atHead th.sortable').forEach(th => th.onclick = () => { S.desc = S.sort === th.dataset.s ? !S.desc : false; S.sort = th.dataset.s; S.offset = 0; load(); });
+    $$('#atBody tr[data-fid]').forEach(tr => tr.onclick = () => hlFeature(d, +tr.dataset.fid, true));
+  };
+  let qt = null;
+  $('#atQ').oninput = () => { clearTimeout(qt); qt = setTimeout(() => { S.q = $('#atQ').value.trim(); S.fid = null; S.offset = 0; load(); }, 300); };
+  $('#atField').onchange = () => { S.field = $('#atField').value; S.offset = 0; if (S.q) load(); };
+  $('#atPrev').onclick = () => { S.offset = Math.max(0, S.offset - S.limit); load(); };
+  $('#atNext').onclick = () => { S.offset += S.limit; load(); };
+  window._atGoto = fid => { S.fid = fid; S.q = ''; $('#atQ').value = ''; S.offset = 0; load().then(() => { hlFeature(d, fid, false); el.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); };
+  // กราฟของฟิลด์: ตัวเลข → ฮิสโทแกรม (+ นับรายค่าถ้าไม่กี่ค่า) · ข้อความ → ค่าที่พบบ่อย (คลิก = กรองตาราง)
+  const stat = async () => {
+    const f = $('#atStatF').value; if (!f) { $('#atStat').textContent = 'ชั้นนี้ไม่มีฟิลด์'; return; }
+    $('#atStat').textContent = 'กำลังคำนวณ…';
+    let r;
+    try { r = await api(`${ENGINE}/api/datasets/${d.id}/field-stats?field=${encodeURIComponent(f)}`); } catch (e) { $('#atStat').innerHTML = `<div class="note err">${esc(e.message)}</div>`; return; }
+    if (!document.body.contains(el) || $('#atStatF').value !== f) return;
+    const top = (r.top || []).slice(0, 15), mx = Math.max(...top.map(x => x.count), 1);
+    const bars = top.length ? `<div class="dist-bars">${top.map(x => `<div class="db-row click" data-v="${esc(String(x.value))}" title="กรองตารางด้วยค่านี้"><span class="db-lbl" translate="no">${esc(String(x.value))}</span>
+      <span class="db-bar"><b style="width:${(x.count / mx * 100).toFixed(1)}%"></b></span><span class="db-v mono">${fmt(x.count, 0)} <span class="muted">${fmt(x.count / r.n * 100, 1)}%</span></span></div>`).join('')}</div>` : '';
+    $('#atStat').className = 'small';
+    $('#atStat').innerHTML = (r.kind === 'number'
+      ? `<div class="muted">${fmt(r.n, 0)} ค่า · ว่าง ${fmt(r.nulls, 0)} · ต่างกัน ${fmt(r.distinct, 0)} ค่า${r.min != null ? ` · min ${fmt(r.min, 4)} · มัธยฐาน ${fmt(r.median, 4)} · เฉลี่ย ${fmt(r.mean, 4)} · max ${fmt(r.max, 4)} · ผลรวม ${fmt(r.sum, 2)}` : ''}</div>
+         ${r.hist ? `<canvas class="hist big" id="atHist"></canvas><div class="tiny muted">${histNote(r.hist)}</div>` : ''}${r.top ? '<h3 style="margin-top:10px">นับรายค่า</h3>' + bars : ''}`
+      : `<div class="muted">${fmt(r.n, 0)} ค่า · ว่าง ${fmt(r.nulls, 0)} · ต่างกัน ${fmt(r.distinct, 0)} ค่า${r.distinct > 15 ? ' (แสดง 15 อันดับแรก)' : ''}</div>${bars}`)
+      + (r.note ? `<div class="tiny muted">${esc(r.note)}</div>` : '') + (top.length ? '<div class="tiny muted">คลิกแถบ = กรองตารางด้วยค่านั้น</div>' : '');
+    if (r.hist) histCanvas($('#atHist'), r.hist, [], [], 130);
+    $$('#atStat .db-row.click').forEach(b => b.onclick = () => { S.q = b.dataset.v; S.field = f; S.fid = null; S.offset = 0; $('#atQ').value = S.q; $('#atField').value = f; load(); });
+  };
+  $('#atStatF').onchange = stat;
+  const pref = flds.find(f => f.name === 'code') || flds.find(isNum) || flds[0];       // แผนที่ไบแวเรียต → ฟิลด์รหัสก่อน
+  if (pref) $('#atStatF').value = pref.name;
+  load(); stat();
+}
+
+function histCanvas(cv, h, breaks = [], colors = [], height = 96) {
+  const W = cv.width = cv.clientWidth * devicePixelRatio, H = cv.height = height * devicePixelRatio;
   const c = cv.getContext('2d'); c.clearRect(0, 0, W, H);
   const mx = Math.max(...h.counts, 1), n = h.counts.length;
   const e0 = h.edges[0], e1 = h.edges[n];
-  const X = v => h.log ? (Math.log10(v) - Math.log10(e0)) / (Math.log10(e1) - Math.log10(e0)) * W : (v - e0) / (e1 - e0) * W;
+  // แกน: log (บวกล้วนเบ้มาก) · symlog (มีทั้งลบและบวก — log สองฝั่ง ใกล้ 0 เชิงเส้น) · เชิงเส้น
+  const T = v => h.scale === 'symlog' ? Math.sign(v) * Math.log10(1 + Math.abs(v) / h.c) : h.log ? Math.log10(Math.max(v, 1e-12)) : v;
+  const t0 = T(e0), t1 = T(e1);
+  const X = v => Math.min(W, Math.max(0, (T(v) - t0) / (t1 - t0) * W));
   const cls = v => breaks.filter(b => v >= b).length;
   h.counts.forEach((k, i) => {
     const x0 = X(h.edges[i]), x1 = X(h.edges[i + 1]); const hh = k / mx * (H - 16);
@@ -908,6 +1065,17 @@ function histCanvas(cv, h, breaks = [], colors = []) {
   breaks.forEach(b => { if (b > e0 && b < e1) c.fillRect(X(b), 0, 2 * devicePixelRatio, H - 14); });
   c.fillStyle = '#8a90b0'; c.font = `${10.5 * devicePixelRatio}px Anuphan, sans-serif`;
   c.fillText(fmt(e0, 3), 2, H - 1); const t = fmt(e1, 3); c.fillText(t, W - c.measureText(t).width - 2, H - 1);
+  if (e0 < 0 && e1 > 0) {                                   // เส้น 0 (ข้อมูลเพิ่ม/ลด)
+    const x = X(0); c.fillStyle = '#8a90b0'; c.globalAlpha = .7; c.fillRect(x, 0, 1 * devicePixelRatio, H - 14); c.globalAlpha = 1;
+    const z = '0', w = c.measureText(z).width; if (x - w / 2 > 40 && x + w / 2 < W - 40) c.fillText(z, x - w / 2, H - 1);
+  }
+}
+// คำอธิบายแกนของฮิสโทแกรม (ใช้ร่วม: การกระจายของค่า · กราฟของฟิลด์)
+function histNote(h) {
+  if (!h) return '';
+  if (h.scale === 'symlog') return `แกน X แบบ symlog (มีทั้งค่าลบ ${fmt(h.neg, 0)} และบวก ${fmt(h.pos, 0)} — log ทั้งสองฝั่ง ใกล้ 0 เชิงเส้น ±${fmt(h.c, 3)})`;
+  if (h.log) return 'แกน X แบบ log (ข้อมูลเบ้มาก)' + (h.zeros ? ` · ค่า ≤ 0 อีก ${fmt(h.zeros, 0)} ค่าไม่อยู่ในกราฟ` : '');
+  return 'แกน X เชิงเส้น' + (h.under || h.over ? ` · ตัดหาง 0.5% (ต่ำกว่า ${fmt(h.under, 0)} · สูงกว่า ${fmt(h.over, 0)} ค่า ไม่อยู่ในกราฟ)` : '');
 }
 
 // ---------- แผนที่ ----------
@@ -993,6 +1161,10 @@ function initMap(d) {
     try {
       const r = await api(`${ENGINE}/api/datasets/${d.id}/point?lon=${lng}&lat=${lat}&z=${mp.getZoom()}`);
       $('#pt').innerHTML = pointHtml(r);
+      if (r.kind === 'vector' && r.features[0]?.fid != null) {
+        hlFeature(d, r.features[0].fid, false);
+        $$('#pt [data-goto-fid]').forEach(b => b.onclick = () => window._atGoto?.(+b.dataset.gotoFid));
+      }
       if (pxRect) mp.removeLayer(pxRect);
       if (r.kind === 'raster' && !r.outside && m.geographic) {
         const t = m.transform, x0 = t[2] + r.col * t[0], y0 = t[5] + r.row * t[4];
@@ -1007,7 +1179,7 @@ function pointHtml(r) {
   const box = (h) => `<div class="pt-card"><div class="mono muted" style="margin-bottom:4px">${ll}</div>${h}</div>`;
   if (r.kind === 'vector') {
     if (!r.features.length) return box('<span class="muted">ไม่พบ feature ใกล้จุดนี้</span>');
-    return box(`${r.features.length} feature` + r.features.map(f => `<table class="kv">${Object.entries(f.attrs).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`).join('<hr style="border-color:var(--line)">'));
+    return box(`${r.features.length} feature` + r.features.map(f => `${f.fid != null && window._atGoto ? `<div class="row" style="justify-content:space-between;margin-top:4px"><span class="tiny muted">FID ${f.fid}</span><button class="sm ghost" data-goto-fid="${f.fid}">${IC.table || ''}แสดงในตาราง ↓</button></div>` : ''}<table class="kv">${Object.entries(f.attrs).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`).join('<hr style="border-color:var(--line)">'));
   }
   if (r.outside) return box('<span class="muted">อยู่นอกขอบเขตข้อมูล</span>');
   const rows = r.bands.map(b => [`แบนด์ ${b.band}${b.desc ? ' ' + esc(b.desc) : ''}`, b.nodata ? `nodata (${esc(b.value)})${r.nodata_as != null ? ` → นับเป็น ${r.nodata_as}` : ''}` : `<b style="color:var(--text);font-size:15px">${fmt(b.value, 6)}</b>${b.raw != null ? ` <span class="tiny muted">(ค่าดิบ ${fmt(b.raw, 6)} × scale ${b.scale}${b.offset ? ` + ${b.offset}` : ''})</span>` : ''}`]);
@@ -1305,7 +1477,7 @@ async function pageBiv() {
           <label class="field full hexF hide"><span>คอลัมน์ค่าในชุดหกเหลี่ยม</span><select data-k="field"></select></label>
           <label class="field"><span>ชื่อแกน</span><input type="text" data-k="label" value="${esc(BIV[ax].label)}" placeholder="เช่น ประชากร"></label>
           <label class="field"><span>จำนวนคลาส</span><select data-k="n">${[1, 2, 3, 4, 5].map(n => `<option ${n == BIV[ax].n ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
-          <label class="field"><span>วิธีแบ่ง</span><select data-k="method"><option value="breaks">กำหนดเกณฑ์เอง</option><option value="quantile">ควอนไทล์</option><option value="equal">ช่วงเท่ากัน</option><option value="degurba">DEGURBA กลุ่มช่อง (1 กม.)</option></select></label>
+          <label class="field"><span>วิธีแบ่ง</span><select data-k="method"><option value="breaks">กำหนดเกณฑ์เอง</option><option value="quantile">ควอนไทล์</option><option value="equal">ช่วงเท่ากัน</option><option value="jenks">Natural breaks (Jenks)</option><option value="degurba">DEGURBA กลุ่มช่อง (1 กม.)</option></select></label>
           <label class="field metricL"><span>ค่าที่ใช้</span><select data-k="metric"><option value="density">ความหนาแน่น (ต่อ ตร.กม.)</option><option value="per_pixel">ค่าต่อพิกเซล</option><option value="value">ค่าตามไฟล์</option></select></label>
           <div class="field full brk"></div>
           <label class="field full"><span>ลำดับเมื่อลดความละเอียด</span><select data-k="order"><option value="auto">อัตโนมัติตามประเภทค่า</option><option value="classify_first">จัดชั้นก่อน แล้ว majority</option></select></label>
@@ -1397,7 +1569,7 @@ async function pageBiv() {
         histCanvas(cv, r.hist, r.breaks, cols);
         const bar = (arr, t) => `<div class="tiny muted">${t}</div><div class="share">${arr.map((s, i) => `<div style="width:${s * 100}%;background:${cols[i] || '#c3b6ff'}" title="คลาส ${i + 1}: ${(s * 100).toFixed(1)}%">${s > .07 ? (s * 100).toFixed(1) + '%' : ''}</div>`).join('')}</div>`;
         sh.innerHTML = bar(r.pixel_share, 'สัดส่วนพิกเซลต่อคลาส') + (r.value_share ? bar(r.value_share, 'สัดส่วนค่านับ (เช่น คน) ต่อคลาส') : '')
-          + `<div class="tiny muted">${fmt(r.n, 0)} ค่าสุ่ม ที่ความละเอียดต้นทาง · เกณฑ์ ${r.breaks.map(b => fmt(b, 4)).join(' / ') || '–'}${r.note ? ' · ' + esc(r.note) : ''}</div>`;
+          + `<div class="tiny muted">${fmt(r.n, 0)} ค่าสุ่ม ที่ความละเอียดต้นทาง · ${histNote(r.hist)} · เกณฑ์ ${r.breaks.map(b => fmt(b, 4)).join(' / ') || '–'}${r.note ? ' · ' + esc(r.note) : ''}</div>`;
       } catch (e) { sh.innerHTML = `<span class="tiny muted">${esc(e.message)}</span>`; }
     }, 250);
   };

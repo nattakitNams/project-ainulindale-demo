@@ -1,0 +1,48 @@
+Gain/loss data (e.g. population change, difference between two years, trend): each side of the centre is classified separately, colours from each half of the ramp — negative values don't vanish because the data is right-skewed
+files — narrow down with years/match · in a recipe use a download step with years+match (no need to list every URL)
+The source registered this as one big ZIP — if the server lists its folders, files can be imported one by one
+(download) needs file_url (one file) or match (+ years) for several files
+steps (for several years use for_years / download with years+match instead of one step per year)
+a multi-file download needs match (words in file names, e.g. ["_t_60_","_t_65_"])
+Only the latest ZIP was checked as a sample — add years to see the files of the years you need
+The data has negative values — showing the actual sum of sampled values per class (gain/loss) instead of %
+files — add "combine":"sum" or narrow match to one file per year
+for_years must be a list of years or "$sN" (yearly output of an earlier step)
+Try other words, or leave the word box empty to see every file type
+call again without match and look at file_patterns
+No statistics yet (data preparation has not finished)
+file_url is not in the importable files of
+(no year = check the latest ZIP as a sample)
+Change the method under Mode, then press Classify
+log on both sides, linear near 0 ±
+words in file name, e.g. _t_60_,_t_65_
+Try another centre, or turn the centre off
+X axis symlog (has both negative
+(summary) needs dataset_ids
+The data has no values away from the centre
+sampled values at source resolution
+Adjust the centre under "Centre"
+for_years only works with job steps (
+Automatic classes from the data
+Files from the source folders
+% hidden (= no change)
+Opening the source folders…
+tails cut at 0.5% (below
+The data has negative (
+values not in the chart)
+Sum of values (sample)
+No files whose names contain
+No files whose names contain
+Centre (diverging)
+years, e.g. 2015,2020
+A recipe needs 1–
+must contain, e.g. 1km
+%) and positive (
+Cannot read recipe
+Exactly 0
+has no result for
+of its own
+file types
+Show files
+and positive
+more

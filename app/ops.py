@@ -237,14 +237,27 @@ def load_sample(ds, metric):
     return v
 
 
+def jenks_exact(v, n):
+    """Natural breaks (Fisher–Jenks) ที่ต้องได้ n−1 เกณฑ์พอดี (แกนไบแวเรียตกำหนดจำนวนชั้นไว้แล้ว)"""
+    from . import symbology
+    if n <= 1:
+        return []
+    b = symbology.tidy(symbology.jenks_breaks(np.asarray(v, 'float64')[np.isfinite(v)], n), 3)
+    if len(b) != n - 1:
+        raise EngineError(f'Natural breaks แบ่งได้ {len(b) + 1} ชั้น ไม่ครบ {n} ชั้น (ค่าต่างกันน้อยเกินไป) — ลดจำนวนชั้นหรือใช้ควอนไทล์')
+    return b
+
+
 def auto_breaks(ds, cfg):
-    """quantile / equal → เกณฑ์ตัวเลข (คำนวณจากค่าสุ่ม ที่ความละเอียดต้นทาง)"""
+    """quantile / equal / jenks → เกณฑ์ตัวเลข (คำนวณจากค่าสุ่ม ที่ความละเอียดต้นทาง)"""
     n = int(cfg.get('n', 3))
     v = load_sample(ds, cfg.get('metric', 'density'))
     if v is None or v.size == 0:
         raise EngineError(f'ชุดข้อมูล "{ds["name"]}" ยังไม่มีค่าสุ่ม — รอให้งานเตรียมข้อมูลเสร็จก่อน')
     if cfg['method'] == 'quantile':
         return engine.quantile_breaks(v, n)                 # ทนค่าซ้ำ (เช่น ศูนย์จำนวนมาก) — ไม่มีชั้นว่าง
+    if cfg['method'] == 'jenks':
+        return jenks_exact(v, n)
     lo, hi = float(v.min()), float(v.max())
     b = [lo + (hi - lo) * i / n for i in range(1, n)]
     out = []
@@ -533,7 +546,7 @@ def op_bivariate(job, P, log, stats_only=False):
             raise EngineError(f'ยังไม่ได้ยืนยันประเภทค่าของ "{d["name"]}"')
     cfgx, cfgy = dict(p['x']), dict(p['y'])
     for cfg, d in ((cfgx, dsx), (cfgy, dsy)):
-        if cfg.get('method') in ('quantile', 'equal'):
+        if cfg.get('method') in ('quantile', 'equal', 'jenks'):
             cfg['breaks'] = auto_breaks(d, cfg)
             log(f'เกณฑ์ {cfg["method"]} ของ "{d["name"]}" (จากค่าสุ่ม) = {cfg["breaks"]}')
             cfg['breaks_from'] = cfg['method']

@@ -55,15 +55,19 @@ def recover():
             db.update('jobs', j['id'], status='failed', error='แอปถูกปิดหรือ process หยุดระหว่างทำงาน', finished_at=db.now())
 
 
+PAR_DOWNLOAD = 4          # งานดาวน์โหลดรอเครือข่ายเป็นหลัก (WorldPop ~120 KB/s ต่อการเชื่อมต่อ) ใช้หน่วยความจำน้อย → รันพร้อมกันได้
+
+
 def kick():
-    """เริ่มงานถัดไปถ้าไม่มีงานที่กำลังรัน"""
+    """เริ่มงานถัดไปถ้าไม่มีงานที่กำลังรัน · ยกเว้นงานดาวน์โหลด: รันพร้อมกันได้ถึง PAR_DOWNLOAD งาน (เมื่อที่รันอยู่เป็นดาวน์โหลดทั้งหมด)
+    งานอื่นยังทีละงาน (คำนวณใช้หน่วยความจำ/ซีพียูเต็มที่) — สูตรงานที่โหลดหลายไฟล์ต่อปี (1.0.44) เร็วขึ้นราว 4 เท่า"""
     with _lock:
         running = db.query("SELECT * FROM jobs WHERE status IN ('running','cancelling')")
         running = [j for j in running if pid_alive(j['pid']) or j['id'] in _procs and _procs[j['id']].poll() is None]
-        if running:
-            return
         q = db.query("SELECT * FROM jobs WHERE status='queued' ORDER BY id LIMIT 1")
         if not q:
+            return
+        if running and not (q[0]['kind'] == 'download' and len(running) < PAR_DOWNLOAD and all(r['kind'] == 'download' for r in running)):
             return
         j = q[0]
         flags = 0x08000000 if os.name == 'nt' else 0                           # CREATE_NO_WINDOW

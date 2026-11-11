@@ -639,3 +639,33 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 /* สูตรงาน */
 .ai-steps { margin: 6px 0; padding-left: 18px; display: grid; gap: 2px; }
 .ai-steps li.st-done .ai-si { color: var(--mint); } .ai-steps li.st-running .ai-si { color: var(--sky); } .ai-steps li.st-failed .ai-si { color: var(--coral); }
+
+/* ===== ล่างหน้าชุดข้อมูล: กราฟการกระจาย + ตาราง attribute (1.0.43) ===== */
+#dataBottom { margin-top: 16px; }
+canvas.hist.big { height: 150px; }
+#atStat canvas.hist.big { height: 130px; }
+.dist-bars { display: flex; flex-direction: column; gap: 3px; margin: 8px 0; max-height: 420px; overflow: auto; }
+.db-row { display: grid; grid-template-columns: minmax(90px, 30%) 1fr 150px; gap: 10px; align-items: center; font-size: 13px; padding: 2px 4px; border-radius: 6px; }
+.db-row.click { cursor: pointer; }
+.db-row.click:hover { background: var(--card-hi); }
+.db-row.off { opacity: .4; }
+.db-lbl { display: flex; align-items: center; gap: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.db-lbl i { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+.db-bar { height: 12px; background: rgba(255,255,255,.04); border-radius: 4px; overflow: hidden; }
+.db-bar b { display: block; height: 100%; background: var(--lav); border-radius: 4px; }
+.db-v { text-align: right; font-size: 12px; }
+.dist-tbl td { font-size: 13px; }
+.dist-tbl tr.off { opacity: .4; }
+.dist-tbl i.sw { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: middle; }
+.dist-tbl td:first-child { width: 24px !important; }
+.at-bar { gap: 8px; margin: 4px 0 8px; flex-wrap: wrap; }
+.at-bar input[type=search] { flex: 1 1 260px; min-width: 200px; }
+.at-wrap { max-height: 460px; overflow: auto; border: 1px solid var(--line); border-radius: 14px; background: rgba(0,0,0,.12); }
+table.at { border-collapse: collapse; width: max-content; min-width: 100%; font-size: 13px; }
+table.at th { position: sticky; top: 0; background: #23263a; z-index: 1; padding: 8px 10px; text-align: left; white-space: nowrap; font-weight: 600; color: var(--text-2); }
+table.at th.sortable { cursor: pointer; }
+table.at th.sortable:hover { color: var(--text); }
+table.at td { padding: 5px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+table.at tbody tr[data-fid] { cursor: pointer; }
+table.at tbody tr[data-fid]:hover td { background: var(--card-hi); }
+table.at tbody tr.on td { background: rgba(255, 230, 109, .16); }

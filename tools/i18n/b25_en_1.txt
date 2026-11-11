@@ -1,0 +1,45 @@
+Click a column header = sort · click a row = zoom to that shape on the map (yellow highlight) · click a shape on the map →
+Counted over every pixel (integer histogram from data preparation) · faded row = hidden on the map
+Searching… (the first search on a large layer can take several seconds; later ones are fast)
+Loading the whole layer for search/sort (the first search may take a moment)
+Preparing data (see the Jobs tab) — the chart will appear here when done
+features — search/sort unavailable; page through only
+Search the table… (e.g. province name, code)
+[attribute table] separate process failed
+The attribute table is only for vector datasets
+[attribute table] could not save cache
+Colors and classes follow the symbology currently shown
+Click a bar = filter the table by that value
+Clear the search box to see all
+Attribute table
+(top 15 shown)
+Filter the table by this value
+[attribute table]
+This layer has no fields
+unit: per km²
+Feature not found
+values not in the chart
+Feature FID
+Value distribution
+No rows match
+% of value sum
+Show in table ↓
+Field not found
+(of the sample)
+Field chart
+first features
+Calculating…
+values ≤ 0 plus
+Search unavailable
+Show in table
+values · empty
+This layer has
+Value counts
+Next page
+% pixels
+(total
+All fields
+Previous page
+distinct
+median
+computed from

@@ -1,0 +1,25 @@
+Pretty breaks (round numbers)
+Logarithmic (round numbers)
+Equal steps between Min–Max (as in QGIS)
+Equal steps between Min–Max
+Same number of pixels in every class
+Equal steps on round numbers 1, 2, 2.5, 5 × 10ⁿ — easy-to-read labels
+Logarithmic steps 1-3-10 / 1-2-5 — positive, strongly right-skewed data such as population
+Splits where the data naturally group (least variance within classes)
+Long-tailed data: split at the mean of the head again and again; the data decide how many classes
+Mean ± 0.5, 1.5, 2.5 SD — spots unusually high or low values
+Classified automatically from the data:
+round-number logarithmic
+round numbers
+(strongly right-skewed: most values are low, a few are very high)
+· change the method under Mode, then click Classify
+The data are whole numbers,
+values → one color per value (raw values)
+· if these are codes, numbers of events or years rather than amounts that add up over area, set the value type to "class"
+Logarithmic needs positive values — try round numbers or Jenks
+The data are not long-tailed enough for head/tail breaks (more than 40% of values are above the mean) — try Jenks or quantile
+Natural breaks gave
+classes, fewer than
+classes (too few distinct values) — use fewer classes or quantile
+standard deviation
+No sample for this dataset yet → classified on round numbers from per-pixel values for now · once preparation finishes, click "Reset to default" to classify from the real data

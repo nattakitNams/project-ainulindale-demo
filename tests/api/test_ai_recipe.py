@@ -145,12 +145,32 @@ out, pr, r, _ = run_recipe()
 R.check('ขั้นพังตอนรัน → หยุด · ขั้นถัดไป "ข้าม" · สรุปบอกสาเหตุ', r['status'] == 'failed' and [x['status'] for x in r['steps']] == ['done', 'failed', 'skipped'] and 'nope' in r['summary'],
         r['summary'][:200])
 
+# ---------- 1.0.44 งานรายปี: for_years · "$s1.{year}" · summary (ผลรวม + % เทียบ) · trend "items":"$sN" ----------
+STATE['steps'] = [
+    dict(id='s1', title='ค่าคงที่ = ปี', kind='calc', for_years=[2015, 2016, 2017], params=dict(expr='A * 0 + {year}', vars=dict(A=dict(dataset_id=xa)), target_res=src, name='ry_year_{year}')),
+    dict(id='s2', title='สองเท่า รายปี', kind='calc', for_years='$s1', params=dict(expr='A * 2', vars=dict(A=dict(dataset_id='$s1.{year}')), target_res='auto', name='ry_double_{year}')),
+    dict(id='s3', title='สรุป', kind='summary', params=dict(dataset_ids='$s2', ratio_to='$s1')),
+    dict(id='s4', title='แนวโน้ม', kind='trend', params=dict(items='$s2', stat='slope', target_res='auto', name='ry_slope'))]
+out, pr, r, _ = run_recipe()
+st = {x['id']: x for x in r['steps']}
+R.check('for_years: ทำซ้ำทุกปี ผลเป็น {ปี: #id} · "$s1.{year}" อ้างผลปีเดียวกัน', r['status'] == 'done' and sorted(map(str, (st['s2']['output'] or {}).keys())) == ['2015', '2016', '2017'],
+        ' · '.join(f'{x["id"]}:{x["status"]}→{x.get("output")}{" " + x["error"] if x.get("error") else ""}' for x in r['steps']))
+tbl = (st['s3'].get('review') or {}).get('table') or []
+npx = X.size
+R.check('summary: ผลรวมถูก (2 × ปี × จำนวนพิกเซล) และ % เทียบ s1 = 200%', len(tbl) == 3 and all(abs(t['sum'] - 2 * int(t['key']) * npx) < 1e-3 * npx * int(t['key']) and abs(t['pct_of_ref'] - 200) < 1e-6 for t in tbl),
+        [(t['key'], t.get('sum'), t.get('pct_of_ref')) for t in tbl])
+if r['status'] == 'done':
+    with rasterio.open([d for d in api('/api/datasets') if d['id'] == st['s4']['output']][0]['path']) as d:
+        sl = d.read(1, masked=True)
+    R.check('trend "items":"$s2" → ใช้ทุกปีเรียงเอง (ความชัน = 2 ต่อปีทุกพิกเซล)', np.allclose(sl.compressed(), 2, atol=1e-4), float(sl.mean()))
+R.check('สรุปส่งกลับแชตมีตาราง % ต่อปี', '200.00%' in (r.get('summary') or ''), (r.get('summary') or '')[-200:])
+
 # ---------- ประหยัดโทเคน ----------
 hist = []
 for i in range(20):
     hist += [dict(role='user', content=f'คำถามเก่า {i} ' + 'ก' * 2000), dict(role='assistant', content='คำตอบยาว ' + 'ข' * 3000)]
 out = chat('สวัสดี', hist)
-R.check('ประวัติเก่าถูกย่อ (ข้อความแรกเหลือ ≤ 450 ตัวอักษร) · ส่วนคงที่ของ system แยกขึ้นก่อน', len(SEEN['first_user']) <= 450 and SEEN['roles'][:2] == ['system', 'system'],
+R.check('ประวัติเก่าถูกย่อ (ข้อความแรกเหลือ ≤ 2,050 ตัวอักษร — 1.0.44 คืนจาก 400) · ส่วนคงที่ของ system แยกขึ้นก่อน', 450 < len(SEEN['first_user']) <= 2050 and SEEN['roles'][:2] == ['system', 'system'],
         f'{len(SEEN["first_user"])} ตัวอักษร · {SEEN["roles"]}')
 R.check('นับโทเคนจาก usage ของผู้ให้บริการ (ส่ง/แคช/ตอบ/รอบ)', out.get('usage') == dict(calls=1, input=15000, cached=12000, output=300), str(out.get('usage')))
 api('/api/ai/logout', {})

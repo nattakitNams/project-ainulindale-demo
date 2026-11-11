@@ -227,8 +227,20 @@ TOOLS_PROPOSE = """
    ภาพดาวเทียม/SAR/DEM/การใช้ที่ดิน/NDVI MODIS: ใช้ satellite_catalog + search_satellite + งาน satellite (ดึงได้เลย ไม่ต้องมีบัญชี เร็วกว่าดาวน์โหลดไฟล์)
 3) ถามพื้นที่: ค่าแนะนำ = ประเทศไทย (พื้นที่ศึกษาพื้นฐาน) แต่ถามว่าจะเอาเฉพาะบางจังหวัดไหม — ถ้าใช่ propose_create_study_area จากชั้นขอบเขตจังหวัด GISTDA (L05_Province ดูฟิลด์ชื่อจังหวัดด้วย get_dataset)
    ถามรวมในคำถามเดียวกับการเลือกชุด/ปี ถ้าทำได้
-4) ผู้ใช้เลือกแล้ว → propose_download_data ทีละไฟล์ (ตัดตาม aoi_id, ใส่ value_type ถ้าความหมายชัด เช่น WorldPop จำนวนคน = count, night light radiance = density) → ผู้ใช้กดยืนยัน
+4) ผู้ใช้เลือกแล้ว → ไฟล์เดียว: propose_download_data (ตัดตาม aoi_id, ใส่ value_type ถ้าความหมายชัด เช่น WorldPop จำนวนคน = count, night light radiance = density)
+   หลายไฟล์/หลายปี: propose_recipe ขั้น download แบบ years + match (+ must) — แอปหาไฟล์ ดาวน์โหลด และรวมต่อปีเอง ไม่ต้องใส่ URL ทีละไฟล์
 5) รอ "[แจ้งจากแอป] งาน #N เสร็จ → ชุด #M" (หรือ job_status) แล้วค่อยออกแบบไบแวเรียตตามวัตถุประสงค์ ถามค่าที่ยังไม่ชัด (คลาส/วิธีแบ่ง/ความละเอียด) → propose_run_job
+Data hub คือทางหลักของแอป — ผู้ใช้บอกโจทย์แล้วคุณต้องหาไฟล์จริงและดึงเข้าแอปเอง ไม่ใช่ใช้แค่ของในคลัง:
+- get_hub_item บอก file_patterns (ชนิดไฟล์ทั้งหมด ปีเขียนเป็น {year}) · ต้นทางที่ลงไว้เป็น ZIP แอปเปิดโฟลเดอร์ต้นทางหาไฟล์ GeoTIFF แยกให้แล้ว (browsed_source_folders)
+  → อ่านความหมายของชื่อไฟล์จาก description (เช่น WorldPop อายุ/เพศ: tha_{t|f|m}_{อายุเริ่ม}_{year}… · t = รวมสองเพศ · 00 = <1 ปี · 01 = 1–4 · 60 = 60–64 · 90 = 90+ · T_F/T_M = รวมทุกอายุของหญิง/ชาย มีเฉพาะ 100m)
+  แล้วเรียก get_hub_item ซ้ำด้วย years/match/must เพื่อยืนยันว่ามีไฟล์จริงก่อนเสนอ · เลือกความละเอียดตามงาน (ทั้งประเทศหลายปี → 1km เล็กกว่า 100m ราว 40 เท่า)
+- ตัวอย่าง "ผู้สูงอายุ (60+) ในพื้นที่น้ำท่วม ปี 2015–2024 เป็น %" (ชุดน้ำท่วม #F อยู่ในคลัง) → propose_recipe:
+  s1 download {"hub_key":"ckan:data:worldpop-age-and-gender-structures-2015-2030-tha","years":[2015,…,2024],"match":["_t_60_","_t_65_","_t_70_","_t_75_","_t_80_","_t_85_","_t_90_"],"must":["1km"],"combine":"sum","name":"pop60plus_{year}","value_type":"count","aoi_id":2}
+  s2 download {…เดียวกัน "match":["_t_"],"name":"pop_total_{year}"} (ประชากรทั้งหมด = ทุกช่วงอายุ — ที่ 1km ไม่มีไฟล์ T_F/T_M) · ไม่แน่ใจว่ามีไฟล์ไหน → get_hub_item years+match+must ก่อน
+  s3 calc "for_years":"$s1" {"expr":"where(F > 0, A, 0)","vars":{"A":{"dataset_id":"$s1.{year}"},"F":{"dataset_id":#F}},"target_res":"auto","value_type":"count","name":"pop60plus_flood_{year}"}
+  s4 calc "for_years":"$s1" {"expr":"where(F > 0, A, 0)","vars":{"A":{"dataset_id":"$s2.{year}"},"F":{"dataset_id":#F}},"target_res":"auto","value_type":"count","name":"pop_flood_{year}"}
+  s5 summary {"dataset_ids":"$s3","ratio_to":"$s4"} → ตาราง % ผู้สูงอายุในพื้นที่ท่วม ต่อปี · แผนที่ % ต่อพิกเซล = calc "A / max(B, 1) * 100" (density)
+  ตีความ "เป็น %" ให้ชัดก่อน (สัดส่วนผู้สูงอายุในพื้นที่ท่วม / สัดส่วนผู้สูงอายุทั้งหมดที่อยู่ในพื้นที่ท่วม) — ถ้าเดาไม่ได้ถามคำถามเดียว ไม่งั้นทำแบบที่ตรงคำขอแล้วบอกว่าคิดแบบไหน
 ประวัติชุดข้อมูล: ทุกครั้งที่ชุดใหม่เข้าคลังจากงานที่คุณเสนอ (ดาวน์โหลด / ไบแวเรียต / แปลง) ให้ write_dataset_note ทันทีที่รู้ว่าเสร็จ — 2–5 ประโยค:
   เป็นข้อมูลอะไร · หน่วย/ความหมายของค่า (เช่น คน/พิกเซล, radiance nW/cm²/sr) · แหล่งและปี · ทำเพื่อวัตถุประสงค์อะไร · ข้อควรระวัง (เช่น ปีไม่ตรงกัน, ความแม่นยำเทียม)
   ไฟล์รูปแบบ/พ่อแม่/ค่าที่ตั้ง แอปบันทึกให้เองแล้ว (get_dataset_profile) — โน้ตเน้นความหมายที่คนอ่านต้องรู้ · ผู้ใช้ถามที่มาของชุดไหน ให้ใช้ get_dataset_profile
@@ -251,7 +263,7 @@ TOOLS_PROPOSE = """
 
 สเปก params_json ของ propose_run_job / estimate_job (JSON ตัวเดียว · ใช้ #id จริง · target_res ใช้ "value" จาก resolution_options):
 - bivariate: {"x":{"dataset_id":7,"n":3,"method":"quantile","metric":"density","label":"ประชากร"},"y":{"dataset_id":6,"n":3,"method":"quantile","metric":"value","label":"จำนวนปีที่ท่วม"},"target_res":"30","aoi_id":2,"name":"pop_x_flood_1km","palette":"bluered","highlight":[9]}
-  method: quantile | equal | breaks (+ "breaks":[n-1 ค่า]) | degurba (แกน count n=3 ความละเอียดหยาบ ~1 กม.) · metric: density หรือ per_pixel ใช้กับ count เท่านั้น ชุดอื่นใช้ value
+  method: quantile | equal | jenks (natural breaks) | breaks (+ "breaks":[n-1 ค่า]) | degurba (แกน count n=3 ความละเอียดหยาบ ~1 กม.) · metric: density หรือ per_pixel ใช้กับ count เท่านั้น ชุดอื่นใช้ value
   palette: traffic bluered pinkblue greenblue purplegold pinkgreen blueyellow redblue seqseq1 seqseq2 · aoi_id/palette/highlight/name ไม่บังคับ · ทั้งสองแกนต้องยืนยันประเภทค่าแล้วและ CRS ตรงกัน · ไม่ต้องแปลงความละเอียดก่อน
   ในแต่ละแกนใส่ "order":"classify_first" ได้ (จัดชั้นก่อนแล้ว majority ตอนลดความละเอียด) ค่าเริ่ม "auto" · ผู้ใช้แก้จำนวนคลาส/วิธีแบ่ง/เกณฑ์/ชื่อแกนในการ์ดเองได้ หรือเปิดไปปรับในหน้าสร้างไบแวเรียต
 รายงาน: propose_create_report → เปิดตัวออกแบบรายงานพร้อมเทมเพลต (gov_l ราชการแนวนอน · gov_p ราชการแนวตั้ง · ocha · journal · poster_a3 · dashboard), ชั้นข้อมูล (ปกติคือแผนที่ไบแวเรียตที่เสร็จแล้ว ดู #id จาก job_status/list_datasets role=map),
@@ -276,7 +288,8 @@ TOOLS_PROPOSE = """
   steps_json = [{"id":"s1","title":"ดึง LST ฤดูร้อน 2015","kind":"satellite","params":{"collection":"modis-11A2-061","bands":["LST_Day_1km"],"aoi_id":2,"date_from":"2015-03-01","date_to":"2015-05-31","zoom":7,"pick":"mean"}},
     {"id":"s2","title":"…2024","kind":"satellite","params":{…}}, {"id":"s3","title":"แนวโน้ม","kind":"trend","params":{"items":[{"dataset_id":"$s1","year":2015},{"dataset_id":"$s2","year":2024}],"stat":"change","target_res":"auto"}},
     {"id":"s4","kind":"bivariate","params":{"x":{"dataset_id":"$s3",…},"y":{"dataset_id":7,…},"target_res":"auto"}}, {"id":"s5","kind":"stats","params":{"dataset_id":"$s4"}}]
-  kind = ชนิดงานด้านล่าง + download ({"hub_key","file_url","name","value_type","aoi_id"} จาก get_hub_item) + stats · "$sN" = ชุดผลลัพธ์ของขั้น N · "target_res":"auto" = ความละเอียดต้นทางที่หยาบสุด
+  kind = ชนิดงานด้านล่าง + download ({"hub_key","file_url","name","value_type","aoi_id"} จาก get_hub_item · หลายไฟล์: "years"+"match"+"must"+"combine":"sum" → ผล {ปี: #id}) + summary ({"dataset_ids":"$sN","ratio_to":"$sM"} ผลรวม/% ต่อปี) + stats
+  "$sN" = ชุดผลลัพธ์ของขั้น N · "$sN.2015" = ผลปี 2015 ของขั้นรายปี · ขั้นงานใส่ "for_years":"$sN" (หรือ [ปี…]) = ทำซ้ำทุกปี แทน {year} ใน params · trend "items":"$sN" = ใช้ทุกปี · "target_res":"auto" = ความละเอียดต้นทางที่หยาบสุด · สูงสุด 30 ขั้น
   ใส่ raw_folder_id / output_folder_id ถ้ามีโฟลเดอร์งาน · ขั้นที่ไม่พึ่งขั้นอื่นถูกตรวจทันทีตอนเสนอ · เมื่อได้ [แจ้งจากแอป] สรุปสูตรงาน → อ่าน สรุปผล/ปัญหาให้ผู้ใช้ อัปเดตแผน (ไม่ต้องตรวจซ้ำทุกชุด แอปตรวจให้แล้ว)
 - satellite (ดึงภาพดาวเทียมเข้าคลัง · mosaic ฝั่งเซิร์ฟเวอร์ Planetary Computer · ไม่ต้องมีบัญชี): {"collection":"sentinel-2-l2a","bands":["B04","B08"],"aoi_id":2,"date_from":"2025-01-01","date_to":"2025-03-31","cloud_max":20,"zoom":9,"pick":"median","name":"..."}
   ดู satellite_catalog (แบนด์/ปี) → search_satellite (มีกี่ภาพ วันไหน เมฆเท่าไร) ก่อนเสนอ · zoom: 8 ≈ 150 ม. · 9 ≈ 76 ม. · 10 ≈ 38 ม. · 11 ≈ 19 ม. · 12 ≈ 10 ม. (ทั้งประเทศ 8–9 เร็ว, 10 ราว 5 นาที, ละเอียดกว่านั้นให้เลือกจังหวัด)
@@ -285,13 +298,14 @@ TOOLS_PROPOSE = """
   อุณหภูมิพื้นผิว: modis-11A2-061 LST_Day_1km / LST_Night_1km (zoom 7 ≈ 300 ม. พอ เพราะต้นทาง 1 กม.) · ค่าเฉลี่ยหลายปี = ดึงทีละปี pick mean แล้ว trend stat mean/slope · °C = calc "A*0.02-273.15"
 - vmerge (รวมเวกเตอร์หลายชั้น → GeoPackage): {"dataset_ids":[5,6],"dissolve":false,"dissolve_field":null,"name":"..."} · dissolve true + ไม่ใส่ฟิลด์ = รวมเป็นรูปเดียว"""
 
-KEEP_FULL = 12                                           # ข้อความล่าสุดที่ส่งเต็ม (ที่เก่ากว่าย่อเหลือ 400 ตัวอักษร)
+KEEP_FULL = 30                                           # ข้อความล่าสุดที่ส่งเต็ม (เก่ากว่าย่อเหลือ OLD_CHARS) — 1.0.36 ลดเหลือ 12/400 แล้วผู้ช่วยลืมบริบท → คืนค่า
+OLD_CHARS = 2000
 MAX_STEPS = 16                                           # พอให้ทำงานหลายขั้นจบในรอบเดียว (ค้น → ตรวจ → เสนอ → อัปเดตแผน)
 
 
 def _context():
     """ข้อมูลอธิบายคลัง (ไม่ใช่ไฟล์ข้อมูล) ให้ AI ตอบตรงกับของที่ผู้ใช้มี"""
-    ds = db.query("SELECT id, name, kind, role, value_type, meta FROM datasets WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 50")
+    ds = db.query("SELECT id, name, kind, role, value_type, meta FROM datasets WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 80")
     aois = db.query('SELECT id, name, area_km2 FROM aoi WHERE trashed_at IS NULL ORDER BY id DESC LIMIT 30')
     rows = []
     for d in ds:
@@ -309,7 +323,7 @@ def _norm(messages):
     for i, m in enumerate(msgs):
         t = str(m.get('content') or '')[:8000]
         if i < len(msgs) - KEEP_FULL:                       # ข้อความเก่า: ย่อ (รายละเอียดอยู่ในแผนงาน/เอกสารแล้ว) — ลดโทเคนที่ส่งซ้ำทุกรอบ
-            t = t[:400] + (' …(ย่อ — ดูแผนงาน/เอกสาร)' if len(t) > 400 else '')
+            t = t[:OLD_CHARS] + (' …(ย่อ — ดูแผนงาน/เอกสาร)' if len(t) > OLD_CHARS else '')
         if not t or m.get('role') == 'error':
             continue
         role = 'assistant' if m.get('role') == 'assistant' else 'user'
@@ -326,7 +340,7 @@ def _norm(messages):
     return out
 
 
-DUMP_MAX = 12000                                         # ผลเครื่องมือถูกส่งซ้ำทุกรอบที่เหลือ (แต่แคชได้) → คุมขนาด
+DUMP_MAX = 15000                                         # ผลเครื่องมือถูกส่งซ้ำทุกรอบที่เหลือ (แต่แคชได้) → คุมขนาด
 
 
 def _dump(x):
@@ -368,7 +382,7 @@ def _needs_responses(e):
     return 'not a chat model' in s or 'v1/responses' in s or 'responses api' in s
 
 
-def _responses(b, p, key, model, system, msgs, specs, texts, call_tool):
+def _responses(b, p, key, model, system, msgs, specs, texts, call_tool, count=None):
     """OpenAI Responses API (/v1/responses) — รุ่นที่ไม่รับ chat/completions · output = รายการ item (message / function_call / reasoning)
     ส่ง item ทั้งหมดกลับเข้า input ตามลำดับ + function_call_output ต่อ call_id"""
     tools = [dict(type='function', name=s['name'], description=s['description'], parameters=s['parameters']) for s in specs]
@@ -378,6 +392,8 @@ def _responses(b, p, key, model, system, msgs, specs, texts, call_tool):
         if tools:
             body['tools'] = tools
         j = _req('POST', f'{b}/responses', p, key, json=body, timeout=600)
+        if count:
+            count(j)
         out = j.get('output') or []
         for it in out:
             if it.get('type') == 'message':
@@ -492,7 +508,7 @@ def chat(messages, page=None, chat_id=None):
             contents.append(dict(role='user', parts=[dict(functionResponse=dict(name=fc['name'], response=dict(result=_dump(call_tool(fc['name'], fc.get('args'))))))
                                                      for fc in calls]))
     elif p == 'openai' and model in (c.get('responses_models') or []):
-        _responses(b, p, key, model, system, msgs, specs, texts, call_tool)
+        _responses(b, p, key, model, system, msgs, specs, texts, call_tool, count)
     else:
         tools = [dict(type='function', function=s) for s in specs]
         conv = [dict(role='system', content=static), dict(role='system', content=dynamic)] + msgs   # ส่วนคงที่ขึ้นก่อน → แคชอัตโนมัติของ OpenAI
@@ -509,7 +525,7 @@ def chat(messages, page=None, chat_id=None):
                     continue
                 if step == 0 and p == 'openai' and _needs_responses(e):   # รุ่นที่ใช้ได้เฉพาะ Responses API (เช่น *-pro) → สลับ + จำไว้
                     save(responses_models=sorted(set(cfg().get('responses_models') or []) | {model}))
-                    _responses(b, p, key, model, system, msgs, specs, texts, call_tool)
+                    _responses(b, p, key, model, system, msgs, specs, texts, call_tool, count)
                     break
                 raise
             ch = j.get('choices') or []
