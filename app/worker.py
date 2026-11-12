@@ -9,7 +9,7 @@ os.environ.setdefault('GDAL_NUM_THREADS', 'ALL_CPUS')
 import traceback
 from datetime import datetime
 
-from . import db, ops, ops3, ops_hex, ops_sat, ops_tools
+from . import db, ops, ops3, ops_hex, ops_sat, ops_tools, ops_proj
 from .config import ensure_workspace
 
 
@@ -62,7 +62,10 @@ def main(jid):
     if job.get('out_dir'):
         log(f'โฟลเดอร์ผลลัพธ์: {job["out_dir"]}')
     try:
-        res = {**ops.OPS, **ops3.OPS3, **ops_hex.OPS_HEX, **ops_tools.OPS_TOOLS, **ops_sat.OPS_SAT}[job['kind']](job, progress, log)
+        res = {**ops.OPS, **ops3.OPS3, **ops_hex.OPS_HEX, **ops_tools.OPS_TOOLS, **ops_sat.OPS_SAT, **ops_proj.OPS_PROJ}[job['kind']](job, progress, log)
+        utm = ops_proj.finalize(job, res, progress, log)       # ค่าตั้ง "ระบบพิกัดผลลัพธ์" (เช่น UTM 47N) → แปลงผลตอนท้าย
+        if utm and isinstance(res, dict):
+            res['output_crs'] = utm
         run_s = time.time() - t0
         fin = db.now()
         timing = dict(queued_at=job.get('created_at'), started_at=datetime.fromtimestamp(t0).isoformat(timespec='seconds'),

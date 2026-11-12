@@ -25,7 +25,7 @@ from . import db
 from .config import WORKSPACE
 
 DIR = WORKSPACE / 'recipes'
-JOB_KINDS = {'satellite', 'calc', 'trend', 'change', 'bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'mosaic', 'vmerge'}
+JOB_KINDS = {'satellite', 'calc', 'trend', 'change', 'bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'mosaic', 'vmerge', 'reproject'}
 KINDS = JOB_KINDS | {'download', 'stats', 'summary'}
 MAX_STEPS = 30
 RAW_KINDS = {'satellite', 'download'}                          # ข้อมูลดิบ → โฟลเดอร์ raw · ที่เหลือ → output
@@ -253,7 +253,7 @@ def _job(r, s, p, call, review, rid, kind=None):
     if isinstance(p.get('items'), dict):                      # trend "items":"$s3" → ทุกปีของผลรายปี
         p['items'] = [dict(dataset_id=v, year=int(k)) for k, v in sorted(p['items'].items(), key=lambda kv: int(kv[0]))]
     if p.get('target_res') == 'auto':
-        p['target_res'] = _auto_res(call, kind, p)
+        p['target_res'] = None if kind == 'reproject' else _auto_res(call, kind, p)     # reproject: ค่าเริ่ม = เมตรที่ใกล้ต้นทางที่สุด
     if kind in ('bivariate', 'hexbiv'):                       # ค่าเริ่มเดียวกับข้อเสนอปกติ (พาเลท/สี/กติกา)
         from .ai_tools import _params
         p = _params(kind, p)

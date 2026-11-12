@@ -18,7 +18,7 @@ from . import db, palettes
 from .config import PORT, STATIC
 
 CLIENT = None                    # server ตั้งให้: lambda: app.test_client()
-JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download', 'calc', 'trend', 'mosaic', 'vmerge', 'satellite')
+JOB_KINDS = ('bivariate', 'resample', 'rasterize', 'hex', 'hexbiv', 'vgrid', 'change', 'download', 'calc', 'trend', 'mosaic', 'vmerge', 'satellite', 'reproject')
 PROPOSAL_TTL = 30 * 60
 _PROPOSALS, _lock = {}, threading.Lock()
 

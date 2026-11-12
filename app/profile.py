@@ -14,7 +14,7 @@ from . import db
 
 KIND_TH = {'bivariate': 'ไบแวเรียต (กริด)', 'hexbiv': 'ไบแวเรียตหกเหลี่ยม', 'resample': 'ปรับความละเอียด / ตัดพื้นที่', 'rasterize': 'แปลงเวกเตอร์เป็นราสเตอร์',
            'hex': 'แปลงเป็นหกเหลี่ยม', 'vgrid': 'กริดเวกเตอร์', 'change': 'เปรียบเทียบ 2 ช่วงเวลา', 'download': 'ดาวน์โหลดจากลิงก์', 'zonal': 'ไบแวเรียตรายพื้นที่',
-           'calc': 'สูตรคำนวณ', 'trend': 'อนุกรมเวลา', 'mosaic': 'รวมราสเตอร์', 'vmerge': 'รวมเวกเตอร์', 'satellite': 'ภาพดาวเทียม (Planetary Computer)'}
+           'calc': 'สูตรคำนวณ', 'trend': 'อนุกรมเวลา', 'mosaic': 'รวมราสเตอร์', 'vmerge': 'รวมเวกเตอร์', 'satellite': 'ภาพดาวเทียม (Planetary Computer)', 'reproject': 'แปลงระบบพิกัด (UTM)'}
 VT_TH = {'count': 'จำนวนนับ (รวมแล้วผลรวมไม่หาย)', 'density': 'ค่าต่อเนื่อง (เฉลี่ยถ่วงพื้นที่)', 'class': 'ชั้น/รหัส (majority)'}
 METRIC_TH = {'density': 'ความหนาแน่น (ต่อ ตร.กม.)', 'per_pixel': 'ค่าต่อพิกเซล', 'value': 'ค่าตามไฟล์'}
 METHOD_TH = {'quantile': 'ควอนไทล์', 'equal': 'ช่วงเท่ากัน', 'breaks': 'กำหนดเกณฑ์เอง', 'degurba': 'DEGURBA'}

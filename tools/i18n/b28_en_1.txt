@@ -1,0 +1,13 @@
+UTM 47N: every job that produces a raster (bivariate, resample, formula, time series, download, satellite imagery, etc.) computes on the source grid as before, then converts the result to EPSG:32647 at the end
+Pixels in metres, every pixel the same area · count totals preserved · the whole country uses zone 47N · convert existing library data in bulk at
+(setting “Output coordinate system”) — converting at the end
+All job outputs are UTM 47N (EPSG:32647)
+Data tools → Convert to UTM 47N
+Outputs use the source coordinate system
+Converting to UTM: tile
+Satellite imagery / SAR
+area-weighted mean
+Output coordinate system
+Same as source data
+UTM 47N (metres)
+Output as

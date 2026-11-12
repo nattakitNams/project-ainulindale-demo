@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.0.44';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.0.45';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -425,6 +425,13 @@ async function pageDataset(id) {
         </div>
         <div class="tiny muted" style="margin:8px 0">กติกาตามประเภทค่า: ${esc(VT_RULE[d.value_type] || '')} · ผลลง workspace/derived/ โฟลเดอร์ใหม่ทุกครั้ง</div>
         <button id="rsRun" class="primary">${IC.play}สร้าง</button></div>
+        ${(m.crs_key || '').toUpperCase() !== 'EPSG:32647' ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>แปลงเป็น UTM 47N</h2><span class="tiny muted">EPSG:32647 · ตอนนี้ ${esc(m.crs_key || '?')}</span></div>
+        <div class="grid-form">
+          <label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes"><option value="">อัตโนมัติ (ใกล้ต้นทาง)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม.</option>`).join('')}</select></label>
+          <label class="field"><span>พื้นที่ศึกษา</span><select id="pjAoi">${aoiOpts}</select></label>
+        </div>
+        <div class="tiny muted" style="margin:8px 0">ทั้งประเทศใช้โซน 47N (ขอบตะวันออกเพี้ยนราว 0.6%) · จำนวนนับผลรวมคงเดิม · ชุดที่จะไขว้กันเลือก 10 / 100 / 1,000 ม. กริดจะซ้อนกันพอดี</div>
+        <button id="pjRun" class="primary">${IC.play}แปลง</button></div>` : ''}
         <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--mint);color:var(--mint)"></span>ทำเป็นกริดเวกเตอร์</h2></div>
         <p class="small muted" style="margin-top:0">ช่องสี่เหลี่ยม + ค่า (GeoPackage) สำหรับวิชวลไลซ์ — ช่องว่าง/ค่า 0 ถูกตัดทิ้ง · สูงสุด 2 ล้านช่อง</p>
         <div class="grid-form">
@@ -510,6 +517,7 @@ async function pageDataset(id) {
     $('#vgRes').innerHTML = optHtml(vgo, false);
     $('#vgRes').value = (vgo.find(o => o.px < 2e6) || vgo.at(-1))?.value;
     $('#rsRun').onclick = () => runJob('resample', { dataset_id: id, target_res: $('#rsRes').value, tie: $('#rsTie')?.value || 'high', aoi_id: +$('#rsAoi').value || null, aoi_rule: $('#rsRule').value });
+    if ($('#pjRun')) $('#pjRun').onclick = () => runJob('reproject', { dataset_id: id, target_res: +$('#pjRes').value || null, aoi_id: +$('#pjAoi').value || null });
     $('#vgRun').onclick = () => runJob('vgrid', { dataset_ids: [id, ...$$('#vgMore input:checked').map(o => +o.value)], target_res: $('#vgRes').value, aoi_id: +$('#vgAoi').value || null });
     if ($('#hxRun')) hexCardBind(d);
     if (d.role === 'map') { mapPalette(d); if (isR) bivStatsCard(d); }
@@ -2263,7 +2271,7 @@ async function pageTools(q) {
   const okR = rs.filter(d => d.value_type_confirmed);
   const opt = d => `<option value="${d.id}">#${d.id} ${esc(d.name)} · ${esc((d.meta.res_label || '').split(' (')[0])}${(d.meta.count || 1) > 1 ? ` · ${d.meta.count} แบนด์` : ''}${d.value_type ? ' · ' + esc(VT_SHORT[d.value_type] || '') : ''}</option>`;
   const aoiSel = id => `<label class="field"><span>พื้นที่ศึกษา</span><select id="${id}"><option value="">ทั้งขอบเขตที่ข้อมูลทับกัน</option>${aoiOptions(aois)}</select></label>`;
-  const T = [['sat', 'ภาพดาวเทียม / SAR'], ['calc', 'สูตรคำนวณ'], ['trend', 'อนุกรมเวลา / ตรวจการเปลี่ยนแปลง'], ['mosaic', 'รวมราสเตอร์'], ['vmerge', 'รวมเวกเตอร์']];
+  const T = [['sat', 'ภาพดาวเทียม / SAR'], ['calc', 'สูตรคำนวณ'], ['trend', 'อนุกรมเวลา / ตรวจการเปลี่ยนแปลง'], ['mosaic', 'รวมราสเตอร์'], ['vmerge', 'รวมเวกเตอร์'], ['utm', 'แปลงเป็น UTM 47N']];
   const v = $('#view');
   v.innerHTML = head('Tools', 'เครื่องมือข้อมูล', 'คำนวณด้วยสูตร (NDVI ฯลฯ) · เทียบอนุกรมเวลาหลายปี · ต่อไฟล์ราสเตอร์ · รวมชั้นเวกเตอร์ — ผลลัพธ์เข้าคลังพร้อมประวัติไฟล์ต้นทาง')
     + `<div class="seg" id="tTabs" style="margin-bottom:14px">${T.map(([k, t]) => `<button data-k="${k}" class="${TOOLS.tab === k ? 'on' : ''}">${t}</button>`).join('')}</div><div id="tBody"></div>`;
@@ -2423,6 +2431,41 @@ async function pageTools(q) {
         threshold: $('#trThr').value === '' ? null : +$('#trThr').value, min_years: +$('#trMin').value || null,
         target_res: $('#trRes').value, aoi_id: +$('#trAoi').value || null, name: $('#trName').value.trim() || null }, done);
     };
+  } else if (TOOLS.tab === 'utm') {
+    const cand = rs.filter(d => (d.meta.crs_key || '').toUpperCase() !== 'EPSG:32647');
+    body.innerHTML = `<div class="card" style="max-width:920px">
+      <div class="small muted" style="margin-bottom:10px">แปลงราสเตอร์ (องศา WGS84 / UTM 48N / อื่น ๆ) เป็น UTM 47N (EPSG:32647) ทีละหลายชุด — ได้ชุดใหม่ในคลัง ต้นฉบับไม่เปลี่ยน ·
+        จำนวนนับ = ถ่วงพื้นที่ผลรวมคงเดิม · ค่าต่อเนื่อง = เฉลี่ยถ่วงพื้นที่ · ชั้น = เสียงข้างมาก · ส่วนที่ว่างข้ามให้</div>
+      <div class="row" style="margin-bottom:6px"><button class="sm ghost" id="pjAll">เลือกทั้งหมด</button><button class="sm ghost" id="pjNone">ไม่เลือก</button></div>
+      ${checklist(cand, 'pjL')}
+      <div class="grid-form" style="margin-top:12px"><label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes2"><option value="">อัตโนมัติ (ใกล้ต้นทางของแต่ละชุด)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม. ทุกชุด</option>`).join('')}</select></label>
+        ${aoiSel('pjAoi2')}</div>
+      <div class="tiny muted" style="margin-top:6px">0.3″ → 10 ม. · 3″ → 100 ม. · 30″ → 1,000 ม. — ชุดที่ยังไม่ยืนยันประเภทค่าแปลงไม่ได้ (ยืนยันในหน้าชุดข้อมูลก่อน)</div>
+      <button id="pjRun2" class="primary" style="margin-top:12px">${IC.play}แปลงที่เลือก</button><div id="pjOut" class="small" style="margin-top:10px"></div></div>`;
+    wireCheck('pjL');
+    $('#pjAll').onclick = () => $$('#pjL .tool-it:not(.hide) input').forEach(x => x.checked = true);
+    $('#pjNone').onclick = () => $$('#pjL input').forEach(x => x.checked = false);
+    $('#pjRun2').onclick = async () => {
+      const ids = checked('pjL');
+      if (!ids.length) return toast('เลือกชุดข้อมูลอย่างน้อย 1 ชุด', true);
+      const base = { target_res: +$('#pjRes2').value || null, aoi_id: +$('#pjAoi2').value || null };
+      const rows = [], ok = [];
+      $('#pjOut').textContent = 'กำลังตรวจ…';
+      for (const i of ids) {                                   // ประเมินทุกชุดก่อน แล้วยืนยันครั้งเดียว
+        const d = rs.find(x => x.id === i);
+        try {
+          const e = await api(ENGINE + '/api/estimate', { json: { kind: 'reproject', params: { dataset_id: i, ...base } } });
+          if (!e.ok) throw new Error(e.error);
+          ok.push(i); rows.push(`<tr><td>#${i} ${esc(d.name)}</td><td>${esc(e.grid.res_label)}</td><td>${fmt(e.grid.width, 0)} × ${fmt(e.grid.height, 0)}</td></tr>`
+            + (e.warnings || []).map(w => `<tr><td colspan="3" class="tiny muted">${esc(w)}</td></tr>`).join(''));
+        } catch (er) { rows.push(`<tr><td>#${i} ${esc(d.name)}</td><td colspan="2" class="note err">${esc(er.message)}</td></tr>`); }
+      }
+      $('#pjOut').textContent = '';
+      if (!ok.length) return ui.confirm('แปลงไม่ได้', `<table class="small">${rows.join('')}</table>`, 'ปิด');
+      if (!await ui.confirm(`แปลง ${ok.length} ชุดเป็น UTM 47N?`, `<table class="small"><tr><th>ชุดข้อมูล</th><th>ความละเอียด</th><th>พิกเซล</th></tr>${rows.join('')}</table>`, 'เริ่มทั้งหมด')) return;
+      for (const i of ok) await api(ENGINE + '/api/jobs', { json: { kind: 'reproject', params: { dataset_id: i, ...base } } });
+      toast(`ส่ง ${ok.length} งานแล้ว — ดูความคืบหน้าในแท็บงาน`); if (typeof jobBadge === 'function') jobBadge(); done();
+    };
   } else if (TOOLS.tab === 'mosaic') {
     body.innerHTML = `<div class="card" style="max-width:920px">
       <div class="small muted" style="margin-bottom:10px">ต่อไฟล์ราสเตอร์หลายแผ่น (เช่น ภาพดาวเทียมหลายแผ่นที่ติดกัน · ข้อมูลรายจังหวัด) เป็นไฟล์เดียว — ทุกไฟล์ต้องระบบพิกัดและจำนวนแบนด์เดียวกัน ใช้ความละเอียดของไฟล์แรก</div>
@@ -2465,6 +2508,10 @@ async function pageSystem() {
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--coral);color:var(--coral)"></span>ผลของงานที่ล้มเหลว/ยกเลิก</h2><span class="chip">${s.dead_jobs.length}</span></div>
         ${s.dead_jobs.length ? `<div class="small">${s.dead_jobs.map(j => `<div class="mono tiny">#${j.id} ${esc(j.title)} · ${esc(j.out_dir)}</div>`).join('')}</div><button id="clrDead" class="sm danger" style="margin-top:10px">${IC.trash}ลบโฟลเดอร์ผลที่ไม่สมบูรณ์</button>` : '<div class="small muted">ไม่มี</div>'}</div>
     </div><div>
+      <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>ระบบพิกัดผลลัพธ์</h2></div>
+        <div class="seg" id="ocSeg"><button data-v="source" class="${s.out_crs !== 'EPSG:32647' ? 'on' : ''}">ตามข้อมูลต้นทาง</button><button data-v="EPSG:32647" class="${s.out_crs === 'EPSG:32647' ? 'on' : ''}">UTM 47N (เมตร)</button></div>
+        <div class="tiny muted" style="margin-top:8px">UTM 47N: ทุกงานที่ได้ราสเตอร์ (ไบแวเรียต ปรับความละเอียด สูตร อนุกรมเวลา ดาวน์โหลด ภาพดาวเทียม ฯลฯ) คำนวณบนกริดต้นทางเหมือนเดิม แล้วแปลงผลเป็น EPSG:32647 ตอนท้าย —
+          พิกเซลเป็นเมตร พื้นที่เท่ากันทุกพิกเซล · จำนวนนับผลรวมคงเดิม · ทั้งประเทศใช้โซน 47N · ข้อมูลเก่าในคลังแปลงทีละหลายชุดได้ที่ <a href="#/tools?t=utm">เครื่องมือข้อมูล → แปลงเป็น UTM 47N</a></div></div>
       <div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--lav);color:var(--lav)"></span>โทเคน (เข้ารหัส)</h2><button class="sm" id="secAdd">${IC.plus}เพิ่ม</button></div>
         ${s.secrets.length ? `<table><tbody>${s.secrets.map(x => `<tr><td>${IC.lock}${esc(x.name)}</td><td class="mono tiny muted">${x.id}</td><td style="text-align:right"><button class="sm ghost danger" data-sec="${x.id}">${IC.trash}</button></td></tr>`).join('')}</tbody></table>` : '<div class="small muted">ยังไม่มี</div>'}
         <div class="tiny muted" style="margin-top:8px">เข้ารหัสด้วย Windows DPAPI · ใช้กับลิงก์ ArcGIS / WMS ที่ต้องยืนยันตัวตน · ไม่ถูกบันทึกใน lineage หรือ log</div></div>
@@ -2475,6 +2522,10 @@ async function pageSystem() {
     if (ask && !await ui.confirm('ยืนยัน', `<p>${ask}</p>`, 'ดำเนินการ')) return;
     const r = await api(ENGINE + '/api/system/clear', { json: { what } }); toast(`เรียบร้อย${r.freed ? ' · คืนพื้นที่ ' + bytes(r.freed) : ''}`); route();
   };
+  $$('#ocSeg button').forEach(b => b.onclick = async () => {
+    try { await api(ENGINE + '/api/settings/out-crs', { json: { out_crs: b.dataset.v } }); $$('#ocSeg button').forEach(x => x.classList.toggle('on', x === b));
+      toast(b.dataset.v === 'source' ? 'ผลลัพธ์ใช้ระบบพิกัดตามข้อมูลต้นทาง' : 'ผลลัพธ์ทุกงานเป็น UTM 47N (EPSG:32647)'); } catch (e) { toast(e.message, true); }
+  });
   $('#clrTiles').onclick = () => clr('tiles');
   $('#clrPrev').onclick = () => clr('preview', 'ลบสำเนาพรีวิวทั้งหมด? แอปจะสร้างใหม่ทีละชุดเมื่อเปิดดู');
   if ($('#clrDead')) $('#clrDead').onclick = () => clr('dead_jobs', 'ลบโฟลเดอร์ผลของงานที่ล้มเหลว/ยกเลิก (ไฟล์ที่ไม่สมบูรณ์) — ย้อนกลับไม่ได้');

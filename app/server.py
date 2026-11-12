@@ -1064,14 +1064,27 @@ def _du(p):
     return dict(files=n, bytes=s)
 
 
+@app.route('/api/settings/out-crs', methods=['POST'])
+def set_out_crs():
+    """ระบบพิกัดผลลัพธ์ของทุกงาน: "source" (ตามต้นทาง) | "EPSG:32647" (UTM 47N) — เก็บใน settings.json"""
+    from .config import save_settings
+    v = (request.get_json(force=True) or {}).get('out_crs') or 'source'
+    if v not in ('source', 'EPSG:32647'):
+        raise ApiError('out_crs ต้องเป็น source หรือ EPSG:32647')
+    save_settings(out_crs=v)
+    return jsonify(out_crs=v)
+
+
 @app.route('/api/system')
 def system_info():
+    from .config import load_settings
     c = DIRS['cache']
     dead = db.query("SELECT id,title,status,out_dir FROM jobs WHERE status IN ('failed','cancelled') AND out_dir IS NOT NULL")
     dead = [j for j in dead if j['out_dir'] and Path(j['out_dir']).exists()]
     return jsonify(dirs={k: dict(path=str(v), **_du(v)) for k, v in DIRS.items()},
                    cache={k: _du(c / k) for k in ('preview', 'samples', 'vrt')},
-                   tile_cache=len(tiles._tc), link_cache=len(links._tc), dead_jobs=dead, secrets=vault.listing())
+                   tile_cache=len(tiles._tc), link_cache=len(links._tc), dead_jobs=dead, secrets=vault.listing(),
+                   out_crs=load_settings().get('out_crs') or 'source')
 
 
 @app.route('/api/system/restart', methods=['POST'])
@@ -1170,7 +1183,7 @@ def api_res_options():
     if len(dss) == 2:
         a, b = dss[0]['meta'], dss[1]['meta']
         if a.get('crs_key') != b.get('crs_key'):
-            raise ApiError(f'CRS ต่างกัน ({a.get("crs_key")} กับ {b.get("crs_key")}) — V1 ยังไม่ reproject')
+            raise ApiError(f'CRS ต่างกัน ({a.get("crs_key")} กับ {b.get("crs_key")}) — แปลงเป็น UTM 47N ก่อน (หน้าชุดข้อมูล → "แปลงเป็น UTM 47N")')
     return jsonify(options=res_options(dss))       # มุมเริ่มต่างกันได้ — res_options ตรวจแลตทิซร่วมให้แต่ละความละเอียด
 
 
@@ -1261,6 +1274,19 @@ def validate_job(kind, p):
         if p.get('aoi_id'):
             est['aoi'] = aoimod.get(int(p['aoi_id']))['name']
         return est
+    if kind == 'reproject':
+        from . import ops_proj
+        d = _confirmed_raster(p['dataset_id'])
+        ab = aoimod.geom_in(int(p['aoi_id']), p.get('crs') or ops_proj.TARGET).bounds if p.get('aoi_id') else None
+        g = ops_proj.plan(d, p.get('target_res'), p.get('crs') or ops_proj.TARGET, ab)
+        sm = ops_proj.native_m(d)
+        if g.rx < sm / 1.5:
+            warns.append(f'ละเอียดกว่าต้นทาง (~{sm:.0f} ม. → {g.rx:g} ม.) — ดูละเอียดขึ้นแต่ไม่มีข้อมูลใหม่')
+        raw = g.width * g.height * 4
+        if raw > 20e9:
+            warns.append(f'ผลลัพธ์ใหญ่มาก {g.width:,} × {g.height:,} พิกเซล — ส่วนที่ว่างถูกข้าม แต่อาจใช้เวลานาน · ตัดตามพื้นที่ศึกษาหรือเลือกความละเอียดหยาบขึ้นได้')
+        return dict(grid=g.describe(), raw_bytes=raw, aoi=aoimod.get(int(p['aoi_id']))['name'] if p.get('aoi_id') else None,
+                    suggested_res=ops_proj.suggest_res(d), warnings=warns)
     if kind == 'resample':
         d = _confirmed_raster(p['dataset_id'])
         s = engine.Source(d)
@@ -1445,7 +1471,10 @@ def create_job():
         raise ApiError(str(e))
     res = est['grid']['res_label'].split(' (')[0]
     aoi_txt = f' · {est["aoi"]}' if est.get('aoi') else ''
-    if kind == 'resample':
+    if kind == 'reproject':
+        from . import ops_proj
+        title = f'แปลงเป็น {ops_proj.CRS_TH.get(p.get("crs") or ops_proj.TARGET)}: {db.get("datasets", int(p["dataset_id"]))["name"]} → {res}{aoi_txt}'
+    elif kind == 'resample':
         title = f'ปรับความละเอียด: {db.get("datasets", int(p["dataset_id"]))["name"]} → {res}{aoi_txt}'
     elif kind == 'rasterize':
         title = p.get('name') or f'แปลงเป็นราสเตอร์: {db.get("datasets", int(p["dataset_id"]))["name"]} → {res}{aoi_txt}'

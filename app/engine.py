@@ -559,7 +559,7 @@ def make_grid(sources, res_frac):
     for s in sources[1:]:
         if s.meta.get('crs_key') != s0.meta.get('crs_key'):
             raise EngineError(f'CRS ไม่ตรงกัน: "{s0.name}" ({s0.meta.get("crs_key")}) กับ "{s.name}" ({s.meta.get("crs_key")}) '
-                              '— V1 ยังไม่ reproject')
+                              '— แปลงชุดใดชุดหนึ่ง (หรือทั้งคู่) เป็น UTM 47N ก่อน: หน้าชุดข้อมูล → "แปลงเป็น UTM 47N" หรือเครื่องมือข้อมูล')
     res_frac = Fraction(res_frac)
     a = align(sources, res_frac)
     ref = a['ref']

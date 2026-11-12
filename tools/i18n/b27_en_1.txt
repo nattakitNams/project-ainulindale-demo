@@ -1,0 +1,30 @@
+The whole country uses zone 47N (eastern edge distorted ~0.6%) · count totals preserved · for datasets you will cross, pick 10 / 100 / 1,000 m so the grids line up exactly
+Convert rasters (WGS84 degrees / UTM 48N / others) to UTM 47N (EPSG:32647), several at once — creates new datasets in the library; originals unchanged
+0.3″ → 10 m · 3″ → 100 m · 30″ → 1,000 m — datasets without a confirmed value type cannot be converted (confirm it on the dataset page first)
+Count = area-weighted, totals preserved · continuous = area-weighted mean · class = majority · empty areas skipped
+pixels — empty areas are skipped, but it may take a while · clip to a study area or choose a coarser resolution
+Only rasters can be reprojected (vectors are reprojected automatically when used)
+) — convert to UTM 47N first (dataset page → "Convert to UTM 47N")
+m) — looks finer but carries no new information
+% — check the source's edges / nodata value
+Count: area-weighted, total preserved
+Automatic (closest to each source)
+jobs sent — see progress in the Jobs tab
+Resolution must be more than 0 metres
+Automatic (closest to source)
+Finer than the source (~
+EPSG:32647 · currently
+Resolution (metres)
+Total differs from the source
+Coarser than the source (~
+datasets to UTM 47N?
+Convert to UTM 47N
+WGS 84 (degrees)
+Total: source
+Start all
+Select all
+Convert selected
+Cannot convert
+m for all
+→ result
+Select none
