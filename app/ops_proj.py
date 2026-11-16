@@ -44,10 +44,11 @@ def suggest_res(ds):
     return min(NICE, key=lambda x: abs(math.log(x / n)))
 
 
-def plan(ds, target_res=None, crs=TARGET, aoi_bounds=None):
-    """กริดผลลัพธ์ (ยังไม่อ่านข้อมูล) — ใช้ทั้งตอนประเมินงานและตอนรัน"""
+def plan(ds, target_res=None, crs=TARGET, aoi_bounds=None, resize=False):
+    """กริดผลลัพธ์ (ยังไม่อ่านข้อมูล) — ใช้ทั้งตอนประเมินงานและตอนรัน
+    resize=True: อยู่ใน CRS เป้าหมายแล้วแต่ขอขนาดเมตรใหม่ (ขั้นท้ายของงานที่ผู้ใช้เลือกความละเอียดเป็นเมตร)"""
     m = ds['meta']
-    if (m.get('crs_key') or '').upper() == crs.upper():
+    if (m.get('crs_key') or '').upper() == crs.upper() and not resize:
         raise EngineError(f'"{ds["name"]}" อยู่ใน {CRS_TH.get(crs, crs)} แล้ว')
     res = float(target_res or suggest_res(ds))
     if res <= 0:
@@ -73,7 +74,7 @@ def _method(vt, src_m, res):
     return Resampling.mode if res > 1.5 * src_m else Resampling.nearest
 
 
-def convert(ds, outp, crs=TARGET, target_res=None, aoi_b=None, P=None, log=print):
+def convert(ds, outp, crs=TARGET, target_res=None, aoi_b=None, P=None, log=print, resize=False):
     """แปลงไฟล์ของชุด ds → outp (CRS เป้าหมาย) · คืน (summary, warnings, grid) — ใช้ทั้งงาน reproject และขั้นท้ายของทุกงาน (ผลลัพธ์เป็น UTM)"""
     P = P or (lambda f, m=None: None)
     if ds['kind'] != 'raster':
@@ -91,7 +92,7 @@ def convert(ds, outp, crs=TARGET, target_res=None, aoi_b=None, P=None, log=print
         except ValueError:
             cmap = None
     nod = sm.get('nodata')
-    grid = plan(ds, target_res, crs, aoi_b)
+    grid = plan(ds, target_res, crs, aoi_b, resize)
     res = grid.rx
     src_m = native_m(ds)
     rs = _method(vt, src_m, res)
@@ -226,13 +227,18 @@ def finalize(job, res, P, log):
     from .config import DIRS
     did = int(res['dataset_id'])
     ds = db.get('datasets', did)
-    if not ds or ds['kind'] != 'raster' or (ds['meta'].get('crs_key') or '').upper() == crs.upper():
+    if not ds or ds['kind'] != 'raster':
         return None
+    want_m = (job.get('params') or {}).get('out_res_m')
+    if (ds['meta'].get('crs_key') or '').upper() == crs.upper():
+        # อยู่ใน CRS ผลลัพธ์แล้ว — แปลงต่อเฉพาะเมื่อผู้ใช้ขอขนาดเมตรที่ต่างจากกริดที่คำนวณ (เช่น คำนวณที่ 30 ม. ขอผล 250 ม.)
+        if not want_m or abs(abs(ds['meta']['transform'][0]) - float(want_m)) <= 1e-6 * float(want_m):
+            return None
     src = Path(ds['path'])
-    res_m = (job.get('params') or {}).get('out_res_m') or suggest_res(ds)
+    res_m = want_m or suggest_res(ds)
     outp = src.with_name(f'{src.stem}_{_tag(crs)}_{gm.fmt_num(float(res_m))}m.tif')
     log(f'ผลลัพธ์เป็น {CRS_TH.get(crs, crs)} (ค่าตั้ง "ระบบพิกัดผลลัพธ์") — แปลงตอนท้าย')
-    summary, warnings, _g = convert(ds, outp, crs, res_m, None, lambda f, m=None: P(0.95 + 0.05 * (f or 0), m), log)
+    summary, warnings, _g = convert(ds, outp, crs, res_m, None, lambda f, m=None: P(0.95 + 0.05 * (f or 0), m), log, resize=True)
     catalog.relink(ds, str(outp))
     d1 = db.get('datasets', did)                             # relink อ่าน meta ใหม่จากไฟล์ → คืนค่าที่งานเติมไว้ (hub_key, purpose, hex ฯลฯ)
     db.update('datasets', did, meta={**{k: v for k, v in ds['meta'].items() if k not in d1['meta']}, **d1['meta'], 'warnings': []})

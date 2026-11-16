@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.1.0';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.1.1';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -427,7 +427,7 @@ async function pageDataset(id) {
         <button id="rsRun" class="primary">${IC.play}สร้าง</button></div>
         ${(m.crs_key || '').toUpperCase() !== 'EPSG:32647' ? `<div class="card"><div class="card-head"><h2><span class="dot" style="background:var(--sky);color:var(--sky)"></span>แปลงเป็น UTM 47N</h2><span class="tiny muted">EPSG:32647 · ตอนนี้ ${esc(m.crs_key || '?')}</span></div>
         <div class="grid-form">
-          <label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes"><option value="">อัตโนมัติ (ใกล้ต้นทาง)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม.</option>`).join('')}</select></label>
+          <label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes" data-custom="m"><option value="">อัตโนมัติ (ใกล้ต้นทาง)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม.</option>`).join('')}</select></label>
           <label class="field"><span>พื้นที่ศึกษา</span><select id="pjAoi">${aoiOpts}</select></label>
         </div>
         <div class="tiny muted" style="margin:8px 0">ทั้งประเทศใช้โซน 47N (ขอบตะวันออกเพี้ยนราว 0.6%) · จำนวนนับผลรวมคงเดิม · ชุดที่จะไขว้กันเลือก 10 / 100 / 1,000 ม. กริดจะซ้อนกันพอดี</div>
@@ -899,6 +899,7 @@ function zonalLegend(d) {
 
 // ประเมินขนาด → ถาม → ส่งงาน
 async function runJob(kind, params, then) {
+  params = resMeterParams(kind, params);
   try {
     const e = await api(ENGINE + '/api/estimate', { json: { kind, params } });
     if (!e.ok) throw new Error(e.error);
@@ -1364,6 +1365,8 @@ function aoiOptions(aois, { val = a => a.id, text = a => `${esc(a.name)} · ${fm
 //   <select> เดิมยังอยู่ (ซ่อน) เป็นที่เก็บค่า → โค้ดเดิมที่อ่าน sel.value / ฟัง change ใช้ได้เหมือนเดิม
 //   blank = ข้อความตัวเลือกค่าว่าง (null = ไม่มีตัวเลือกว่าง) · extra = ตัวเลือกคงที่ (HTML) ต่อจากค่าว่าง · group = หัวหมวดของชุดข้อมูล
 function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extra = '', group = null) {
+  sel.dataset.nocbx = '';                                            // ใช้กล่องของ dsPicker (มีกรองโฟลเดอร์) ไม่ใช่กล่องทั่วไป
+  if (sel._cbxBox) { sel._cbxBox.remove(); sel._cbxBox = null; sel.classList.remove('cbx-src'); }
   const pathName = id => { const o = []; let f = FOL.find(x => x.id === id); while (f) { o.unshift(f.name); f = FOL.find(x => x.id === f.parent_id); } return o.join(' / '); };
   const sub = id => { const s = new Set([id]); let grew = true; while (grew) { grew = false; FOL.forEach(f => { if (s.has(f.parent_id) && !s.has(f.id)) { s.add(f.id); grew = true; } }); } return s; };
   const box = document.createElement('div');
@@ -1451,6 +1454,167 @@ function dsPicker(sel, list, FOL, optFn, blank = '— เลือก —', extr
   };
   if (!sel.options.length) apply(); else label();        // <select> ว่าง → สร้างตัวเลือกครั้งแรก
 }
+
+// ================= ความละเอียดเป็นเมตร (1.1.1) =================
+// ช่องความละเอียดของงานเก็บค่า "กริดต้นทาง" (ฟิลิปดา/เมตรแบบเศษส่วน) เหมือนเดิม — โค้ดเดิมที่อ่าน sel.value ใช้ได้ทุกจุด
+// แต่ผู้ใช้เห็น/เลือก/พิมพ์เป็นเมตร: ตัวเลือก = ขนาดเมตรกลม ๆ ในช่วงของข้อมูล + ค่าที่พิมพ์เอง → แต่ละตัวผูกกับกริดต้นทางที่ "ไม่หยาบกว่า" ขนาดนั้น
+// ตอนสั่งงาน runJob เติม out_crs = UTM 47N + out_res_m → ตัวประมวลผลคำนวณบนกริดต้นทางแล้วแปลงเป็นเมตรตอนท้าย (ops_proj.finalize คงผลรวม)
+// ชนิดงาน → ช่องความละเอียดของงานนั้น (ผลเป็นราสเตอร์ จึงแปลงเป็นเมตรตอนท้ายได้ · กริดเวกเตอร์/หกเหลี่ยมไม่อยู่ในนี้)
+const RES_M_FOR = { resample: 'rsRes', rasterize: 'rzRes', bivariate: 'res', change: 'cRes', calc: 'cpRes', trend: 'trRes' };
+const RES_M_IDS = Object.values(RES_M_FOR);
+const RES_M_NICE = [1, 2, 5, 10, 15, 20, 25, 30, 50, 75, 100, 150, 200, 250, 300, 500, 750, 1000, 1500, 2000, 2500, 3000, 5000, 7500, 10000, 20000, 25000, 50000, 100000];
+const fmtM = m => m >= 1000 ? `${fmt(m / 1000, m % 1000 ? 2 : 0)} กม.` : `${fmt(m, m % 1 ? 1 : 0)} ม.`;
+function resOptMeters(o) {
+  const v = o.value;
+  if (!v) return null;
+  const f = v.includes('/') ? v.split('/').reduce((a, b) => +a / +b) : +v;
+  const t = o.dataset.lbl || o.textContent;
+  if (!/[″′°]/.test(t.split('(')[0])) return f;                     // กริดเมตรอยู่แล้ว
+  const lm = /(?:ที่|at)\s*(\d+(?:\.\d+)?)°/.exec(t);
+  const lat = (lm ? +lm[1] : 14) * Math.PI / 180;
+  return f / 3600 * 111320 * Math.sqrt(Math.cos(lat));               // ขนาดเฉลี่ยเรขาคณิตของด้านกว้าง/ยาว (เมตร)
+}
+function resMeterOption(base, M) {
+  // กริดต้นทางที่หยาบที่สุดแต่ไม่หยาบกว่า M (ผลรวมไม่หาย · ไม่ต้องแตกพิกเซล) · ละเอียดกว่าทุกตัวเลือก → ใช้ตัวที่ละเอียดสุด
+  const ok = base.filter(b => b.m <= M * 1.001);
+  const b = ok.length ? ok.reduce((x, y) => (y.m > x.m ? y : x)) : base.reduce((x, y) => (y.m < x.m ? y : x));
+  const finer = M < Math.min(...base.map(x => x.m)) * 0.999 || /⚠ ละเอียดกว่าข้อมูล|finer than the data/.test(b.lbl);
+  const inner = b.lbl.split(' (')[0];
+  return `<option value="${esc(b.v)}" data-m="${M}" data-lbl="${esc(b.lbl)}">${fmtM(M)}${finer ? ' · ⚠ ละเอียดกว่าข้อมูล' : ''} · คำนวณที่ ${esc(inner)}</option>`;
+}
+function resMeterize(sel) {
+  const opts = [...sel.options];
+  if (!opts.some(o => o.value) || opts.every(o => !o.value || o.dataset.m)) return;   // ว่าง / เป็นเมตรแล้ว
+  const keep = opts.filter(o => !o.value).map(o => o.outerHTML).join('');
+  const base = opts.filter(o => o.value && !o.dataset.m).map(o => ({ v: o.value, lbl: o.dataset.lbl || o.textContent, m: resOptMeters(o) })).filter(b => b.m > 0);
+  if (!base.length) return;
+  sel._resBase = base;
+  const lo = Math.min(...base.map(b => b.m)), hi = Math.max(...base.map(b => b.m));
+  let ms = RES_M_NICE.filter(M => M >= lo * 0.9 && M <= hi * 1.1);
+  if (!ms.length) ms = [Math.round(lo)];
+  const cur = sel.value, curM = (base.find(b => b.v === cur) || {}).m;
+  sel.innerHTML = keep + ms.map(M => resMeterOption(base, M)).join('');
+  if (cur && curM) {                                                   // คงกริดที่เลือกไว้ → ขนาดเมตรที่ใกล้ที่สุดของกริดนั้น
+    const same = [...sel.options].filter(o => o.value === cur);
+    const pick = same.length ? same.reduce((a, o) => (Math.abs(Math.log(o.dataset.m / curM)) < Math.abs(Math.log(a.dataset.m / curM)) ? o : a))
+      : [...sel.options].filter(o => o.dataset.m).reduce((a, o) => (Math.abs(Math.log(o.dataset.m / curM)) < Math.abs(Math.log(a.dataset.m / curM)) ? o : a));
+    sel.selectedIndex = pick.index;
+  }
+}
+function resMeterCustom(sel, M) {                                       // พิมพ์ขนาดเอง → เพิ่มตัวเลือก แล้วเลือก
+  if (!sel._resBase || !(M > 0)) return null;
+  const ex = [...sel.options].find(o => +o.dataset.m === M);
+  if (ex) return ex;
+  const t = document.createElement('template');
+  t.innerHTML = resMeterOption(sel._resBase, M).trim();
+  const o = t.content.firstChild;
+  const after = [...sel.options].find(x => +x.dataset.m > M);
+  sel.insertBefore(o, after || null);
+  return o;
+}
+// runJob: ช่องความละเอียดที่เลือกเป็นเมตร → ผลลัพธ์ UTM 47N ตามขนาดนั้น
+function resMeterParams(kind, params) {
+  if (!params || params.target_res == null || params.out_res_m || !RES_M_FOR[kind]) return params;
+  if (kind === 'rasterize' && params.grid === 'own') return params;            // กริดกำหนดเอง: ผู้ใช้เลือก CRS/หน่วยเองในช่องของมัน
+  const s = document.getElementById(RES_M_FOR[kind]);
+  const o = s && s.isConnected && s.value === String(params.target_res) ? s.selectedOptions[0] : null;
+  return o?.dataset.m ? { ...params, out_crs: 'EPSG:32647', out_res_m: +o.dataset.m } : params;
+}
+
+// ================= ดรอปดาวน์ทุกช่องค้นหาได้ (1.1.1) =================
+// ทุก <select> ในหน้าเว็บกลายเป็นปุ่ม + กล่องค้นหา (รูปแบบเดียวกับ dsPicker) · <select> เดิมอยู่ต่อ (ซ่อน) เป็นที่เก็บค่า
+// → โค้ดเดิมที่อ่าน/ตั้ง sel.value, ฟัง change, เปลี่ยนตัวเลือก, ตั้ง disabled ใช้ได้เหมือนเดิม
+// ช่องความละเอียดเป็นเมตร / ช่องที่มี data-custom="m" → พิมพ์ตัวเลขแล้วกด Enter ใช้ค่าที่พิมพ์เองได้
+function cbxSelect(sel) {
+  if (sel._cbx || sel.multiple || sel.closest('.cbx, .leaflet-container') || sel.dataset.nocbx != null) return;
+  sel._cbx = true;
+  const box = document.createElement('div');
+  box.className = 'cbx cbx-any';
+  if (sel.style.width) box.style.width = sel.style.width;
+  if (sel.style.flex) box.style.flex = sel.style.flex;
+  box.innerHTML = `<button type="button" class="cbx-btn"><span class="cbx-t"></span><span class="cbx-c">▼</span></button>
+    <div class="cbx-pop hide"><div class="cbx-bar"><input type="search" class="dsp-q" autocomplete="off"></div><div class="cbx-list" role="listbox"></div></div>`;
+  sel.before(box);
+  sel.classList.add('cbx-src');                                      // ซ่อนด้วยคลาสของตัวเอง — โค้ดเดิมที่สลับ .hide บน <select> ยังซ่อน/แสดงช่องได้ (ปุ่มตาม)
+  sel._cbxBox = box;
+  const btn = box.querySelector('.cbx-btn'), pop = box.querySelector('.cbx-pop'), lst = box.querySelector('.cbx-list'), tx = box.querySelector('.cbx-t'), q = box.querySelector('.dsp-q');
+  const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+  const idx = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'selectedIndex');
+  const isM = () => RES_M_IDS.includes(sel.id) || sel.dataset.custom === 'm';
+  const label = () => {
+    const o = sel.options[sel.selectedIndex];
+    tx.textContent = o ? o.textContent : '— เลือก —';
+    tx.classList.toggle('muted', !o || !o.value);
+    btn.disabled = sel.disabled;
+    box.title = sel.title || '';
+    box.classList.toggle('hide', sel.classList.contains('hide') || sel.style.display === 'none');
+  };
+  Object.defineProperty(sel, 'value', { configurable: true, get() { return desc.get.call(this); }, set(v) { desc.set.call(this, v); label(); } });
+  Object.defineProperty(sel, 'selectedIndex', { configurable: true, get() { return idx.get.call(this); }, set(v) { idx.set.call(this, v); label(); } });
+  new MutationObserver(() => { if (RES_M_IDS.includes(sel.id)) resMeterize(sel); label(); if (!pop.classList.contains('hide')) apply(); })
+    .observe(sel, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled', 'class', 'style', 'title'] });
+  sel.addEventListener('change', label);
+  let hi = -1;
+  const items = () => [...lst.querySelectorAll('.cbx-it:not(.dis)')];
+  const mark = i => { const it = items(); hi = Math.max(0, Math.min(i, it.length - 1)); it.forEach((x, k) => x.classList.toggle('on', k === hi)); it[hi]?.scrollIntoView({ block: 'nearest' }); };
+  const num = () => { const v = parseFloat(q.value.replace(/,/g, '')); return v > 0 ? (/กม|km/i.test(q.value) ? v * 1000 : v) : null; };
+  const apply = () => {
+    const t = q.value.trim().toLowerCase();
+    let n = 0;
+    const row = o => { if (t && !o.textContent.toLowerCase().includes(t) && !o.value.toLowerCase().includes(t)) return ''; n++;
+      return `<div class="cbx-it${o.disabled ? ' dis' : ''}${o.index === sel.selectedIndex ? ' cur' : ''}" data-i="${o.index}">${esc(o.textContent)}</div>`; };
+    const body = [...sel.children].map(c => c.tagName === 'OPTGROUP'
+      ? (r => r ? `<div class="cbx-g">${esc(c.label)}</div>` + r : '')([...c.children].map(row).join('')) : row(c)).join('');
+    const M = isM() ? num() : null;
+    const custom = M ? `<div class="cbx-it cbx-custom" data-m="${M}">ใช้ค่าที่พิมพ์: ${fmtM(M)}</div>` : '';
+    lst.innerHTML = custom + body + (n || custom ? '' : '<div class="cbx-it dis">ไม่พบตัวเลือกที่ตรงคำค้น</div>');
+    mark(Math.max(0, items().findIndex(x => +x.dataset.i === sel.selectedIndex)));
+  };
+  const outside = e => { if (!box.contains(e.target)) close(); };
+  const close = () => { pop.classList.add('hide'); document.removeEventListener('mousedown', outside); };
+  const open = () => {
+    if (sel.disabled) return;
+    q.value = '';
+    q.placeholder = isM() ? 'ค้นหา หรือพิมพ์ขนาด เช่น 250 หรือ 2 กม. แล้วกด Enter' : 'พิมพ์เพื่อค้นหา';
+    apply(); pop.classList.remove('hide'); document.addEventListener('mousedown', outside); q.focus();
+  };
+  const fire = () => { sel.dispatchEvent(new Event('input', { bubbles: true })); sel.dispatchEvent(new Event('change', { bubbles: true })); };
+  const choose = x => {
+    let i;
+    if (x.dataset.m && x.classList.contains('cbx-custom')) {
+      let o = RES_M_IDS.includes(sel.id) ? resMeterCustom(sel, +x.dataset.m) : null;
+      if (!o) {                                                        // ช่องตัวเลขทั่วไป (data-custom="m") → เพิ่มตัวเลือกค่าเมตรตรง ๆ
+        o = [...sel.options].find(z => +z.value === +x.dataset.m) || sel.appendChild(new Option(`${fmtM(+x.dataset.m)} (กำหนดเอง)`, x.dataset.m));
+      }
+      i = o.index;
+    } else i = +x.dataset.i;
+    const ch = i !== sel.selectedIndex;
+    idx.set.call(sel, i);
+    label(); close(); btn.focus();
+    if (ch) fire();
+  };
+  btn.onclick = () => (pop.classList.contains('hide') ? open() : close());
+  btn.onkeydown = e => { if (['ArrowDown', 'Enter', ' '].includes(e.key)) { e.preventDefault(); open(); } };
+  lst.onmousedown = e => { const x = e.target.closest('.cbx-it'); if (x && !x.classList.contains('dis')) { e.preventDefault(); choose(x); } };
+  q.oninput = apply;
+  q.onkeydown = e => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); mark(hi + 1); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); mark(hi - 1); }
+    else if (e.key === 'Enter') { e.preventDefault(); const x = items()[hi]; if (x) choose(x); }
+    else if (e.key === 'Escape') { e.preventDefault(); close(); btn.focus(); }
+  };
+  if (RES_M_IDS.includes(sel.id)) resMeterize(sel);
+  label();
+}
+// ทุก <select> ที่ปรากฏในหน้า (หน้าใหม่ · กล่องโต้ตอบ · แชต) → ค้นหาได้อัตโนมัติ
+new MutationObserver(ms => {
+  for (const m of ms) for (const n of m.addedNodes) {
+    if (n.nodeType !== 1) continue;
+    if (n.tagName === 'SELECT') cbxSelect(n);
+    else n.querySelectorAll?.('select').forEach(cbxSelect);
+  }
+}).observe(document.documentElement, { childList: true, subtree: true });
+document.addEventListener('DOMContentLoaded', () => document.querySelectorAll('select').forEach(cbxSelect));
 
 // ช่องค้นหาในรายการติ๊กเลือก (กล่อง "เพิ่มชั้นข้อมูล"): <input class="cl-q"> วางก่อน .checklist → กรองตามชื่อ ซ่อนหัวหมวดที่ไม่เหลือรายการ
 document.addEventListener('input', e => {
@@ -1708,9 +1872,9 @@ async function pageBiv() {
       ...(isHex(dsOf(c.dataset_id)) ? { field: c.field } : {}) });
     if (BIV.out === 'hex') return { x: ax(BIV.x), y: ax(BIV.y), size_km: +$('#hxSizeB').value, aoi_id: BIV.aoi_id, colors: BIV.colors, palette: BIV.pal,
       highlight: BIV.highlight, name: BIV.name || null };
-    return { x: ax(BIV.x), y: ax(BIV.y), target_res: BIV.target_res, tie: BIV.tie, count_down_valid: BIV.count_down_valid,
+    return resMeterParams('bivariate', { x: ax(BIV.x), y: ax(BIV.y), target_res: BIV.target_res, tie: BIV.tie, count_down_valid: BIV.count_down_valid,
       colors: BIV.colors, palette: BIV.pal, highlight: BIV.highlight, name: BIV.name || null, weight_dataset_id: $('#wds').value ? +$('#wds').value : null,
-      aoi_id: BIV.aoi_id, aoi_rule: BIV.aoi_rule, aoi_mask_res: BIV.aoi_mask_res || null };
+      aoi_id: BIV.aoi_id, aoi_rule: BIV.aoi_rule, aoi_mask_res: BIV.aoi_mask_res || null });
   };
   $('#check').onclick = async () => {
     const p = collect();
@@ -2438,7 +2602,7 @@ async function pageTools(q) {
         จำนวนนับ = ถ่วงพื้นที่ผลรวมคงเดิม · ค่าต่อเนื่อง = เฉลี่ยถ่วงพื้นที่ · ชั้น = เสียงข้างมาก · ส่วนที่ว่างข้ามให้</div>
       <div class="row" style="margin-bottom:6px"><button class="sm ghost" id="pjAll">เลือกทั้งหมด</button><button class="sm ghost" id="pjNone">ไม่เลือก</button></div>
       ${checklist(cand, 'pjL')}
-      <div class="grid-form" style="margin-top:12px"><label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes2"><option value="">อัตโนมัติ (ใกล้ต้นทางของแต่ละชุด)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม. ทุกชุด</option>`).join('')}</select></label>
+      <div class="grid-form" style="margin-top:12px"><label class="field"><span>ความละเอียด (เมตร)</span><select id="pjRes2" data-custom="m"><option value="">อัตโนมัติ (ใกล้ต้นทางของแต่ละชุด)</option>${[10, 30, 100, 250, 500, 1000].map(r => `<option value="${r}">${fmt(r, 0)} ม. ทุกชุด</option>`).join('')}</select></label>
         ${aoiSel('pjAoi2')}</div>
       <div class="tiny muted" style="margin-top:6px">0.3″ → 10 ม. · 3″ → 100 ม. · 30″ → 1,000 ม. — ชุดที่ยังไม่ยืนยันประเภทค่าแปลงไม่ได้ (ยืนยันในหน้าชุดข้อมูลก่อน)</div>
       <button id="pjRun2" class="primary" style="margin-top:12px">${IC.play}แปลงที่เลือก</button><div id="pjOut" class="small" style="margin-top:10px"></div></div>`;

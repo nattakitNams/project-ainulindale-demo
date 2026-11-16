@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """เซิร์ฟเวอร์ Flask (รันในเครื่อง) — python -m app.server หรือ run.bat"""
 import json
+import math
 import os
 import re
 import subprocess
@@ -1308,7 +1309,7 @@ def validate_job(kind, p):
         aoi_name = _apply_aoi(p, g, [og])
         s.close()
         engine.check_tiles(g, [og])
-        if og.mode == 'same' and not aoi_name:
+        if og.mode == 'same' and not aoi_name and not p.get('out_res_m'):
             raise ApiError('ความละเอียดเป้าหมายเท่ากับต้นฉบับ (เลือกพื้นที่ศึกษาถ้าต้องการตัดอย่างเดียว)')
         if og.mode == 'up' and d['value_type'] == 'count':
             warns.append(f'ความแม่นยำเทียม: แบ่งค่านับลง {og.k}×{og.k} แบบเท่ากัน ดูละเอียดขึ้นแต่ไม่มีข้อมูลใหม่')
@@ -1452,7 +1453,7 @@ def validate_job(kind, p):
 def estimate():
     b = request.get_json(force=True)
     try:
-        return jsonify(ok=True, **validate_job(b['kind'], b['params']))
+        return jsonify(ok=True, **_meter_out(validate_job(b['kind'], b['params']), b['params']))
     except (engine.EngineError, ApiError) as e:
         return jsonify(ok=False, error=str(e))
 
@@ -1474,12 +1475,43 @@ def sat_search():
         raise ApiError(str(e))
 
 
+def _meter_out(est, p):
+    """ความละเอียดเป็นเมตร (1.1.1): หน้าเว็บส่ง out_res_m + out_crs=UTM 47N คู่กับ target_res (กริดต้นทางที่ไม่หยาบกว่า)
+    → คำนวณบนกริดต้นทางตามเดิม แล้ว ops_proj.finalize แปลงเป็นเมตรตอนท้าย (คงผลรวม) · ผลประเมิน/ชื่องานแสดงขนาดเมตรสุดท้าย"""
+    m = p.get('out_res_m')
+    if not m:
+        return est
+    try:
+        m = float(m)
+    except (TypeError, ValueError):
+        raise ApiError('ความละเอียด (เมตร) ต้องเป็นตัวเลข')
+    if not 0.5 <= m <= 100_000:
+        raise ApiError('ความละเอียด (เมตร) ต้องอยู่ระหว่าง 0.5 ม. – 100 กม.')
+    from . import ops_proj
+    if (p.get('out_crs') or ops_proj.TARGET) != ops_proj.TARGET:
+        raise ApiError('ความละเอียดเป็นเมตรใช้กับผลลัพธ์ UTM 47N (EPSG:32647) เท่านั้น')
+    p['out_crs'] = ops_proj.TARGET
+    g = est.get('grid') or {}
+    if g.get('res') and g.get('width'):
+        rx, ry = abs(g['res'][0]), abs(g['res'][1])
+        if rx < 1:                                          # กริดองศา → ขนาดเป็นเมตรที่ละติจูดกลาง
+            lat = math.radians(g['y0'] - g['height'] * ry / 2)
+            wm, hm = g['width'] * rx * 111_320 * math.cos(lat), g['height'] * ry * 110_574
+        else:
+            wm, hm = g['width'] * rx, g['height'] * ry
+        g['width'], g['height'] = max(1, round(wm / m)), max(1, round(hm / m))
+    inner = (g.get('res_label') or '').split(' (')[0]
+    g['res_label'] = f'{gm.res_label(Fraction(str(m)), False)} (UTM 47N' + (f' · คำนวณบนกริด {inner} แล้วแปลงตอนท้าย' if inner else '') + ')'
+    est['grid'] = g
+    return est
+
+
 @app.route('/api/jobs', methods=['POST'])
 def create_job():
     b = request.get_json(force=True)
     kind, p = b['kind'], b['params']
     try:
-        est = validate_job(kind, p)
+        est = _meter_out(validate_job(kind, p), p)
     except engine.EngineError as e:
         raise ApiError(str(e))
     res = est['grid']['res_label'].split(' (')[0]

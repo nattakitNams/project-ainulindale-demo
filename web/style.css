@@ -587,6 +587,9 @@ body:has(#ainuGate) .lang-float, body:has(#ainuSetup) .lang-float { display: inl
 .aoi-sec:first-of-type { margin-top: 2px; }
 .dsp { display: flex; gap: 6px; flex-wrap: wrap; }
 .cbx { position: relative; width: 100%; min-width: 0; }
+.cbx-src { display: none !important; }
+.cbx-any .cbx-pop { min-width: 260px; }
+.cbx-custom { color: var(--lav); font-weight: 600; }
 .cbx-btn { width: 100%; display: flex; align-items: center; gap: 8px; justify-content: space-between; text-align: left; font: inherit; font-weight: 400;
   color: var(--text); background: var(--field); border: 1px solid var(--line-2); border-radius: 11px; padding: 8px 11px; cursor: pointer; box-shadow: none; }
 .cbx-btn:focus-visible, .cbx-btn:hover { border-color: rgba(195, 182, 255, .6); }

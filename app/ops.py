@@ -476,7 +476,7 @@ def op_resample(job, P, log):
     grid = engine.make_grid([src], target)
     og = engine.OnGrid(src, grid, p.get('count_down_valid', 'any'), p.get('tie', 'high'))
     warnings = []
-    if og.mode == 'same':
+    if og.mode == 'same' and not p.get('aoi_id') and not p.get('out_res_m'):   # เท่าเดิม = ตัดพื้นที่ศึกษา หรือแปลงเป็นเมตรตอนท้าย (ตรงกับ validate_job)
         raise EngineError('ความละเอียดเป้าหมายเท่ากับต้นฉบับ')
     if og.mode == 'up' and vt == 'count':
         warnings.append(f'ความแม่นยำเทียม: แบ่งค่านับลงพิกเซลละเอียดขึ้น {og.k}×{og.k} แบบเท่ากัน '
@@ -524,7 +524,7 @@ def op_resample(job, P, log):
     summary = dict(valid_pixels=nval, sum=total, grid=grid.describe(), aoi=aoi_info)
     params = dict(p, value_type=vt, method={'count': {'up': 'หารเท่ากัน ÷k²', 'down': 'ผลรวม'},
                                             'density': {'up': 'ทำซ้ำค่า', 'down': 'ค่าเฉลี่ยถ่วงพื้นที่'},
-                                            'class': {'up': 'ทำซ้ำค่า', 'down': f'เสียงข้างมาก (เสมอ → {p.get("tie", "high")})'}}[vt][og.mode],
+                                            'class': {'up': 'ทำซ้ำค่า', 'down': f'เสียงข้างมาก (เสมอ → {p.get("tie", "high")})'}}[vt].get(og.mode, 'เท่าเดิม (ตัดพื้นที่ / แปลงตอนท้าย)'),
                   mode=og.mode, factor=og.k)
     export.write_lineage(out_dir, 'resample', [export.lineage_input(ds)], params, [outp], summary, warnings)
     new_id = register_output(outp, f"{ds['name']} → {lbl.split(' (')[0]}", vt, job['id'], 'derived')
