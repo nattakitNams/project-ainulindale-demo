@@ -4,7 +4,7 @@
 ทั้งราสเตอร์และเวกเตอร์ ความละเอียดต่างกันได้ ผลรวมค่าไม่หาย (count / density / class มีกติกาการรวม-แตกพิกเซลต่างกัน)
 พร้อมแปลงเวกเตอร์ ↔ ราสเตอร์ ↔ หกเหลี่ยม (hex), เปรียบเทียบ 2 ช่วงเวลา, แผนที่ซ้อนชั้น, คลังข้อมูลแบบโฟลเดอร์ + ถังขยะ
 (หน้าชุดข้อมูลมีกราฟการกระจายของค่าตามสัญลักษณ์ และตาราง attribute ของเวกเตอร์/หกเหลี่ยม ค้นหา เรียง คลิกแถวแล้วซูมไปรูปนั้นได้),
-Data hub รายชื่อแหล่งข้อมูล ~1,560 ชุด (ผู้ช่วย AI หาไฟล์จริงและดึงเข้าแอปเองได้ — รวมไฟล์ย่อยรายช่วงอายุ/ปีของชุดที่ต้นทางลงไว้เป็น ZIP)
+Data hub รายชื่อแหล่งข้อมูล ~1,560 ชุด พร้อม **ตารางไฟล์** บอกว่าแต่ละชุดมีปีไหน ไฟล์อะไร และลิงก์โหลด/นำเข้ารายไฟล์ (ผู้ช่วย AI หาไฟล์จริงและดึงเข้าแอปเองได้ — รวมไฟล์ย่อยรายช่วงอายุ/ปีของชุดที่ต้นทางลงไว้เป็น ZIP) · ผู้ช่วย AI ใช้บัญชี Claude Pro/Max แทน API key ได้ (ผู้ให้บริการ "Claude Code")
 และตัวออกแบบรายงานแผนที่แบบลากวาง (ส่งออก PDF) · หน้าเว็บสองภาษา ไทย / English
 
 **หน้าเว็บ:** https://nattakitnams.github.io/project-ainulindale-demo/
@@ -164,6 +164,7 @@ python -m app.server --no-browser
 | คลังความรู้ข้อมูล | `knowledge.py` | หัวข้อ = dict ใน TOPICS (หน่วย สูตรแปลงค่า ช่วงค่าปกติ ข้อควรระวัง ความน่าเชื่อถือ + match) — เขียนจากเอกสารผู้ผลิต ห้ามเดาตัวเลข |
 | สถิติไบแวเรียต | `bivstats.py` | สุ่มบนกริด/metric เดียวกับแผนที่ · ผลแคชที่ <out_dir>/stats/ (ลบโฟลเดอร์นี้ = คิดใหม่) |
 | สูตรงาน | `recipes.py` | ขั้น JSON อ้าง "$sN" / "$sN.2015" (ผลรายปี) · `for_years` ทำซ้ำทุกปี (แทน `{year}` ใน params) · download แบบ years+match+must+combine sum (หลายไฟล์ → รวมเป็นชุดเดียวต่อปีด้วย calc ทีละ ≤ 12) · `summary` ผลรวม + % เทียบชุดคู่ · trend `"items":"$sN"` · ≤ 30 ขั้น · runner เป็นเธรดในเซิร์ฟเวอร์ (ไม่ใช้ LLM) · workspace/recipes/<id>.json เขียนแบบอะตอม · ชนิดงานใหม่ต้องเพิ่มใน JOB_KINDS ของ recipes ด้วย |
+| ผู้ให้บริการ Claude Code (1.1.0) | `ai_cc.py`, `ai_mcp.py` | ใช้บัญชี claude.ai ที่ล็อกอินใน Claude Code / แอป Claude Desktop แทน API key · ทุกรอบแชตเรียก `claude -p` (`--tools ""` ปิดเครื่องมือในตัวทั้งหมด · `--strict-mcp-config` · `--setting-sources project` ในโฟลเดอร์ว่าง · ไม่ส่ง `ANTHROPIC_API_KEY` ต่อ กันสลับไปคิดเงินแบบ API) · เครื่องมือของแอป = `ai_tools` ชุดเดิม ผ่าน MCP stdio (`ai_mcp.py` stdlib ล้วน) → `POST /api/ai/cc_tool` พร้อม `X-Ainu-CC` โทเคนสุ่มต่อรอบ (หมดเมื่อรอบจบ · คำขอที่มี Origin ถูกปฏิเสธ) · หา `claude.exe`: `AINU_CLAUDE_EXE` > PATH > `~/.local/bin` > `%APPDATA%\Claude\claude-code\*\*` > `%LOCALAPPDATA%\Packages\Claude_*\LocalCache\Roaming\...` (แอป Claude จาก Microsoft Store — โปรเซสนอกแอปมองไม่เห็นที่ path ปกติ) · ต้องเป็น `authMethod: claude.ai` |
 | ประหยัดโทเคน | `ai.py` | system = ส่วนคงที่ (แคช) + ส่วนเปลี่ยน · `_cache_last` · KEEP_FULL · `_dump` ตัดรายการไม่ตัด JSON · usage |
 | เอกสารของผู้ช่วย / บันทึกบทสนทนา | `ai_docs.py`, `server._ai_log` | workspace/ai_docs (md + meta) · workspace/ai_logs/<chat_id>.jsonl ใช้วิเคราะห์ว่าผู้ช่วยคุยหลงตรงไหน (ไม่มี key) |
 | แผนงานผู้ช่วย | `ai_plan.py` | ต่อ chat_id (หน้าเว็บสร้าง) · ใส่ใน system prompt ทุกรอบ · เครื่องมือ update_plan · GET /api/ai/plan?chat= |
@@ -173,6 +174,7 @@ python -m app.server --no-browser
 | แปลงระบบพิกัด (UTM 47N) | `ops_proj.py` (งาน `reproject`) | ราสเตอร์ใด ๆ → EPSG:32647 (ทุกโซนของไทยเป็น 47N) · GDAL warp ตามประเภทค่า: count = `sum` (ผลรวมคงเดิม ทดสอบหยาบ/เท่า/ละเอียดขึ้น) · density = `average` · class = `mode` (หยาบลง > 1.5×) ไม่งั้น `nearest` · มุมกริดเป็นพหุคูณของขนาดพิกเซล → ชุด 47N ที่ 10 / 100 / 1,000 ม. ซ้อนกันพอดี · ไทล์ 2,048 ขนานหลายเธรด ข้ามไทล์ที่ต้นทางว่าง · ตัวคำนวณไบแวเรียตยังไม่แปลง CRS เอง (ต่าง CRS → error บอกให้แปลงก่อน) · **ค่าตั้ง "ระบบพิกัดผลลัพธ์"** (`settings.json` `out_crs`, หน้า "ระบบ" · ต่องาน `params.out_crs`) = UTM 47N → `worker` เรียก `ops_proj.finalize` หลังงานเสร็จ: แปลงผลราสเตอร์ · `catalog.relink` ชุดเดิมไปไฟล์ใหม่ (คืน meta ที่งานเติม · สถิติจากตอนเขียน) · ลบไฟล์เดิมของงาน · lineage บันทึก `output_crs` |
 | ไฟล์ย่อยของชุดที่เป็น ZIP | `hub_browse.py` + `ai_tools._hub_files` / `hub_plan` | ต้นทางมีแต่ ZIP (เช่น WorldPop อายุ/เพศ 2015–2030) → อ่านหน้ารายชื่อโฟลเดอร์ข้าง ZIP (autoindex) + โฟลเดอร์ลูกลึก ≤ 2 ชั้น โฮสต์เดียวกันเท่านั้น · แคช `workspace/cache/hub_dirs` 7 วัน · `match` (อันไหนก็ได้) / `must` (ต้องมีทุกคำ) **ตรงตัวพิมพ์** (tha_t_65 ≠ tha_T_F) · `/api/hub/browse` ให้หน้า Data hub |
 | ภาพดาวเทียม | `ops_sat.py` | Planetary Computer Data API: `/mosaic/register` → ไทล์ WGS1984Quad @2x (ค่าจริง) ดึง 16 พร้อมกัน · ไทล์ว่างตอบ 204 · คอลเลกชันที่รองรับ = `COLLECTIONS` (เพิ่มแถว + แบนด์) · ไม่ต้องโทเคน |
+| ตารางไฟล์ Data hub (1.1.0) | `web/hub.js` (`hubEnsureFiles` `hubCollectFiles` `hubFileRow`) + `web/hub/files_extra.json` | มุมมอง "ตารางไฟล์" (สลับกับ "การ์ด" จำไว้ใน localStorage) · ไฟล์ต่อชุด = resources ใน desc_XX (GeoTIFF/GeoJSON → นำเข้าได้ · ZIP/CSV/GPKG ฯลฯ → ลิงก์) + ไฟล์ที่รวบไว้ล่วงหน้าจากโฟลเดอร์ข้าง ZIP · ปีจากชื่อไฟล์ (regex เดียวกับ `ai_tools._year`) · กรองปี · ปุ่มนำเข้าใช้ `hubImport` เดิม · ไม่มีไฟล์ files_extra ก็ทำงาน |
 | ป้ายบัญชี/โทเคน Data hub | `hub_access.py` + `hubAccess` ใน `web/hub.js` | กติกาเดียวกันสองที่ — แก้ต้องแก้ทั้งคู่ |
 | เครื่องมือข้อมูล | `ops_tools.py` | calc (สูตร → ตัวตรวจ AST `parse_expr`, เพิ่มฟังก์ชันที่ `FUNCS`) · trend · mosaic · vmerge · `estimate()` ใช้ใน `validate_job` · `_run(each=)` เดินไทล์ร่วม |
 | ตรวจลิงก์ Data hub | `linkcheck.py` | กันยิงเครือข่ายภายใน (ทุกขั้น redirect ต้องเป็น IP สาธารณะ) |
@@ -231,6 +233,7 @@ python tools/build_hub.py [--xlsx <catalog.xlsx>] [--cache <โฟลเดอ�
 - **คำอธิบายต้องมาจากต้นทางเท่านั้น** (STAC / Wikipedia / ข้อความผู้ให้ข้อมูลในพอร์ทัล / meta description) พร้อมที่มา — ไม่เขียนเอง
 - พอร์ทัล CKAN (GISTDA, กรมพัฒนาที่ดิน, data.go.th, HDX) แตกเป็นรายชุด · ชุดซ้ำข้ามพอร์ทัลรวมเป็นรายการเดียว
 - **คีย์/โทเคนที่ผู้ให้ข้อมูลฝังในลิงก์ → `redact()` แทนด้วย `{YOUR_API_KEY}` ก่อน commit เสมอ**
+- รายการไฟล์รายปีของชุดที่ต้นทางมีแต่ ZIP (ตารางไฟล์ในหน้า Data hub): `python tools/build_files_extra.py` → `web/hub/files_extra.json` (ต่อเน็ต · ใช้แคช `hub_browse` 7 วัน รันซ้ำเร็วขึ้น · เพดานเวลา `AINU_BUILD_BUDGET_S` ค่าเริ่ม 18 นาที เขียนผลทุก 20 ชุด · ≤ 1,500 ไฟล์ต่อชุด)
 
 ## 5. การทดสอบ
 
@@ -254,6 +257,7 @@ python tests/api/run_all.py
 | `test_ai.py` (9) | ผู้ช่วย AI กับเซิร์ฟเวอร์จำลองในตัว (ไม่ต้องมี key จริง): key ผิด/ถูก · key ไม่หลุด · แชต + บริบท · เปลี่ยนรุ่น · ออกจากระบบ |
 | `test_ai_recipe.py` (14) | สูตรงานรันเองครบ/ผลถูก/ไม่เรียกโมเดลระหว่างทาง · ปฏิเสธตอนเสนอ · หยุดเมื่อพัง · รายปี for_years / "$s1.{year}" / summary % / trend "$sN" · ย่อประวัติ · usage |
 | `test_reproject.py` (9) | WorldPop กทม. → UTM 47N 30 / 100 / 1,000 ม. ผลรวมคนคงเดิม · ชั้นไม่เกิดรหัสใหม่ · 48N → 47N · ต่าง CRS บอกให้แปลง · ไขว้สองชุด 47N ได้ |
+| `test_ai_cc.py` (11) | ผู้ให้บริการ Claude Code โดยไม่ต้องติดตั้ง/ล็อกอิน: สะพาน MCP (initialize · tools/list · tools/call ส่งโทเคน + อาร์กิวเมนต์ไทย · ข้อความเสียไม่ล้ม · -32601) · `/api/ai/cc_tool` ปฏิเสธโทเคนผิด/คำขอจากเว็บ · transcript |
 | `test_hub_recipe.py` (10) | **อินเทอร์เน็ตจริง**: WorldPop อายุ/เพศ (ต้นทางมีแต่ ZIP) → ไฟล์ย่อยจากโฟลเดอร์ต้นทาง · years/match/must · ด่าน URL · สูตรงานโหลด 27 ไฟล์ รวมต่อปี → % ผู้สูงอายุ 60+ |
 | `test_ai_conv.py` (8) | ข้อความล่าสุดชนะข้อตกลง · delivered · save_document/HTML/v2 · list_past_work · ai_logs |
 | `test_ai_knowledge.py` (13) | คลังความรู้ · บัตรข้อมูล hub (ตัวแปร/ปี/การเข้าถึง) · สถิติไบแวเรียตกับข้อมูลสังเคราะห์ (สัมพันธ์/อิสระ/Moran) · กราฟ |

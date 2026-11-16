@@ -1,0 +1,38 @@
+Claude Code was not found on this computer — install the Claude Desktop app or Claude Code CLI and sign in (or set AINU_CLAUDE_EXE to the path of claude.exe)
+Uses the claude.ai account signed in to the Claude app / Claude Code on this computer · counts against your plan, no extra API charges · replies a little slower than the API
+the app downloads it for you and can clip to a study area · link = download directly from the source · datasets without links (e.g. GEE) open at the source from the details page
+Claude Code is not signed in — open the Claude app and sign in, or run "claude auth login"
+(not a claude.ai account) — it would be billed as API usage instead of your plan
+Claude Code (Claude account on this computer · no API key)
+sign in again in the Claude app or run "claude auth login"
+(the Claude app must be installed and signed in on this computer)
+Every dataset as a table: which years, which files, with download links
+You can use a Claude Pro/Max account instead of an API key: choose
+Download into the app library, optionally clipped to a study area
+files — open the details page to search them all
+Could not read the Claude Code sign-in status
+your plan usage limit is reached — wait for it to reset
+Nothing found — try clearing filters, or untick
+Invalid token, or the chat turn has ended
+Click a row to expand its files by year
+Datasets + download files
+Claude Code failed
+Could not reach the engine (
+Could not start Claude Code (
+Claude Code did not respond within
+Claude Code is signed in with
+Only datasets with file links
+Checking sign-in…
+Loading file list…
+from the source folder of
+No direct-download files
+datasets · direct links
+Filter year, e.g. 2020
+yearly files collected on
+Engine responded
+Showing 300 of
+bundled/other files
+direct-download files
+File table
+Year not stated
+Cards

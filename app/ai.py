@@ -21,6 +21,7 @@ PROVIDERS = {
     'openai': dict(label='OpenAI', base='https://api.openai.com/v1', key_url='https://platform.openai.com/api-keys'),
     'gemini': dict(label='Google Gemini', base='https://generativelanguage.googleapis.com/v1beta', key_url='https://aistudio.google.com/apikey'),
     'compat': dict(label='OpenAI-compatible (Ollama / OpenRouter / เซิร์ฟเวอร์หน่วยงาน)', base=None, key_url=None, key_optional=True),
+    'claude_code': dict(label='Claude Code (บัญชี Claude บนเครื่อง · ไม่ใช้ API key)', base=None, key_url=None, key_optional=True, no_key=True),
 }
 # รุ่นที่ไม่ใช่แชต (OpenAI /models คืนทุกอย่าง)
 _NOT_CHAT = re.compile(r'embed|whisper|tts|dall-e|moderation|image|audio|realtime|transcribe|search|babbage|davinci|computer-use', re.I)
@@ -56,15 +57,18 @@ def _key(c=None):
 def status():
     c = cfg()
     p = c.get('provider')
-    connected = bool(p) and (bool(_key(c)) or (PROVIDERS.get(p, {}).get('key_optional') and bool(c.get('base_url'))))
+    connected = bool(p) and (p == 'claude_code' or bool(_key(c)) or (PROVIDERS.get(p, {}).get('key_optional') and bool(c.get('base_url'))))
     return dict(enabled=bool(c.get('enabled')), connected=connected, mode=c.get('mode') or 'propose', provider=p if connected else None,
                 provider_label=PROVIDERS.get(p, {}).get('label') if connected else None,
                 model=c.get('model') if connected else None, base_url=c.get('base_url') if connected else None,
-                providers=[dict(id=k, label=v['label'], key_url=v['key_url'], key_optional=bool(v.get('key_optional'))) for k, v in PROVIDERS.items()])
+                providers=[dict(id=k, label=v['label'], key_url=v['key_url'], key_optional=bool(v.get('key_optional')), no_key=bool(v.get('no_key')))
+                           for k, v in PROVIDERS.items()])
 
 
 # ---------- คุยกับผู้ให้บริการ ----------
 def _base(p, base_url):
+    if p == 'claude_code':
+        return None
     if p == 'compat':
         b = (base_url or '').strip().rstrip('/')
         if not re.match(r'^https?://', b):
@@ -110,6 +114,12 @@ def _req(method, url, p, key, timeout=TIMEOUT, **kw):
 
 
 def list_models(p, key, base_url=None):
+    if p == 'claude_code':
+        from . import ai_cc
+        try:
+            return ai_cc.models()                    # ตรวจว่าติดตั้ง + ล็อกอินบัญชี claude.ai แล้ว
+        except ai_cc.CcError as e:
+            raise AiError(str(e))
     b = _base(p, base_url)
     if p == 'anthropic':
         ids = [m['id'] for m in _req('GET', f'{b}/models', p, key, params=dict(limit=100)).get('data', [])]
@@ -126,7 +136,7 @@ def list_models(p, key, base_url=None):
 
 
 def default_model(p, ids):
-    pref = dict(anthropic=['sonnet', 'opus', 'haiku'], openai=['gpt-5', 'gpt-4.1', 'gpt-4o'], gemini=['flash', 'pro']).get(p, [])
+    pref = dict(anthropic=['sonnet', 'opus', 'haiku'], claude_code=['sonnet'], openai=['gpt-5', 'gpt-4.1', 'gpt-4o'], gemini=['flash', 'pro']).get(p, [])
     for w in pref:
         hit = [i for i in ids if w in i and 'preview' not in i] or [i for i in ids if w in i]
         if hit:
@@ -137,7 +147,7 @@ def default_model(p, ids):
 def login(p, key, base_url=None):
     if p not in PROVIDERS:
         raise AiError('ไม่รู้จักผู้ให้บริการนี้')
-    key = (key or '').strip()
+    key = '' if PROVIDERS[p].get('no_key') else (key or '').strip()
     if not key and not PROVIDERS[p].get('key_optional'):
         raise AiError('ใส่ API key')
     ids = list_models(p, key, base_url)                 # ทดสอบ key ก่อนเก็บ
@@ -476,7 +486,22 @@ def chat(messages, page=None, chat_id=None):
             docs.append(out['document'])
         return out
 
-    if p == 'anthropic':
+    if p == 'claude_code':
+        from . import ai_cc
+
+        def cc_tool(name, args):                             # เรียกจากเธรดของคำขอ /api/ai/cc_tool → ตั้งค่าต่อเธรดให้เครื่องมือ
+            ai_tools.CURRENT_MODEL['m'] = f'Claude Code · {model}'
+            ai_tools.CURRENT_CHAT['id'] = chat_id
+            return _dump(call_tool(name, args))
+        try:
+            reply, u = ai_cc.chat(model, system, msgs, specs, cc_tool)
+        except ai_cc.CcError as e:
+            raise AiError(str(e))
+        if reply:
+            texts.append(reply)
+        for k in usage:
+            usage[k] += u.get(k) or 0
+    elif p == 'anthropic':
         tools = [dict(name=s['name'], description=s['description'], input_schema=s['parameters']) for s in specs]
         if tools:
             tools[-1] = dict(tools[-1], cache_control=dict(type='ephemeral'))
