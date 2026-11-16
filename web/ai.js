@@ -58,21 +58,23 @@ const AIDock = (() => {
       <p class="small" style="margin-top:0">เชื่อมต่อผู้ให้บริการ AI ด้วย API key ของคุณ</p>
       <label class="field"><span>ผู้ให้บริการ</span><select id="aiProv">${st.providers.map(p => `<option value="${p.id}">${esc(p.label)}</option>`).join('')}</select></label>
       <label class="field aiBase hide"><span>ที่อยู่เซิร์ฟเวอร์</span><input type="text" id="aiBase" placeholder="http://localhost:11434/v1" autocomplete="off" spellcheck="false"></label>
-      <label class="field"><span>API key <span class="aiOpt tiny muted hide">(ไม่ต้องใส่ถ้าเซิร์ฟเวอร์ไม่ใช้)</span></span><input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="วาง key ที่นี่"></label>
+      <label class="field aiKeyF"><span>API key <span class="aiOpt tiny muted hide">(ไม่ต้องใส่ถ้าเซิร์ฟเวอร์ไม่ใช้)</span></span><input type="password" id="aiKey" autocomplete="off" spellcheck="false" placeholder="วาง key ที่นี่"></label>
       <div class="tiny" id="aiKeyUrl"></div>
       <button class="primary" id="aiGo" style="margin-top:10px;width:100%">เชื่อมต่อ</button>
       <div class="tiny muted ai-note" style="margin-top:10px;line-height:1.6">${IC.lock}key ถูกเข้ารหัสเก็บในตัวประมวลผลบนเครื่องนี้ (Windows DPAPI) — ไม่เก็บในเบราว์เซอร์ ไม่ขึ้นเว็บ<br>
         ส่งให้ AI: ข้อความแชต + ชื่อ/ประเภทของชุดข้อมูลในคลัง (ไม่ส่งไฟล์ข้อมูล)<br>
-        ใช้บัญชีแบบรายเดือน (ChatGPT Plus / Claude Pro) แทน API key ไม่ได้</div></div>`;
+        ใช้บัญชี Claude Pro/Max แทน API key ได้: เลือก "Claude Code" (ต้องติดตั้งแอป Claude และล็อกอินไว้ในเครื่องนี้)</div></div>`;
     const sync = () => {
       const p = st.providers.find(x => x.id === $('#aiProv').value);
       b.querySelector('.aiBase').classList.toggle('hide', p.id !== 'compat');
       b.querySelector('.aiOpt').classList.toggle('hide', !p.key_optional);
-      $('#aiKeyUrl').innerHTML = p.key_url ? `<a href="${p.key_url}" target="_blank" rel="noopener" class="ai-link">ขอ API key ที่นี่ ${IC.ext}</a>` : 'Ollama: <span class="mono">http://localhost:11434/v1</span> · OpenRouter: <span class="mono">https://openrouter.ai/api/v1</span>';
+      b.querySelector('.aiKeyF').classList.toggle('hide', !!p.no_key);
+      $('#aiKeyUrl').innerHTML = p.no_key ? 'ใช้บัญชี claude.ai ที่ล็อกอินในแอป Claude / Claude Code บนเครื่องนี้ · ใช้โควตาของแพ็กเกจ ไม่มีค่า API เพิ่ม · ตอบช้ากว่า API เล็กน้อย'
+        : p.key_url ? `<a href="${p.key_url}" target="_blank" rel="noopener" class="ai-link">ขอ API key ที่นี่ ${IC.ext}</a>` : 'Ollama: <span class="mono">http://localhost:11434/v1</span> · OpenRouter: <span class="mono">https://openrouter.ai/api/v1</span>';
     };
     $('#aiProv').onchange = sync; sync();
     $('#aiGo').onclick = async () => {
-      const btn = $('#aiGo'); btn.disabled = true; btn.textContent = 'กำลังตรวจ key…';
+      const btn = $('#aiGo'); btn.disabled = true; btn.textContent = $('#aiProv').value === 'claude_code' ? 'กำลังตรวจการล็อกอิน…' : 'กำลังตรวจ key…';
       try {
         st = await api(ENGINE + '/api/ai/login', { json: { provider: $('#aiProv').value, api_key: $('#aiKey').value, base_url: $('#aiBase').value } });
         $('#aiKey').value = '';

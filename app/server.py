@@ -69,6 +69,8 @@ def _guard():
         return jsonify(error=f'หน้าเว็บ {o} ไม่ได้รับอนุญาต — เพิ่มใน engine.json → allowed_origins'), 403
     if request.method == 'OPTIONS':                          # preflight ของ CORS / Private Network Access
         return Response(status=204)
+    if request.path == '/api/ai/cc_tool':                    # สะพาน MCP ของ Claude Code (โปรเซสในเครื่อง ไม่มี Origin) — ผ่านด้วยโทเคนของรอบแชตเท่านั้น
+        return None if (not o and request.headers.get('X-Ainu-CC')) else (jsonify(error='forbidden'), 403)
     if request.method not in ('GET', 'HEAD') and request.path.startswith('/api/') and not _self_origin(o or '') and not _token_ok():
         return jsonify(error='ยังไม่ได้จับคู่กับตัวประมวลผลในเครื่อง (โทเคนไม่ถูกต้อง)', pair=True), 401
 
@@ -230,6 +232,17 @@ def ai_login():
     b = request.get_json(force=True)
     ids = ai.login(b.get('provider'), b.get('api_key'), b.get('base_url'))
     return jsonify(dict(ai.status(), models=ids))
+
+
+@app.route('/api/ai/cc_tool', methods=['POST'])
+def ai_cc_tool():
+    """MCP server ของ Claude Code ส่งคำขอเรียกเครื่องมือมาที่นี่ · โทเคนผูกกับรอบแชตที่กำลังรัน (หมดอายุเมื่อรอบจบ)"""
+    from . import ai_cc
+    b = request.get_json(force=True) or {}
+    out = ai_cc.call(request.headers.get('X-Ainu-CC', ''), str(b.get('name') or ''), b.get('args'))
+    if out is None:
+        return jsonify(error='โทเคนไม่ถูกต้องหรือรอบแชตจบแล้ว'), 403
+    return jsonify(result=out, is_error=out.startswith('{"error"'))
 
 
 @app.route('/api/ai/logout', methods=['POST'])

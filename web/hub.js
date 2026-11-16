@@ -1,7 +1,8 @@
 // Ainulindalë — Data hub: รายชื่อว่าใครมีข้อมูลอะไร อยู่ที่ไหน (ไม่เก็บไฟล์ · กดไปโหลดที่ต้นทาง)
 // ข้อมูลจาก hub/index.json + hub/desc_XX.json (สร้างด้วย tools/build_hub.py) · คำอธิบายดึงจากต้นทาง ไม่ได้เขียนเอง
 'use strict';
-const HUB = { idx: null, desc: {}, q: '', th: '', plat: '', org: '', ty: '', lc: '', cover: '', link: '', old: false, sort: 'name', shown: 40, links: {}, run: null, withRes: false };
+const HUB = { idx: null, desc: {}, q: '', th: '', plat: '', org: '', ty: '', lc: '', cover: '', link: '', old: false, sort: 'name', shown: 40, links: {}, run: null, withRes: false,
+  view: (() => { try { return localStorage.getItem('ainu-hub-view') || 'cards'; } catch { return 'cards'; } })(), _get: null, extraFiles: null, extraMeta: {}, fonly: true, fyear: '', fopen: {} };
 const HUB_LC = { open: ['เปิด', 'var(--mint)', 'ใช้/แจกต่อได้ (ระบุที่มา)'], nc: ['ไม่ใช่เชิงพาณิชย์', 'var(--butter)', 'ห้ามใช้เชิงพาณิชย์'], check: ['ตรวจเงื่อนไข', 'var(--muted)', 'อ่านเงื่อนไขของผู้ผลิตก่อนใช้'] };
 const HUB_COVER = { global: 'ทั้งโลก', thailand: 'ไทย', other: 'นอกไทย', partial: 'บางส่วน', unknown: 'ไม่ระบุ' };
 const HUB_ST = { ok: 'ใช้ได้', warn: 'มีเงื่อนไข', bad: 'เสีย' };
@@ -115,7 +116,7 @@ async function hubExport(list, withRes) {
     const get = await hubAllDesc();
     lines = [[...cols, ...['ไฟล์/บริการในชุด', 'รูปแบบ', 'ลิงก์ไฟล์', 'สถานะลิงก์ไฟล์'].map(tt)].map(q).join(',')];
     list.forEach(it => {
-      const rs = get(it).resources || [];
+      const rs = [...(get(it).resources || []), ...(((HUB.extraFiles || {})[it.k]) || []).map(f => ({ name: f.name, format: 'GeoTIFF', url: f.url }))];
       if (!rs.length) lines.push([...row(it), '', '', '', ''].map(q).join(','));
       rs.forEach(r => lines.push([...row(it), r.name, r.format, r.url, tt(HUB_ST[st(r.url).state] || 'ยังไม่ได้ตรวจ')].map(q).join(',')));
     });
@@ -172,6 +173,118 @@ function hubCard(it) {
       <span class="hub-lc" style="--c:${L[1]}" title="${esc(it.l || 'ไม่ระบุ')} — ${L[2]}">${L[0]}</span>${hubDot(it.u)}</div></a>`;
 }
 
+// ---------- มุมมอง "ตารางไฟล์": ทุกชุด + ปี + ลิงก์โหลดรายไฟล์ (จากแคตตาล็อก + files_extra.json ที่รวบไว้ล่วงหน้า) ----------
+const HUB_FYEAR_RE = /(?<!\d)(19[5-9]\d|20[0-4]\d)(?:0101)?(?!\d)/;
+const hubYearOf = n => { const m = HUB_FYEAR_RE.exec(n || ''); return m ? +m[1] : null; };
+const hubCanImport = u => /\.(tiff?)(\/content)?(\?|$)|\.(geo)?json(\?|$)/i.test(u || '');
+const hubIsArchive = u => /\.(zip|gpkg|csv|xlsx?|nc|h5|kmz?|shp|parquet|7z)(\/content)?(\?|$)/i.test(u || '');
+const hubFname = u => { try { return decodeURIComponent((u || '').replace(/\/content$/, '').split('?')[0].split('/').pop() || u); } catch { return u; } };
+
+async function hubEnsureFiles() {
+  if (!HUB._get) HUB._get = await hubAllDesc();
+  if (HUB.extraFiles === null) {
+    try {
+      const r = await fetch('hub/files_extra.json?v=' + UI_VERSION);
+      const j = r.ok ? await r.json() : null;
+      HUB.extraFiles = (j && j.items) || {};
+      HUB.extraMeta = (j && j.meta) || {};
+    } catch { HUB.extraFiles = {}; }
+  }
+  HUB.idx.items.forEach(it => { if (!it._files) it._files = hubCollectFiles(it); });
+}
+
+function hubCollectFiles(it) {
+  const seen = new Set();
+  const dl = [], arc = [];
+  (HUB._get(it).resources || []).forEach(r => {
+    const u = r.url || '';
+    if (!u || r.key || seen.has(u)) return;
+    seen.add(u);
+    const f = { name: r.name || hubFname(u), url: u, format: r.format || '', size_mb: r.size ? r.size / 1e6 : null, year: hubYearOf(r.name || u) };
+    if (hubCanImport(u)) dl.push({ ...f, imp: true });
+    else if (hubIsArchive(u)) arc.push({ ...f, imp: false });
+  });
+  ((HUB.extraFiles || {})[it.k] || []).forEach(f => {
+    if (seen.has(f.url)) return;
+    seen.add(f.url);
+    dl.push({ name: f.name, url: f.url, format: 'GeoTIFF', size_mb: f.size_mb, year: f.year, imp: true, fromZip: f.from_zip });
+  });
+  const all = [...dl, ...arc];
+  const years = [...new Set(all.map(f => f.year).filter(Boolean))].sort((a, b) => b - a);
+  return { dl, arc, all, years };
+}
+
+function hubFilesList(list) {
+  let rows = list;
+  if (HUB.fonly) rows = rows.filter(it => it._files.all.length);
+  const y = +HUB.fyear;
+  if (y) rows = rows.filter(it => it._files.years.includes(y) || (!it._files.all.length && it.y && it.y[0] <= y && y <= it.y[1]));
+  return rows;
+}
+
+function hubFileRow(it) {
+  const F = it._files, open = !!HUB.fopen[it.k];
+  const y = +HUB.fyear;
+  const yearsTxt = F.years.length ? (F.years.length > 6 ? `${F.years[F.years.length - 1]}–${F.years[0]} (${F.years.length} ปี)` : F.years.slice().reverse().join(' '))
+    : (it.y ? (it.y[0] === it.y[1] ? `ปี ${it.y[0]}` : `${it.y[0]}–${it.y[1]}`) : hubYears(it));
+  let body = '';
+  if (open) {
+    const pool = y ? F.all.filter(f => f.year === y) : F.all;
+    const files = pool.slice(0, 300);
+    const groups = new Map();
+    files.forEach(f => { const k = f.year || 0; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(f); });
+    const gkeys = [...groups.keys()].sort((a, b) => b - a);
+    body = `<div class="hub-fbody">` + (files.length ? gkeys.map(gy => {
+      const fs = groups.get(gy);
+      return `<div class="hub-fyear"><b>${gy ? 'ปี ' + gy : 'ไม่ระบุปี'}</b> <span class="tiny muted">${fmt(fs.length, 0)} ไฟล์</span></div>`
+        + fs.map(f => `<div class="hub-link"><div><a href="${esc(f.url)}" target="_blank" rel="noopener noreferrer" translate="no">${esc(f.name)}</a>
+            <div class="tiny mono muted hub-url">${esc(f.url)}</div>${f.fromZip ? `<div class="tiny muted">จากโฟลเดอร์ต้นทางของ ${esc(f.fromZip)}</div>` : ''}</div>
+            <div class="hub-st">${f.size_mb ? `<span class="tiny muted">${fmt(f.size_mb, 1)} MB</span>` : ''}${f.imp ? `<button class="sm" data-imp="${esc(it.k)}" data-impu="${esc(f.url)}" title="ดาวน์โหลดเข้าคลังของแอป ตัดตามพื้นที่ศึกษาได้">นำเข้าคลัง</button>` : ''}</div></div>`).join('');
+    }).join('') : `<p class="small muted" style="margin:0">ไม่มีไฟล์ให้โหลดตรง${y ? 'ของปี ' + y : ''} — ${esc(hubAccess(it)[1])}</p>`)
+      + (pool.length > 300 ? `<p class="tiny muted">แสดง 300 จาก ${fmt(pool.length, 0)} ไฟล์ — เปิดหน้ารายละเอียดเพื่อค้นทั้งหมด</p>` : '')
+      + `</div>`;
+  }
+  return `<div class="card hub-frow">
+    <div class="hub-fhead" data-fk="${esc(it.k)}">
+      <div><a href="#/hub/${encodeURIComponent(it.k)}" translate="no"><b>${esc(it.t)}</b></a>
+        <div class="tiny muted" translate="no">${esc((it.og || [it.pr]).filter(Boolean).slice(0, 2).join(', '))} · ${esc(it.p)}</div></div>
+      <div class="tiny muted">${[hubType(it.ty), yearsTxt, hubGsd(it.g), tt_(HUB_COVER[it.cv])].filter(Boolean).map(esc).join(' · ')}</div>
+      <div class="hub-fmeta">${F.dl.length ? `<span class="chip ok">${fmt(F.dl.length, 0)} ไฟล์โหลดตรง</span>` : ''}${F.arc.length ? `<span class="chip">${fmt(F.arc.length, 0)} ไฟล์รวม/อื่น</span>` : ''}${!F.all.length ? hubAccChip(it) : ''}<span class="chip">${open ? '▾' : '▸'}</span></div>
+    </div>${body}</div>`;
+}
+const tt_ = s2 => s2 == null ? '' : String(s2);
+
+function hubFilesTable(list) {
+  const rows = hubFilesList(list);
+  const totDl = rows.reduce((n, it) => n + it._files.dl.length, 0);
+  const totArc = rows.reduce((n, it) => n + it._files.arc.length, 0);
+  return `<div class="card" style="padding:10px 14px;margin-bottom:10px"><div class="row small" style="gap:14px;flex-wrap:wrap">
+      <b>ตารางข้อมูล + ไฟล์ดาวน์โหลด</b>
+      <label class="row small" style="gap:6px"><input type="checkbox" id="hfOnly" ${HUB.fonly ? 'checked' : ''}> เฉพาะชุดที่มีลิงก์ไฟล์</label>
+      <input type="search" id="hfYear" placeholder="กรองปี เช่น 2020" value="${esc(HUB.fyear)}" style="width:130px">
+      <span class="spacer"></span>
+      <span class="muted">${fmt(rows.length, 0)} ชุด · ลิงก์โหลดตรง ${fmt(totDl, 0)} · ไฟล์รวม/อื่น ${fmt(totArc, 0)}${HUB.extraMeta.built ? ` · รวบรายปีไว้เมื่อ ${esc(HUB.extraMeta.built)}` : ''}</span></div>
+    <div class="tiny muted" style="margin-top:4px">คลิกแถวเพื่อกางรายการไฟล์รายปี · "นำเข้าคลัง" = แอปดาวน์โหลดให้ ตัดเฉพาะพื้นที่ศึกษาได้ · ลิงก์ = โหลดตรงจากต้นทาง · ชุดที่ไม่มีลิงก์ (เช่น GEE) เปิดดูที่ต้นทางจากหน้ารายละเอียด</div></div>`
+    + (rows.slice(0, HUB.shown).map(hubFileRow).join('') || '<p class="muted">ไม่พบ — ลองล้างตัวกรอง หรือเอาติ๊ก "เฉพาะชุดที่มีลิงก์ไฟล์" ออก</p>')
+    + (rows.length > HUB.shown ? `<div style="text-align:center;margin:14px"><button class="ghost" id="hbMore">แสดงเพิ่ม (${fmt(rows.length - HUB.shown, 0)} เหลือ)</button></div>` : '');
+}
+
+function hubFilesWire(draw) {
+  $('#hfOnly') && ($('#hfOnly').onchange = () => { HUB.fonly = $('#hfOnly').checked; HUB.shown = 40; draw(); });
+  const yEl = $('#hfYear');
+  if (yEl) { let t; yEl.oninput = () => { clearTimeout(t); t = setTimeout(() => { HUB.fyear = yEl.value.trim(); HUB.shown = 40; draw(); }, 250); }; }
+  $$('#hbRes .hub-fhead').forEach(el => el.onclick = e => {
+    if (e.target.closest('a,button')) return;
+    HUB.fopen[el.dataset.fk] = !HUB.fopen[el.dataset.fk]; draw();
+  });
+  $$('#hbRes [data-imp]').forEach(b => b.onclick = e => {
+    e.stopPropagation();
+    const it = HUB.idx.items.find(x => x.k === b.dataset.imp);
+    const f = it && it._files.all.find(x => x.url === b.dataset.impu);
+    if (it && f) hubImport(it, f);
+  });
+}
+
 async function pageHub(key) {
   const v = $('#view');
   const ix = await hubLoad();
@@ -203,13 +316,28 @@ async function pageHub(key) {
     ix.items.forEach(it => { const s = HUB.links[it.u]?.state; if (s) n[s]++; });
     return n;
   };
+  const setView = async v => {
+    if (v === HUB.view) return;
+    if (v === 'files') { $('#hbRes').innerHTML = '<p class="muted">กำลังโหลดรายการไฟล์…</p>'; await hubEnsureFiles(); }
+    HUB.view = v; try { localStorage.setItem('ainu-hub-view', v); } catch { }
+    HUB.shown = 40; draw();
+  };
   const draw = () => {
     const list = hubFilter(), n = summary(), c = checked();
-    $('#hbRes').innerHTML = `<div class="row small muted" style="margin:4px 2px 10px;gap:12px">${fmt(list.length, 0)} รายการ
-      ${c ? `<span class="spacer"></span><span>ลิงก์ที่ตรวจแล้ว ${fmt(c, 0)}/${fmt(ix.items.length, 0)}: <span class="hub-badge ok">ใช้ได้ ${fmt(n.ok, 0)}</span> <span class="hub-badge warn">มีเงื่อนไข ${fmt(n.warn, 0)}</span> <span class="hub-badge bad">เสีย ${fmt(n.bad, 0)}</span></span>` : ''}</div>
-      <div class="hub-grid">${list.slice(0, HUB.shown).map(hubCard).join('') || '<p class="muted">ไม่พบ — ลองคำค้นอื่น หรือล้างตัวกรอง</p>'}</div>
-      ${list.length > HUB.shown ? `<div style="text-align:center;margin:14px"><button class="ghost" id="hbMore">แสดงเพิ่ม (${fmt(list.length - HUB.shown, 0)} เหลือ)</button></div>` : ''}`;
+    const headRow = `<div class="row small muted" style="margin:4px 2px 10px;gap:12px">${fmt(list.length, 0)} รายการ
+      <span class="hub-vsw"><button class="sm ${HUB.view === 'cards' ? 'primary' : 'ghost'}" id="hbVCards">การ์ด</button><button class="sm ${HUB.view === 'files' ? 'primary' : 'ghost'}" id="hbVFiles" title="ทุกชุดเป็นตาราง: มีปีไหน ไฟล์อะไร พร้อมลิงก์โหลด">ตารางไฟล์</button></span>
+      ${c ? `<span class="spacer"></span><span>ลิงก์ที่ตรวจแล้ว ${fmt(c, 0)}/${fmt(ix.items.length, 0)}: <span class="hub-badge ok">ใช้ได้ ${fmt(n.ok, 0)}</span> <span class="hub-badge warn">มีเงื่อนไข ${fmt(n.warn, 0)}</span> <span class="hub-badge bad">เสีย ${fmt(n.bad, 0)}</span></span>` : ''}</div>`;
+    if (HUB.view === 'files' && HUB._get) {
+      $('#hbRes').innerHTML = headRow + hubFilesTable(list);
+      hubFilesWire(draw);
+    } else {
+      $('#hbRes').innerHTML = headRow
+        + `<div class="hub-grid">${list.slice(0, HUB.shown).map(hubCard).join('') || '<p class="muted">ไม่พบ — ลองคำค้นอื่น หรือล้างตัวกรอง</p>'}</div>
+        ${list.length > HUB.shown ? `<div style="text-align:center;margin:14px"><button class="ghost" id="hbMore">แสดงเพิ่ม (${fmt(list.length - HUB.shown, 0)} เหลือ)</button></div>` : ''}`;
+    }
     $('#hbMore') && ($('#hbMore').onclick = () => { HUB.shown += 60; draw(); });
+    $('#hbVCards').onclick = () => setView('cards');
+    $('#hbVFiles').onclick = () => setView('files');
     return list;
   };
   const redraw = () => { HUB.shown = 40; draw(); };
@@ -255,6 +383,7 @@ async function pageHub(key) {
     $('#hbChk') && ($('#hbChk').disabled = false);
   };
   if (HUB.run) showRun(HUB.run);
+  if (HUB.view === 'files') await hubEnsureFiles();
   draw();
 }
 

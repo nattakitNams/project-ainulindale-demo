@@ -475,6 +475,15 @@ main:has(.rp) { max-width: none; padding: 14px 14px 14px 18px; }
 .hub-attr { border-top: 1px solid var(--line); padding-top: 8px; margin-top: 6px; }
 .hub-map { height: 220px; border-radius: 12px; margin-top: 10px; }
 .hub-links { display: flex; flex-direction: column; gap: 10px; }
+.hub-vsw { display: inline-flex; gap: 4px; }
+.hub-frow { padding: 0; overflow: hidden; margin-bottom: 8px; }
+.hub-fhead { display: flex; gap: 14px; align-items: center; padding: 10px 14px; cursor: pointer; flex-wrap: wrap; }
+.hub-fhead:hover { background: rgba(195, 182, 255, .05); }
+.hub-fhead > div:first-child { flex: 2 1 260px; min-width: 0; }
+.hub-fhead > div:nth-child(2) { flex: 1 1 200px; }
+.hub-fmeta { display: flex; gap: 6px; align-items: center; margin-left: auto; white-space: nowrap; }
+.hub-fbody { border-top: 1px solid var(--line); padding: 10px 14px; display: flex; flex-direction: column; gap: 10px; max-height: 500px; overflow: auto; }
+.hub-fyear { margin: 2px 0 0; }
 .hub-link { display: flex; gap: 10px; justify-content: space-between; align-items: flex-start; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .hub-link:last-child { border-bottom: 0; padding-bottom: 0; }
 .hub-link > div:first-child { min-width: 0; }
