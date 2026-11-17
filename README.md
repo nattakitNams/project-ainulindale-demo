@@ -159,7 +159,7 @@ python -m app.server --no-browser
 | หกเหลี่ยม | `hexgrid.py`, `ops_hex.py` | UTM/LAEA พื้นที่เท่ากัน · แลตทิซยึด (0,0) → ขนาด+พิกัดฉายเดียวกัน = ต่อด้วย `hex_id` ได้ |
 | ถังขยะ | `trash.py` | ลบถาวรลบไฟล์เฉพาะที่แอปเป็นเจ้าของใน workspace — **ไม่แตะไฟล์ต้นฉบับของผู้ใช้** |
 | โฟลเดอร์คลังข้อมูล | `folders.py` | จัดหมวดในแอปเท่านั้น · ลบโฟลเดอร์ = ของข้างในย้ายขึ้นแม่ |
-| รายงาน | `canvas.py`, `layout.py`, `web/report.js` | หน้า HTML/SVG หน่วย มม. → Edge headless พิมพ์ PDF |
+| รายงาน | `canvas.py`, `layout.py`, `web/report.js` | หน้า HTML/SVG หน่วย มม. → Edge headless พิมพ์ PDF · แผนที่วาดใน EPSG:4326 (ชั้นเมตร/UTM: คิดสีในพิกัดเดิมแล้ว warp ภาพเข้ากรอบ) · ภาพแคชที่ `cache/report` กุญแจผูก APP_VERSION · กรอบคำอธิบาย `note` + `data-fit` ย่อตัวอักษรให้พอดี (`RPT.fit`) · ผู้ช่วยใส่กรอบผ่าน `notes` / `propose_add_report_notes` → `rpAddNotes` |
 | ผู้ช่วย AI | `ai.py`, `ai_tools.py`, `web/ai.js` | ปิดเป็นค่าเริ่มต้น เปิดที่หน้า "ระบบ" · API key เก็บใน `vault` (DPAPI) ไม่ส่งกลับหน้าเว็บ · ค่าตั้งที่ `workspace/ai.json` · ผู้ให้บริการ: Anthropic / OpenAI / Gemini / OpenAI-compatible · คำขอที่ใช้ key เป็น POST เท่านั้น |
 | คลังความรู้ข้อมูล | `knowledge.py` | หัวข้อ = dict ใน TOPICS (หน่วย สูตรแปลงค่า ช่วงค่าปกติ ข้อควรระวัง ความน่าเชื่อถือ + match) — เขียนจากเอกสารผู้ผลิต ห้ามเดาตัวเลข |
 | สถิติไบแวเรียต | `bivstats.py` | สุ่มบนกริด/metric เดียวกับแผนที่ · ผลแคชที่ <out_dir>/stats/ (ลบโฟลเดอร์นี้ = คิดใหม่) |

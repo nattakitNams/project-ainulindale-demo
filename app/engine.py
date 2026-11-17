@@ -247,8 +247,17 @@ def fmt_breaks(vals):
     xs = sorted({float(x) for x in vals if fin(x)})
     if all(x.is_integer() for x in xs):
         return [f'{int(float(x)):,}' if fin(x) else '∞' for x in vals]
-    for sig in range(3, 13):
-        s = {x: f'{x:,.{sig}g}' for x in xs}
+    # ไม่ใช้รูปวิทยาศาสตร์ (เดิม :g → 6.17e+03 ในคำอธิบายสัญลักษณ์ ป้ายยาวจนล้นกรอบรายงาน) · ทศนิยมตามขนาดค่า
+    def dec(x):
+        a = abs(x)
+        if a == 0 or a >= 100:
+            return 0
+        return 1 if a >= 10 else (2 if a >= 1 else min(8, 1 - math.floor(math.log10(a))))
+    for extra in range(0, 8):
+        s = {}
+        for x in xs:
+            t = f'{x:,.{dec(x) + extra}f}'
+            s[x] = t.rstrip('0').rstrip('.') if '.' in t else t
         if len(set(s.values())) == len(xs):
             break
     return [s[float(x)] if fin(x) else '∞' for x in vals]

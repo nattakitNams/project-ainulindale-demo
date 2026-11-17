@@ -23,6 +23,24 @@ from . import db, layout, tiles
 from .config import APP_VERSION, DIRS
 
 RDIR = DIRS['cache'] / 'report'
+
+
+def _purge_old():
+    """แอปเปลี่ยนเวอร์ชัน → ลบภาพแผนที่/แผนที่ตำแหน่งที่แคชไว้ของรุ่นก่อน (กุญแจผูกเวอร์ชันแล้ว ของเก่าไม่ถูกใช้อีก แค่กินดิสก์)"""
+    try:
+        RDIR.mkdir(parents=True, exist_ok=True)
+        tag = RDIR / '.version'
+        if tag.exists() and tag.read_text(encoding='utf-8').strip() == APP_VERSION:
+            return
+        for f in RDIR.iterdir():
+            if f.suffix in ('.png', '.json'):
+                f.unlink(missing_ok=True)
+        tag.write_text(APP_VERSION, encoding='utf-8')
+    except OSError:
+        pass
+
+
+_purge_old()
 _plock = threading.Lock()                 # matplotlib (pyplot) ไม่ปลอดภัยต่อหลายเธรด
 PRINTS = {}                               # token → เอกสารที่รอ Edge มาเปิด
 
@@ -102,7 +120,7 @@ def render_map(m, w, h, dpi=110, view=None):
     view = view or auto_view(m, w, h, layers)
     ext = ext_from_view(view, w, h)
     key = _h(dict(m={k: m.get(k) for k in ('basemap', 'basemap_opacity', 'boundary', 'layers')}, w=round(w, 1), h=round(h, 1), dpi=dpi,
-                  view={k: round(float(v), 6) for k, v in view.items()}, sig=_sig(layers, m), v=2))
+                  view={k: round(float(v), 6) for k, v in view.items()}, sig=_sig(layers, m), v=APP_VERSION))   # แก้โค้ดวาด → ภาพเก่าในแคชไม่ถูกใช้ (เดิม v=2 ตายตัว: ภาพว่างของชั้น UTM ค้างแม้แก้แล้ว)
     RDIR.mkdir(parents=True, exist_ok=True)
     png, meta = RDIR / f'{key}.png', RDIR / f'{key}.json'
     if png.exists() and meta.exists():
@@ -164,7 +182,7 @@ def render_inset(main_ext, w, h, dpi=110, basemap='esri_light', zoom=1.0):
     iext = layout._fit_extent([cx - span / 2, cy - span / 2, cx + span / 2, cy + span / 2], w, h)
     iext[1], iext[3] = max(iext[1], -85), min(iext[3], 85)
     bm = layout.BASEMAP_ALIAS.get(basemap, basemap)
-    key = _h(dict(t='inset', e=[round(v, 5) for v in iext], w=round(w, 1), h=round(h, 1), dpi=dpi, bm=bm))
+    key = _h(dict(t='inset', e=[round(v, 5) for v in iext], w=round(w, 1), h=round(h, 1), dpi=dpi, bm=bm, v=APP_VERSION))
     RDIR.mkdir(parents=True, exist_ok=True)
     png = RDIR / f'{key}.png'
     if not png.exists():
@@ -219,7 +237,20 @@ def info(m):
         if bdd:
             sources.append(bdd.get('name'))
     return dict(legend=leg, stats=stats, prov=layout._provenance(main, layers) if main else [f'• {n}' for n, *_ in layers],
-                sources=list(dict.fromkeys(sources)), basemap_attrib=layout.BASEMAPS[bm][1] if bm in layout.BASEMAPS else '', version=APP_VERSION)
+                sources=list(dict.fromkeys(sources)), basemap_attrib=layout.BASEMAPS[bm][1] if bm in layout.BASEMAPS else '', version=APP_VERSION,
+                crs=_crs_line(layers))
+
+
+CRS_TH = {'EPSG:4326': 'พิกัดภูมิศาสตร์ WGS 84 (EPSG:4326)', 'EPSG:32647': 'UTM โซน 47N WGS 84 (EPSG:32647)', 'EPSG:32648': 'UTM โซน 48N WGS 84 (EPSG:32648)'}
+
+
+def _crs_line(layers):
+    """บรรทัดระบบพิกัดในเครดิต: ตามชั้นข้อมูลจริง (เดิมเขียน WGS 84 เสมอ แม้ข้อมูลเป็น UTM 47N)"""
+    ks = list(dict.fromkeys(((d or {}).get('meta') or {}).get('crs_key') for _, k, d, *_ in layers if k in ('raster', 'vector') and d))
+    ks = [k for k in ks if k]
+    if not ks or ks == ['EPSG:4326']:
+        return 'ระบบพิกัดภูมิศาสตร์ WGS 84 (EPSG:4326)'
+    return 'ข้อมูล ' + ' · '.join(CRS_TH.get(k, k) for k in ks) + ' · แสดงบนพิกัดภูมิศาสตร์ WGS 84'
 
 
 # ---------- ส่งออกด้วย Edge/Chrome headless ----------

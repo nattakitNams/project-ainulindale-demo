@@ -276,6 +276,8 @@ Data hub คือทางหลักของแอป — ผู้ใช้
   method: quantile | equal | jenks (natural breaks) | breaks (+ "breaks":[n-1 ค่า]) | degurba (แกน count n=3 ความละเอียดหยาบ ~1 กม.) · metric: density หรือ per_pixel ใช้กับ count เท่านั้น ชุดอื่นใช้ value
   palette: traffic bluered pinkblue greenblue purplegold pinkgreen blueyellow redblue seqseq1 seqseq2 · aoi_id/palette/highlight/name ไม่บังคับ · ทั้งสองแกนต้องยืนยันประเภทค่าแล้วและ CRS ตรงกัน · ไม่ต้องแปลงความละเอียดก่อน
   ในแต่ละแกนใส่ "order":"classify_first" ได้ (จัดชั้นก่อนแล้ว majority ตอนลดความละเอียด) ค่าเริ่ม "auto" · ผู้ใช้แก้จำนวนคลาส/วิธีแบ่ง/เกณฑ์/ชื่อแกนในการ์ดเองได้ หรือเปิดไปปรับในหน้าสร้างไบแวเรียต
+รายงาน: ใส่ "notes":[{"title":"วิธีอ่านแผนที่","text":"…","where":"map_bl"}] ใน propose_create_report ได้ (กรอบคำอธิบายบนแผนที่ · ย่อตัวอักษรให้พอดีเอง) · รายงานเปิดอยู่แล้ว → propose_add_report_notes (เพิ่มกรอบโดยไม่ล้างหน้า)
+  เขียนข้อความกรอบให้สั้นและตรงกับผลจริง (ข้อค้นพบ/วิธีอ่าน/ข้อควรระวัง) ≤ ~60 คำต่อกรอบ · ห้ามแต่งตัวเลขที่ไม่ได้มาจากเครื่องมือ
 รายงาน: propose_create_report → เปิดตัวออกแบบรายงานพร้อมเทมเพลต (gov_l ราชการแนวนอน · gov_p ราชการแนวตั้ง · ocha · journal · poster_a3 · dashboard), ชั้นข้อมูล (ปกติคือแผนที่ไบแวเรียตที่เสร็จแล้ว ดู #id จาก job_status/list_datasets role=map),
   ชื่อเรื่อง/คำอธิบาย/หน่วยงาน/ผู้จัดทำ/หมายเหตุ และกรอบแผนที่ตามพื้นที่ศึกษา (extent_aoi_id) · ผู้ใช้กด "ส่งออก" เป็น PDF เองในหน้านั้น — เขียนชื่อเรื่อง/คำอธิบายให้กระชับเป็นภาษาของผู้ใช้
 - hexbiv (ไบแวเรียตหกเหลี่ยม): เหมือน bivariate แต่ใช้ "size_km":1 แทน target_res · แกนที่เป็นชุดหกเหลี่ยมต้องมี "field"

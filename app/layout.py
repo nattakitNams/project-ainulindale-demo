@@ -170,9 +170,20 @@ def _raster(ax, d, ext, px_w, px_h, opacity):
         wb = rasterio.windows.bounds(win, s.transform)
         res = abs(s.transform.a)
         lat = wb[3] - (np.arange(oh) + 0.5) * (wb[3] - wb[1]) / oh
+        src_crs, src_tr = s.crs, rasterio.transform.from_bounds(*wb, ow, oh)
     a = engine.unscale(np.asarray(arr.filled(0)).astype('float64'), *sc)
     rgba = symbology.render(d, style, a, ~np.ma.getmaskarray(arr), res, lat)
     rgba[..., 3] = (rgba[..., 3] * opacity).astype('uint8')
+    if src_crs and src_crs.to_epsg() != 4326:
+        # ชุดเมตร (UTM ฯลฯ): สีคิดในพิกัดเดิม (ความหนาแน่นใช้พื้นที่พิกเซลจริง) แล้วค่อย warp ภาพสีเข้ากรอบองศาของแผนที่
+        # (เดิมวาดพิกัดเมตรลงแกนองศาตรง ๆ → ภาพไปตกนอกกรอบ = "ชั้นข้อมูลไม่ขึ้น" ตั้งแต่เปิดผลลัพธ์ UTM 47N ใน 1.0.45)
+        from rasterio.warp import reproject
+        ow2, oh2 = max(1, int(px_w)), max(1, int(px_h))
+        out = np.zeros((4, oh2, ow2), 'uint8')
+        reproject(np.moveaxis(rgba, -1, 0).copy(), out, src_transform=src_tr, src_crs=src_crs,
+                  dst_transform=rasterio.transform.from_bounds(*ext, ow2, oh2), dst_crs='EPSG:4326', resampling=Resampling.nearest)
+        ax.imshow(np.moveaxis(out, 0, -1), extent=[ext[0], ext[2], ext[1], ext[3]], interpolation='nearest', zorder=3)
+        return
     ax.imshow(rgba, extent=[wb[0], wb[2], wb[1], wb[3]], interpolation='nearest', zorder=3)
 
 

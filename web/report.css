@@ -26,6 +26,9 @@
 /* ข้อความ */
 .rpt-txt { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; word-break: break-word; }
 .rpt-tx { outline: none; min-height: 1em; }
+.rpt-note { position: absolute; inset: 0; overflow: hidden; word-break: break-word; box-sizing: border-box; }
+.rpt-note-t { font-weight: 700; margin-bottom: .35em; line-height: 1.2; }
+.rpt-note-b > div { margin-bottom: .15em; }
 
 /* คำอธิบาย */
 .rpt-leg { position: absolute; inset: 0; overflow: hidden; line-height: 1.3; }
@@ -45,7 +48,8 @@
 .rpt-biv-g i { display: block; border: .1mm solid #ffffff; }
 .rpt-biv-g i.hl { outline: .4mm solid #1d2233; outline-offset: -.4mm; }
 .rpt-biv-yl { font-size: .78em; color: #5d6478; text-align: right; padding-right: .8mm; white-space: nowrap; }
-.rpt-biv-xl { font-size: .72em; color: #5d6478; text-align: center; line-height: 1.1; padding-top: .4mm; word-break: break-all; }
+.rpt-biv-xl { font-size: .72em; color: #5d6478; text-align: center; line-height: 1.1; padding-top: .4mm; white-space: nowrap; overflow: visible; }
+.rpt-biv-xl.v { writing-mode: vertical-rl; transform: rotate(180deg); justify-self: center; text-align: left; padding: .4mm 0 0; }   /* ป้ายยาวกว่าช่อง → ตั้ง (เดิมตัดกลางคำ) */
 .rpt-biv-x { font-size: .9em; font-weight: 600; margin-top: .6mm; padding-left: 4mm; }
 
 /* ตัวเลข / ที่มา / เครดิต */

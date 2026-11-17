@@ -806,7 +806,28 @@ REPORT_TEMPLATES = {'gov_l': 'ราชการ A4 แนวนอน', 'gov_p'
                     'journal': 'ภาพประกอบบทความวิชาการ', 'poster_a3': 'โปสเตอร์ A3 แนวตั้ง', 'dashboard': 'Dashboard / อินโฟกราฟิก A4'}
 
 
-def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle='', org='', author='', note='', caption='', map_no='', extent_aoi_id=None, purpose=''):
+NOTE_WHERE = ('map_tl', 'map_tr', 'map_bl', 'map_br')
+
+
+def _notes(notes):
+    """กรอบคำอธิบายบนหน้ารายงาน: [{title, text, where}] → ตรวจ/ตัดความยาว (≤ 6 กรอบ · ข้อความ ≤ 1,500 ตัวอักษร)"""
+    import json as _json
+    if isinstance(notes, str):
+        try:
+            notes = _json.loads(notes)
+        except ValueError:
+            raise ToolError('notes ต้องเป็นรายการ [{"title":"…","text":"…","where":"map_tl"}]')
+    out = []
+    for n in (notes or [])[:6]:
+        if not isinstance(n, dict) or not str(n.get('text') or '').strip():
+            continue
+        w = n.get('where') if n.get('where') in NOTE_WHERE else 'map_tl'
+        out.append(dict(title=str(n.get('title') or '')[:120], text=str(n['text'])[:1500], where=w))
+    return out
+
+
+def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle='', org='', author='', note='', caption='', map_no='', extent_aoi_id=None, purpose='',
+                            notes=None):
     """รายงานจัดหน้าอยู่ในเบราว์เซอร์ (ตัวออกแบบรายงาน) → ยืนยันแล้วหน้าเว็บเปิดตัวออกแบบพร้อมค่าที่ตั้งนี้ ผู้ใช้กดส่งออก PDF เอง"""
     if template not in REPORT_TEMPLATES:
         raise ToolError(f'template ต้องเป็นหนึ่งใน {", ".join(REPORT_TEMPLATES)}')
@@ -823,9 +844,19 @@ def t_propose_create_report(dataset_ids, template='gov_l', title='', subtitle=''
     if purpose and not note:                                # วัตถุประสงค์ขึ้นเป็นหมายเหตุของรายงาน (แก้ได้ในตัวออกแบบ)
         note = f'วัตถุประสงค์: {purpose}'
     spec = dict(dataset_ids=[int(i) for i in dataset_ids], template=template, extent_aoi_id=int(extent_aoi_id) if extent_aoi_id else None, purpose=str(purpose)[:500] or None,
-                meta={k: str(v)[:300] for k, v in dict(title=title, subtitle=subtitle, org=org, author=author, note=note, caption=caption, map_no=map_no).items() if v})
+                meta={k: str(v)[:300] for k, v in dict(title=title, subtitle=subtitle, org=org, author=author, note=note, caption=caption, map_no=map_no).items() if v},
+                notes=_notes(notes))
     return _propose('create_report', f'รายงาน "{title or names[0]}" · {REPORT_TEMPLATES[template]} · ' + ', '.join(names[:4]), spec,
                     lambda: dict(ok=True, template=REPORT_TEMPLATES[template], layers=names))
+
+
+def t_propose_add_report_notes(notes, purpose=''):
+    """เพิ่มกรอบคำอธิบายลงรายงานที่เปิดอยู่ในตัวออกแบบ (ไม่ล้างหน้าเดิม) — ผู้ใช้กดยืนยันแล้วหน้าเว็บวางกรอบให้ ย้าย/แก้ได้"""
+    ns = _notes(notes)
+    if not ns:
+        raise ToolError('ใส่ notes อย่างน้อย 1 กรอบ: [{"title":"…","text":"…","where":"map_tl|map_tr|map_bl|map_br"}]')
+    return _propose('report_notes', f'เพิ่มกรอบคำอธิบาย {len(ns)} กรอบในรายงาน: ' + ', '.join(n['title'] or n['text'][:30] for n in ns),
+                    dict(notes=ns, purpose=str(purpose)[:300]), lambda: dict(ok=True, notes=[n['title'] or n['text'][:40] for n in ns]))
 
 
 def proposals_public(ids):
@@ -844,6 +875,8 @@ def execute(pid, model=None, params=None):
     a = p['args']
     if p['action'] == 'create_report':
         return dict(ok=True, report=a, message='เปิดตัวออกแบบรายงานพร้อมค่าที่ตั้งแล้ว — ตรวจแล้วกด "ส่งออก" เพื่อได้ PDF')
+    if p['action'] == 'report_notes':
+        return dict(ok=True, report_notes=a['notes'], message=f'เพิ่มกรอบคำอธิบาย {len(a["notes"])} กรอบในรายงานแล้ว — ลาก/ปรับขนาด/แก้ข้อความได้ในตัวออกแบบ')
     if p['action'] == 'download':                            # เพิ่มลิงก์เข้าคลัง → งานดาวน์โหลด (ตัดกรอบพื้นที่ศึกษา) → ชุดข้อมูลใหม่ในคลัง
         vt = a.get('value_type')
         if isinstance(params, dict) and 'value_type' in params and params['value_type'] in ('count', 'density', 'class', None):
@@ -959,6 +992,8 @@ def t_review_output(dataset_id, expectation=None):
 
 # ---------- ทะเบียนเครื่องมือ (schema เรียบง่าย ใช้ได้ทั้ง Anthropic / OpenAI / Gemini) ----------
 S, I, N, B = dict(type='string'), dict(type='integer'), dict(type='number'), dict(type='boolean')
+NOTES = dict(type='array', description='กรอบคำอธิบาย ≤ 6: title (หัวข้อสั้น) · text (ข้อความ ขึ้นบรรทัดด้วย \\n ใช้ "• " ทำหัวข้อย่อยได้) · where (มุมแผนที่หลัก)',
+             items=dict(type='object', properties=dict(title=dict(type='string'), text=dict(type='string'), where=dict(type='string', enum=list(NOTE_WHERE))), required=['text']))
 TOOLS = [
     ('list_datasets', 'read', t_list_datasets, 'รายการชุดข้อมูลในคลัง (กรองด้วยคำค้น/ชนิด/บทบาทได้) — ใช้ก่อนอ้าง #id ทุกครั้ง',
      dict(query=S, kind=dict(type='string', enum=['raster', 'vector', 'link']), role=dict(type='string', enum=['input', 'derived', 'map'])), []),
@@ -1015,7 +1050,10 @@ TOOLS = [
     ('propose_create_report', 'action', t_propose_create_report,
      'เสนอทำรายงานแผนที่ (เปิดตัวออกแบบรายงานพร้อมเทมเพลต/ชั้นข้อมูล/ข้อความ ผู้ใช้กดยืนยันแล้วส่งออก PDF เอง) — dataset_ids ปกติคือแผนที่ไบแวเรียตที่ทำเสร็จแล้ว',
      dict(dataset_ids=dict(type='array', items=I), template=dict(type='string', enum=list(REPORT_TEMPLATES)), title=S, subtitle=S, org=S, author=S,
-          note=S, caption=S, map_no=S, extent_aoi_id=I, purpose=S), ['dataset_ids', 'title', 'purpose']),
+          note=S, caption=S, map_no=S, extent_aoi_id=I, purpose=S, notes=NOTES), ['dataset_ids', 'title', 'purpose']),
+    ('propose_add_report_notes', 'action', t_propose_add_report_notes,
+     'เพิ่มกรอบคำอธิบาย (หัวข้อ + ข้อความ) ลงรายงานที่ผู้ใช้เปิดอยู่ในตัวออกแบบรายงาน โดยไม่ล้างหน้าเดิม — เช่น อธิบายวิธีอ่านแผนที่ ข้อค้นพบ ข้อควรระวัง · where = มุมของแผนที่หลัก · ตัวอักษรย่อให้พอดีกรอบเอง',
+     dict(notes=NOTES, purpose=S), ['notes']),
     ('propose_create_study_area', 'action', t_propose_create_study_area, 'เสนอสร้างพื้นที่ศึกษาจากชั้นขอบเขต (เลือกค่าของฟิลด์ เช่น ชื่อจังหวัด)',
      dict(name=S, source_dataset_id=I, field=S, values=dict(type='array', items=S)), ['name', 'source_dataset_id', 'field', 'values']),
 ]

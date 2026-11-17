@@ -1,6 +1,6 @@
 // Ainulindalë — หน้าเว็บ (หน้าเดียว, เส้นทาง #hash) · V2
 'use strict';
-const UI_VERSION = '1.1.1';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
+const UI_VERSION = '1.1.2';          // ต้องตรงกับ APP_VERSION ฝั่งเซิร์ฟเวอร์ — ไม่ตรง = run.bat ยังรันโค้ดเก่า
 const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -2980,13 +2980,17 @@ async function pageViewer() {
 // เริ่มจากเทมเพลต → ลาก/ย่อขยาย/แก้ข้อความ/เพิ่มองค์ประกอบได้ · หน้าจอ = PDF (พิมพ์ด้วย Edge headless จาก report.js ตัวเดียวกัน)
 const RDOC = 'reportDoc.v2';
 const BM_LABEL = { none: 'ไม่มี', esri_light: 'เทาอ่อน Esri (เหมาะพิมพ์)', esri_dark: 'เทาเข้ม Esri', esri_topo: 'ภูมิประเทศ Esri', esri_imagery: 'ภาพดาวเทียม Esri', osm: 'OpenStreetMap', google_hybrid: 'Google Hybrid ⚠ ตรวจข้อกำหนดก่อนเผยแพร่' };
-const RP_SIZE = { map: [120, 90], inset: [40, 30], legend: [50, 60], scalebar: [50, 12], north: [10, 14], text: [70, 12], rect: [40, 25], line: [60, 1], image: [30, 20], kpi: [90, 24], chart: [80, 50], prov: [60, 40], credits: [110, 12] };
-const RP_ICON = { map: '🗺', inset: '📍', legend: '☰', scalebar: '📏', north: '🧭', text: 'T', rect: '▭', line: '―', image: '🖼', kpi: '#', chart: '📊', prov: 'ℹ', credits: '©' };
+const RP_SIZE = { map: [120, 90], inset: [40, 30], legend: [50, 60], scalebar: [50, 12], north: [10, 14], note: [70, 34], text: [70, 12], rect: [40, 25], line: [60, 1], image: [30, 20], kpi: [90, 24], chart: [80, 50], prov: [60, 40], credits: [110, 12] };
+const RP_ICON = { map: '🗺', inset: '📍', legend: '☰', scalebar: '📏', north: '🧭', text: 'T', note: '💬', rect: '▭', line: '―', image: '🖼', kpi: '#', chart: '📊', prov: 'ℹ', credits: '©' };
 const RP_F = {
   text: [['text', 'ข้อความ', 'area'], ['fs', 'ขนาด (pt)', 'num', [4, 120, .5]], ['fw', 'น้ำหนัก', 'sel', { 300: 'บาง', 400: 'ปกติ', 500: 'กลาง', 600: 'หนา', 700: 'หนามาก' }], ['color', 'สีตัวอักษร', 'color'],
     ['align', 'จัดแนว', 'seg', { left: 'ซ้าย', center: 'กลาง', right: 'ขวา' }], ['valign', 'แนวตั้ง', 'seg', { top: 'บน', middle: 'กลาง', bottom: 'ล่าง' }], ['lh', 'ระยะบรรทัด', 'num', [.8, 3, .05]],
     ['ls', 'ระยะตัวอักษร (em)', 'num', [-.1, .5, .01]], ['italic', 'ตัวเอียง', 'chk'], ['upper', 'ตัวพิมพ์ใหญ่ (อังกฤษ)', 'chk'], ['bg', 'พื้นหลัง', 'colorx'], ['bc', 'สีกรอบ', 'colorx'],
-    ['bw', 'ความหนากรอบ (มม.)', 'num', [0, 5, .05]], ['pad', 'ระยะขอบใน (มม.)', 'num', [0, 30, .5]], ['r', 'มุมโค้ง (มม.)', 'num', [0, 30, .5]]],
+    ['bw', 'ความหนากรอบ (มม.)', 'num', [0, 5, .05]], ['pad', 'ระยะขอบใน (มม.)', 'num', [0, 30, .5]], ['r', 'มุมโค้ง (มม.)', 'num', [0, 30, .5]], ['fit', 'ย่อตัวอักษรให้พอดีกรอบ', 'chk']],
+  note: [['title', 'หัวข้อ (เว้นว่าง = ไม่มี)', 'txt'], ['text', 'คำอธิบาย (ขึ้นบรรทัดใหม่ได้ · ใช้ {title} {date} ฯลฯ ได้)', 'area'], ['fit', 'ย่อตัวอักษรให้พอดีกรอบ', 'chk'],
+    ['fs', 'ขนาดเนื้อความ (pt)', 'num', [4, 40, .5]], ['tfs', 'ขนาดหัวข้อ (pt)', 'num', [4, 48, .5]], ['color', 'สีเนื้อความ', 'color'], ['tcolor', 'สีหัวข้อ', 'color'],
+    ['align', 'จัดแนว', 'seg', { left: 'ซ้าย', center: 'กลาง', right: 'ขวา' }], ['lh', 'ระยะบรรทัด', 'num', [.8, 3, .05]], ['accent', 'แถบสีด้านซ้าย', 'colorx'],
+    ['bg', 'พื้นหลัง', 'colorx'], ['bc', 'สีกรอบ', 'colorx'], ['bw', 'ความหนากรอบ (มม.)', 'num', [0, 5, .05]], ['pad', 'ระยะขอบใน (มม.)', 'num', [0, 30, .5]], ['r', 'มุมโค้ง (มม.)', 'num', [0, 30, .5]]],
   map: [['grid', 'กริดพิกัด', 'sel', { none: 'ไม่แสดง', ticks: 'ขีดที่ขอบกรอบ', lines: 'เส้นตาราง' }], ['gridLabels', 'ป้ายพิกัด', 'sel', { '': 'ไม่แสดง', lb: 'ซ้าย + ล่าง (นอกกรอบ)', lbtr: 'ทุกด้าน (นอกกรอบ)', i: 'ในกรอบ' }],
     ['gfs', 'ขนาดป้ายพิกัด (pt)', 'num', [4, 16, .5]], ['gridColor', 'สีเส้นตาราง', 'color'], ['gridOp', 'ความทึบเส้นตาราง', 'range', [0, 1, .05]], ['fw', 'เส้นกรอบ (มม.)', 'num', [0, 3, .05]], ['fc', 'สีกรอบ/ป้ายพิกัด', 'color'],
     ['bg', 'พื้นหลังกรอบ', 'colorx'], ['labels', 'ป้ายชื่อขอบเขต', 'chk'], ['lfs', 'ขนาดป้ายชื่อ (pt)', 'num', [3, 24, .5]], ['lcolor', 'สีป้ายชื่อ', 'color'], ['halo', 'ขอบรอบป้ายชื่อ', 'colorx']],
@@ -3007,6 +3011,28 @@ const RP_F = {
   credits: [['extra', 'ข้อความบรรทัดแรก (เช่น ข้อความปฏิเสธความรับผิดชอบ)', 'area'], ['fs', 'ขนาดตัวอักษร', 'num', [4, 14, .25]], ['color', 'สี', 'color'],
     ['align', 'จัดแนว', 'seg', { left: 'ซ้าย', center: 'กลาง', right: 'ขวา' }], ['note', 'แสดงหมายเหตุ', 'chk'], ['author', 'แสดงผู้จัดทำ', 'chk'], ['crs', 'แสดงระบบพิกัด', 'chk']],
 };
+
+// วางกรอบคำอธิบายตามมุมของแผนที่หลัก (ผู้ช่วย AI) · สูงตามความยาวข้อความ · มุมเดียวกันซ้อนลงไปเรื่อย ๆ
+function rpAddNotes(doc, notes) {
+  if (!notes?.length) return;
+  const [PW, PH] = RPT.size(doc);
+  const m = doc.els.find(e => e.type === 'map' && !e.hidden) || { x: 10, y: 10, w: PW - 20, h: PH - 20 };
+  const stack = {}, PT = 0.3528, zTop = Math.max(0, ...doc.els.map(e => e.z || 0));
+  notes.forEach((nt, i) => {
+    const p = Object.assign(JSON.parse(JSON.stringify(RPT.TYPES.note.p)), { title: nt.title || '', text: nt.text || '' });
+    const w = Math.round(Math.min(72, Math.max(45, m.w * .36)) * 10) / 10;
+    const cpl = Math.max(8, (w - 2 * p.pad - 1) / (p.fs * PT * .5));
+    const lines = String(p.text).split('\n').reduce((a, l) => a + Math.max(1, Math.ceil(l.length / cpl)), 0);
+    const h = Math.round(Math.min(m.h * .55, 2 * p.pad + (p.title ? p.tfs * PT * 1.55 : 0) + lines * p.fs * PT * p.lh + 1.5) * 10) / 10;
+    const wh = nt.where || 'map_tl', gap = 4, down = !/^map_b/.test(wh);
+    const x = /r$/.test(wh) ? m.x + m.w - w - gap : m.x + gap;
+    let y = down ? m.y + gap + (stack[wh] || 0) : m.y + m.h - h - gap - (stack[wh] || 0);
+    const hit = yy => doc.els.find(o => o.type === 'note' && !o.hidden && x < o.x + o.w && x + w > o.x && yy < o.y + o.h && yy + h > o.y);
+    for (let o, k = 0; (o = hit(y)) && k < 12; k++) y = down ? o.y + o.h + 3 : o.y - h - 3;   // หลบกรอบที่มีอยู่แล้ว (AI เพิ่มหลายรอบ)
+    stack[wh] = down ? y + h + 3 - (m.y + gap) : m.y + m.h - gap - y + 3;
+    doc.els.push({ id: RPT.uid(), type: 'note', x: Math.round(x * 10) / 10, y: Math.round(Math.max(0, Math.min(PH - h, y)) * 10) / 10, w, h, z: zTop + 1 + i, p });
+  });
+}
 
 async function pageReport(qs) {
   const gen = window._routeGen, alive = () => gen === window._routeGen && location.hash.startsWith('#/report');
@@ -3033,9 +3059,13 @@ async function pageReport(qs) {
       doc.map.layers = (sp.dataset_ids || []).map((id, i) => all.find(x => x.id === id)).filter(Boolean).map((d, i) => vLayerFromDs(d, i));
       if (sp.extent_aoi_id && byKey['aoi:' + sp.extent_aoi_id]) doc.map.extent = { type: 'aoi', aoi_id: sp.extent_aoi_id };
       resetViews();
+      rpAddNotes(doc, sp.notes || []);
     }
+  } else if (qs.get('ainotes')) {                            // ผู้ช่วย AI เพิ่มกรอบคำอธิบายลงรายงานที่เปิดอยู่ (ไม่ล้างหน้าเดิม)
+    let ns = null; try { ns = JSON.parse(sessionStorage.getItem('ainu-ai-report-notes')); sessionStorage.removeItem('ainu-ai-report-notes'); } catch { }
+    if (ns?.length) { rpAddNotes(doc, ns); try { localStorage.setItem(RDOC, JSON.stringify(doc)); } catch { } }
   }
-  if (qs.get('ds') || qs.get('viewer') || qs.get('ai')) history.replaceState(null, '', '#/report');
+  if (qs.get('ds') || qs.get('viewer') || qs.get('ai') || qs.get('ainotes')) history.replaceState(null, '', '#/report');
   doc.map.layers = doc.map.layers.filter(l => byKey[l.key]);
   if (/^carto_/.test(doc.map.basemap)) doc.map.basemap = 'esri_light';
 
@@ -3100,10 +3130,12 @@ async function pageReport(qs) {
     n.classList.toggle('rp-lock', !!e.lock);
     n.classList.toggle('rpt-nofill', e.type === 'rect' && !e.p.fill);
     n.classList.toggle('rp-panning', panMode === e.id);
-    if (['text', 'credits', 'legend', 'prov'].includes(e.type)) {        // ข้อความล้นกรอบ → ขอบแดง + คำแนะนำ
+    if (['text', 'note', 'credits', 'legend', 'prov'].includes(e.type)) {        // ข้อความล้นกรอบ → ขอบแดง + คำแนะนำ
       const inn = n.firstElementChild, over = inn && inn.scrollHeight > inn.clientHeight + 2;
       n.classList.toggle('rp-over', !!over);
-      n.title = over ? 'ข้อความล้นกรอบ — ขยายกล่องหรือลดขนาดตัวอักษร (ส่วนที่ล้นจะไม่ถูกพิมพ์)' : '';
+      const k = inn?.dataset?.k ? +inn.dataset.k : 1;
+      n.title = over ? (inn?.dataset?.fit ? 'ข้อความยาวเกินแม้ย่อเหลือครึ่งหนึ่งแล้ว — ขยายกล่องหรือตัดข้อความ' : 'ข้อความล้นกรอบ — ขยายกล่อง ลดขนาดตัวอักษร หรือติ๊ก "ย่อตัวอักษรให้พอดีกรอบ" (ส่วนที่ล้นจะไม่ถูกพิมพ์)')
+        : k < 1 ? `ย่อตัวอักษรเหลือ ${Math.round(k * 100)}% ให้พอดีกรอบ` : '';
     }
   };
   const full = () => { RPT.render($('#rpPage'), doc, data, { editor: true }); doc.els.forEach(e => deco(node(e.id), e)); drawSel(); };

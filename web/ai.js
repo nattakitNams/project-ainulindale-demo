@@ -110,7 +110,7 @@ const AIDock = (() => {
   const save = () => ls.set(HKEY, hist.slice(-60));
 
   // การ์ดข้อเสนอ: AI เสนอ → ผู้ใช้ตรวจ (ขนาด/คำเตือน) → กดยืนยันจึงรัน · ข้อเสนอใช้ได้ครั้งเดียว (หมดอายุ 30 นาที)
-  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', download: 'ดาวน์โหลดเข้าคลัง',
+  const KIND_TH = { set_value_type: 'ตั้งประเภทค่า', create_aoi: 'สร้างพื้นที่ศึกษา', run_job: 'รันงาน', create_report: 'ทำรายงาน', report_notes: 'เพิ่มกรอบคำอธิบาย', download: 'ดาวน์โหลดเข้าคลัง',
     create_folders: 'สร้างโฟลเดอร์', move_folder: 'ย้ายเข้าโฟลเดอร์', recipe: 'สูตรงาน (รันเองทุกขั้น)' };
   const STEP_TH = { satellite: 'ดึงภาพดาวเทียม', download: 'นำเข้าจาก Data hub', calc: 'สูตรคำนวณ', trend: 'อนุกรมเวลา', change: 'เปรียบเทียบ', bivariate: 'ไบแวเรียต',
     resample: 'ปรับความละเอียด', rasterize: 'แปลงเป็นราสเตอร์', hex: 'หกเหลี่ยม', hexbiv: 'ไบแวเรียตหกเหลี่ยม', vgrid: 'กริดเวกเตอร์', mosaic: 'รวมราสเตอร์', vmerge: 'รวมเวกเตอร์', stats: 'สถิติความสัมพันธ์' };
@@ -190,7 +190,8 @@ const AIDock = (() => {
       ? (p.edited ? '<div class="tiny warn-t">แก้ค่าแล้ว — ตรวจอีกครั้งตอนรัน</div>' : e.ok ? `<div class="tiny">${esc(e.resolution || '')}${e.size?.[0] ? ` · ${fmt(e.size[0], 0)} × ${fmt(e.size[1], 0)} พิกเซล` : ''}${e.aoi ? ' · ' + esc(e.aoi) : ''}</div>`
         + (e.warnings || []).map(w => `<div class="tiny warn-t">${esc(w)}</div>`).join('')
         : `<div class="tiny warn-t">ตรวจไม่ผ่านตอนเสนอ: ${esc(e.error || '?')} — จะตรวจอีกครั้งตอนรัน</div>`)
-      : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span></div>`
+      : p.action === 'create_report' && e.layers ? `<div class="tiny">${esc(e.template)} · <span translate="no">${esc(e.layers.join(', '))}</span>${(p.args.notes || []).length ? ` · กรอบคำอธิบาย ${p.args.notes.length}` : ''}</div>`
+      : p.action === 'report_notes' ? `<div class="tiny">${(p.args.notes || []).map(n => `💬 <b>${esc(n.title || '')}</b> ${esc(n.text.slice(0, 90))}${n.text.length > 90 ? '…' : ''}`).join('<br>')}</div>`
       : p.action === 'download' ? dlCard(p)
       : p.action === 'create_folders' ? `<div class="tiny">${(p.args.paths || []).map(x => `${IC.folder}<span translate="no">${esc(x)}</span>${(p.args.new || []).includes(x) ? '' : ' <span class="muted">(มีแล้ว)</span>'}`).join('<br>')}</div>`
       : p.action === 'recipe' ? `<ol class="ai-steps tiny">${(p.args.steps || []).map(st => `<li><b translate="no">${esc(st.title)}</b> <span class="muted">${STEP_TH[st.kind] || st.kind}</span>${JSON.stringify(st.params).includes('"$s') ? ' <span class="muted">· ใช้ผลขั้นก่อน</span>' : ''}</li>`).join('')}</ol>
@@ -208,7 +209,7 @@ const AIDock = (() => {
     const purpose = p.args?.params?.purpose || p.args?.purpose;
     return `<div class="ai-prop ${p.state}" data-m="${mi}" data-p="${pi}"><div class="small"><b>${KIND_TH[p.action] || p.action}</b> · <span translate="no">${esc(p.title)}</span></div>
       ${purpose ? `<div class="ai-purpose tiny">${IC.target}<span>วัตถุประสงค์: <span translate="no">${esc(purpose)}</span></span></div>` : ''}${est}${edit}${detail}
-      <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}${p.action === 'create_report' ? 'เปิดตัวออกแบบรายงาน' : 'ยืนยัน'}</button>`
+      <div class="row" style="margin-top:6px;gap:6px">${p.state === 'pending' ? `<button class="sm primary" data-ok>${IC.check}${p.action === 'create_report' ? 'เปิดตัวออกแบบรายงาน' : p.action === 'report_notes' ? 'ใส่ในรายงาน' : 'ยืนยัน'}</button>`
         + (isBiv(p) ? `<button class="sm ghost" data-form title="ใส่ค่าทั้งหมดลงฟอร์มหน้าสร้างไบแวเรียต แล้วปรับ/รันเอง">ปรับในหน้าสร้างไบแวเรียต</button>` : '')
         + '<button class="sm ghost" data-no>ไม่ทำ</button>' : stx}</div></div>`;
   }
@@ -259,6 +260,7 @@ const AIDock = (() => {
       else if (r.job_id) watchJob(r.job_id);
       else if (!r.report && !hist[mi].proposals.some(q => q.state === 'pending' || q.state === 'running') && !watching.size) setTimeout(autoContinue, 300);
       if (r.report) { try { sessionStorage.setItem('ainu-ai-report', JSON.stringify(r.report)); } catch { } location.hash = '#/report?ai=1'; }
+      if (r.report_notes) { try { sessionStorage.setItem('ainu-ai-report-notes', JSON.stringify(r.report_notes)); } catch { } location.hash = '#/report?ainotes=' + Date.now(); }
       if (typeof jobBadge === 'function') jobBadge();
     } catch (e) { p.state = 'failed'; p.result = e.message; hist.push({ role: 'event', content: `ไม่สำเร็จ: ${p.title} — ${e.message}` }); }
     save(); drawMsgs();

@@ -1,0 +1,21 @@
+Text is too long even at half size — enlarge the box or shorten the text
+box(es) added to the report — drag, resize or edit them in the designer
+Text overflows the box — enlarge it, reduce the font size, or tick
+geographic WGS 84 (EPSG:4326)
+Description (line breaks allowed · use
+UTM zone 47N WGS 84 (EPSG:32647)
+UTM zone 48N WGS 84 (EPSG:32648)
+shown in geographic WGS 84
+(the overflow will not be printed)
+Title (empty = none)
+Shrink text to fit the box
+Type the description here
+Body size (pt)
+Add note boxes
+Text shrunk to
+% to fit the box
+Left accent bar
+Note box
+Body colour
+Put in report
+Title colour

@@ -43,7 +43,9 @@
     legend: { name: 'คำอธิบายสัญลักษณ์', p: { title: 'คำอธิบายสัญลักษณ์', fs: 8, tfs: 10, color: '#1d2233', bg: '', bc: '', bw: 0, pad: 0, r: 0, cols: 1, skip: [], names: {} } },
     scalebar: { name: 'มาตราส่วน', p: { style: 'alt', seg: 4, ratio: true, fs: 7, color: '#1d2233', bg: '', align: 'left' } },
     north: { name: 'ลูกศรทิศเหนือ', p: { style: 'classic', color: '#1d2233' } },
-    text: { name: 'ข้อความ', p: { text: 'ข้อความ', fs: 11, fw: 400, color: '#1d2233', align: 'left', valign: 'top', bg: '', bc: '', bw: 0, pad: 0, r: 0, lh: 1.3, ls: 0, italic: false, upper: false } },
+    text: { name: 'ข้อความ', p: { text: 'ข้อความ', fs: 11, fw: 400, color: '#1d2233', align: 'left', valign: 'top', bg: '', bc: '', bw: 0, pad: 0, r: 0, lh: 1.3, ls: 0, italic: false, upper: false, fit: false } },
+    note: { name: 'กรอบคำอธิบาย', p: { title: 'คำอธิบาย', text: 'พิมพ์คำอธิบายที่นี่\n• ขึ้นบรรทัดใหม่ได้\n• ตัวอักษรย่อให้พอดีกรอบเอง', fs: 8, tfs: 9.5, color: '#1d2233', tcolor: '#1b2a4a',
+      accent: '#2b59c3', bg: '#ffffffee', bc: '#c9d0dd', bw: .25, pad: 2.5, r: 1.2, lh: 1.35, align: 'left', fit: true } },
     rect: { name: 'สี่เหลี่ยม/แถบสี', p: { fill: '#1f3a5f', stroke: '', sw: 0, r: 0, op: 1 } },
     line: { name: 'เส้น', p: { color: '#1d2233', width: .4, dash: false } },
     image: { name: 'รูปภาพ/โลโก้', p: { src: '', fit: 'contain' } },
@@ -66,12 +68,14 @@
       root.appendChild(n);
       RPT.draw(n, e, doc, data, opt);
     });
+    if (document.fonts?.ready) document.fonts.ready.then(() => RPT.fit(root));     // ฟอนต์จริงกว้าง/แคบกว่าตัวสำรอง → วัดใหม่
   };
   RPT.draw = (n, e, doc, data, opt = {}) => {
     n.className = `rpt-el rpt-t-${e.type}${e.hidden ? ' rpt-hidden' : ''}`;
     Object.assign(n.style, { left: e.x + 'mm', top: e.y + 'mm', width: e.w + 'mm', height: e.h + 'mm', zIndex: 10 + (e.z || 0) });
     const f = R[e.type];
     try { n.innerHTML = f ? f(e, e.p || {}, doc, data || {}, opt) : ''; } catch (er) { n.innerHTML = opt.editor ? `<div class="rpt-ph">${esc(er.message)}</div>` : ''; console.error(er); }
+    if (n.isConnected) RPT.fit(n);
   };
   const abs = u => (window.ENGINE && /^\/api\//.test(u || '')) ? window.ENGINE + u : u;   // v1: ภาพอยู่ที่ตัวประมวลผลในเครื่อง
   const ph = (opt, t) => opt.editor ? `<div class="rpt-ph">${t}</div>` : '';
@@ -207,9 +211,28 @@
   R.text = (e, p, doc) => {
     const t = p.bind ? (doc.meta?.[p.bind] ?? '') : RPT.fill(p.text, doc);
     const jc = { top: 'flex-start', middle: 'center', bottom: 'flex-end' }[p.valign || 'top'];
-    return `<div class="rpt-txt" style="font-size:${p.fs}pt;font-weight:${p.fw};color:${p.color};text-align:${p.align};justify-content:${jc};
+    return `<div class="rpt-txt"${p.fit ? ` data-fit="${p.fs}"` : ''} style="font-size:${p.fs}pt;font-weight:${p.fw};color:${p.color};text-align:${p.align};justify-content:${jc};
       background:${p.bg || 'transparent'};border:${p.bw || 0}mm solid ${p.bc || 'transparent'};border-radius:${p.r || 0}mm;padding:${p.pad || 0}mm;
       line-height:${p.lh || 1.3};letter-spacing:${p.ls || 0}em;font-style:${p.italic ? 'italic' : 'normal'};text-transform:${p.upper ? 'uppercase' : 'none'}"><div class="rpt-tx">${esc(t).replace(/\n/g, '<br>')}</div></div>`;
+  };
+  // กรอบคำอธิบาย: หัวข้อ + เนื้อความ (ตัวแทน {title} ฯลฯ ใช้ได้) · ขนาดเป็น em ของกล่อง → ย่อทั้งกล่องพร้อมกันได้ (data-fit)
+  R.note = (e, p, doc) => {
+    const t = RPT.fill(p.text, doc), title = RPT.fill(p.title || '', doc);
+    const body = esc(t).split('\n').map(l => l.trim() ? `<div>${l}</div>` : '<div style="height:.5em"></div>').join('');
+    return `<div class="rpt-note"${p.fit !== false ? ` data-fit="${p.fs}"` : ''} style="font-size:${p.fs}pt;color:${p.color};background:${p.bg || 'transparent'};
+      border:${p.bw || 0}mm solid ${p.bc || 'transparent'};${p.accent ? `border-left:${Math.max(p.bw || 0, .9)}mm solid ${p.accent};` : ''}border-radius:${p.r || 0}mm;padding:${p.pad || 0}mm;
+      line-height:${p.lh || 1.35};text-align:${p.align || 'left'}">${title ? `<div class="rpt-note-t" style="font-size:${(p.tfs || p.fs) / p.fs}em;color:${p.tcolor || p.color}">${esc(title)}</div>` : ''}<div class="rpt-note-b">${body}</div></div>`;
+  };
+  // ย่อตัวอักษรของกล่องที่ตั้ง "ย่อให้พอดีกรอบ" จนไม่ล้น (ต่ำสุด 50% ของขนาดที่ตั้ง) — เรียกหลังวาด และอีกครั้งเมื่อฟอนต์โหลดเสร็จ
+  RPT.fit = root => {
+    (root.matches?.('[data-fit]') ? [root] : [...root.querySelectorAll('[data-fit]')]).forEach(b => {
+      const base = +b.dataset.fit;
+      if (!base || !b.clientHeight) return;
+      let k = 1;
+      b.style.fontSize = base + 'pt';
+      while (b.scrollHeight > b.clientHeight + 1 && k > .5) { k -= .04; b.style.fontSize = (base * k).toFixed(2) + 'pt'; }
+      b.dataset.k = k.toFixed(2);
+    });
   };
   R.rect = (e, p) => `<div class="rpt-fill" style="background:${p.fill || 'transparent'};border:${p.sw || 0}mm solid ${p.stroke || 'transparent'};border-radius:${p.r || 0}mm;opacity:${p.op ?? 1}"></div>`;
   R.line = (e, p) => {
@@ -238,7 +261,8 @@
           g += `<span class="rpt-biv-yl">${esc(it.yl[y])}</span>`;
           for (let x = 0; x < it.nx; x++) { const code = y * it.nx + x + 1; g += `<i style="background:${it.colors[code - 1]};height:${cell}mm" class="${(it.hl || []).includes(code) ? 'hl' : ''}"></i>`; }
         }
-        g += `<span></span>` + Array.from({ length: it.nx }, (_, x) => `<span class="rpt-biv-xl">${esc(it.xl[x])}</span>`).join('');
+        const vx = Math.max(...it.xl.map(t => String(t).length)) * fs * .72 * PT * .55 > cell + .35;   // ป้ายแกน X กว้างกว่าช่อง → ตั้ง
+        g += `<span></span>` + Array.from({ length: it.nx }, (_, x) => `<span class="rpt-biv-xl${vx ? ' v' : ''}">${esc(it.xl[x])}</span>`).join('');
         h += g + `</div><div class="rpt-biv-x">${esc(it.xn)} →</div></div></div>`;
         if ((it.hl || []).length) h += `<div class="rpt-leg-r"><i class="sw" style="background:#fff;border:.35mm solid #1d2233"></i>กรอบเข้ม = เขตเน้น (รหัส ${it.hl.join(', ')})</div>`;
       } else if (it.type === 'ramp') {
@@ -297,7 +321,7 @@
     if (i.sources?.length) L.push('แหล่งข้อมูล: ' + esc(i.sources.join(', ')));
     if (i.basemap_attrib) L.push('แผนที่พื้นหลัง: ' + esc(i.basemap_attrib));
     L.push([p.author && m.author ? 'จัดทำโดย ' + esc(m.author) : '', m.org ? esc(m.org) : '', 'วันที่ ' + esc(m.date || today()),
-      p.crs ? 'ระบบพิกัดภูมิศาสตร์ WGS 84 (EPSG:4326)' : '', `Ainulindalë ${esc(i.version || '')}`].filter(Boolean).join(' · '));
+      p.crs ? esc(i.crs || 'ระบบพิกัดภูมิศาสตร์ WGS 84 (EPSG:4326)') : '', `Ainulindalë ${esc(i.version || '')}`].filter(Boolean).join(' · '));
     return `<div class="rpt-cred" style="font-size:${p.fs}pt;color:${p.color};text-align:${p.align}">${L.map(x => `<div>${x}</div>`).join('')}</div>`;
   };
 
